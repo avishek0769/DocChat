@@ -16,6 +16,7 @@ export interface Message {
     role: "user" | "ai";
     content: string;
     timestamp: Date;
+    model?: string;
     sources?: Source[];
     isStreaming?: boolean;
 }
@@ -207,8 +208,9 @@ export const ChatPage = () => {
     const handleSend = (e?: React.FormEvent) => {
         e?.preventDefault();
         if (!input.trim() || isTyping) return;
+        const modelForResponse = selectedModel;
 
-        const newUserMessage = {
+        const newUserMessage: Message = {
             id: Date.now().toString(),
             role: "user",
             content: input.trim(),
@@ -237,6 +239,7 @@ export const ChatPage = () => {
                     id: aiId,
                     role: "ai",
                     content: "",
+                    model: modelForResponse,
                     sources: MOCK_SOURCES,
                     isStreaming: true,
                     timestamp: new Date(),
@@ -924,6 +927,7 @@ const ChatMessage = ({
     onViewSources: (sources: Source[]) => void;
 }) => {
     const isAi = message.role === "ai";
+    const messageSources = message.sources ?? [];
     const [copied, setCopied] = useState(false);
 
     const handleCopy = () => {
@@ -971,6 +975,9 @@ const ChatMessage = ({
                 >
                     {isAi ? (
                         <div className="prose prose-invert text-[15px] max-w-full overflow-hidden">
+                            <div className="mb-3 inline-flex items-center rounded-md border border-accent-blue/20 bg-accent-blue/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent-blue">
+                                {message.model || "Default Hosted Model"}
+                            </div>
                             {parseCustomMarkdown(message.content)}
 
                             {/* Mock Citations */}
@@ -1017,12 +1024,12 @@ const ChatMessage = ({
                             )}
                         </button>
 
-                        {message.sources && message.sources.length > 0 && (
+                        {messageSources.length > 0 && (
                             <>
                                 <div className="w-px h-3 bg-white/10" />
                                 <button
                                     onClick={() =>
-                                        onViewSources(message.sources)
+                                        onViewSources(messageSources)
                                     }
                                     className="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-1.5 text-sm font-medium"
                                 >
