@@ -110,6 +110,28 @@ const Settings = () => {
                         </p>
                     </header>
 
+                    <div>
+                        <div className="flex items-start gap-3 text-sm text-gray-400 bg-accent-blue/5 p-4 rounded-xl border border-accent-blue/10">
+                            <AlertCircle className="w-4 h-4 text-accent-blue shrink-0 mt-1.5" />
+                            <div className="space-y-1">
+                                <p className="font-medium text-gray-200 text-lg">
+                                    Security & Transparency
+                                </p>
+                                <p className="leading-relaxed">
+                                    Your API keys are stored completely hashed
+                                    and encrypted using{" "}
+                                    <strong className="text-gray-300">
+                                        bcrypt.js
+                                    </strong>
+                                    , meaning even the administrators cannot
+                                    access or see them. Furthermore, the entire
+                                    codebase is open-sourced so you can
+                                    independently verify our security practices.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
                     <section className="space-y-6">
                         <div className="flex items-center gap-3 border-b border-white/10 pb-4">
                             <Key className="w-6 h-6 text-accent-blue" />
@@ -302,14 +324,6 @@ const Settings = () => {
                                     </p>
                                 </div>
                             )}
-                        </div>
-
-                        <div className="pt-2">
-                            <p className="text-xs text-gray-500 flex items-center gap-1.5">
-                                <AlertCircle className="w-3.5 h-3.5" />
-                                Keys are stored locally in your browser and used
-                                directly for requests.
-                            </p>
                         </div>
                     </section>
                 </div>

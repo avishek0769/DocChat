@@ -84,6 +84,7 @@ const Dashboard = () => {
     const navigate = useNavigate();
     const [chats, setChats] = useState<Chat[]>(MOCK_CHATS);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isDocsListOpen, setIsDocsListOpen] = useState(false);
 
     // New Chat Form State
     const [chatName, setChatName] = useState("");
@@ -276,10 +277,6 @@ const Dashboard = () => {
     const isStartDisabled =
         !chatUrl || (useOwnKey && (apiKeys.length === 0 || !selectedKeyId));
 
-    const totalPagesIndexed = chats
-        .filter((c) => c.status === "ready")
-        .reduce((sum, c) => sum + c.pages, 0);
-
     const totalDataProcessed = chats
         .filter((c) => c.status === "ready")
         .reduce((sum, c) => sum + parseFloat(c.size) || 0, 0);
@@ -345,7 +342,7 @@ const Dashboard = () => {
                     </header>
 
                     {/* Quick Insights */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         {[
                             {
                                 label: "Total Chats",
@@ -355,11 +352,34 @@ const Dashboard = () => {
                                 ),
                             },
                             {
-                                label: "Pages Indexed",
-                                value: totalPagesIndexed.toString(),
+                                label: "Docs Processed",
+                                value: chats.filter(c => c.status === "ready").reduce((acc, c) => acc + c.urls.length, 0).toString(),
                                 icon: (
-                                    <FileText className="w-5 h-5 text-indigo-400" />
+                                    <CheckCircle2 className="w-5 h-5 text-green-400" />
                                 ),
+                                action: (
+                                    <button
+                                        onClick={() => setIsDocsListOpen(true)}
+                                        className="text-xs text-accent-blue hover:text-accent-blue/80 hover:underline mt-1 block"
+                                    >
+                                        View List
+                                    </button>
+                                )
+                            },
+                            {
+                                label: "Tokens Used (Month)",
+                                value: "1.2M",
+                                icon: (
+                                    <Zap className="w-5 h-5 text-indigo-400" />
+                                ),
+                                action: (
+                                    <button
+                                        onClick={() => navigate('/usage')}
+                                        className="text-xs text-accent-blue hover:text-accent-blue/80 hover:underline mt-1 block"
+                                    >
+                                        View Details
+                                    </button>
+                                )
                             },
                             {
                                 label: "Data Processed",
@@ -380,6 +400,7 @@ const Dashboard = () => {
                                     <p className="text-2xl font-bold">
                                         {stat.value}
                                     </p>
+                                    {stat.action}
                                 </div>
                                 <div className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center border border-white/5">
                                     {stat.icon}
@@ -430,7 +451,7 @@ const Dashboard = () => {
                                                                 href={u}
                                                                 target="_blank"
                                                                 rel="noreferrer"
-                                                                className="text-xs text-gray-500 hover:text-accent-blue bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 px-2 py-0.5 rounded transition-all truncate max-w-[150px]"
+                                                                className="text-xs text-gray-500 hover:text-accent-blue bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 px-2 py-0.5 rounded transition-all truncate max-w-37.5"
                                                                 title={u}
                                                             >
                                                                 {(() => { try { return new URL(u).hostname; } catch { return u; } })()}
@@ -566,6 +587,63 @@ const Dashboard = () => {
                     </div>
                 </div>
             </main>
+
+            {/* Docs List Modal */}
+            {isDocsListOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div
+                        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                        onClick={() => setIsDocsListOpen(false)}
+                    />
+                    <div className="relative w-full max-w-lg bg-[#0b0b0f] border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+                        {/* Modal Header */}
+                        <div className="flex items-center justify-between p-5 border-b border-white/5 bg-white/2 shrink-0">
+                            <h2 className="text-lg font-semibold flex items-center gap-2">
+                                <CheckCircle2 className="w-5 h-5 text-green-400" />
+                                Processed Documentations
+                            </h2>
+                            <button
+                                onClick={() => setIsDocsListOpen(false)}
+                                className="p-1 rounded-md text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Modal Body */}
+                        <div className="p-5 overflow-y-auto custom-scrollbar flex-1 space-y-4">
+                            {chats.filter(c => c.status === "ready").length > 0 ? (
+                                chats
+                                    .filter(c => c.status === "ready")
+                                    .flatMap(chat => 
+                                        chat.urls.map((url, i) => (
+                                            <div key={`${chat.id}-${i}`} className="p-3 bg-white/5 border border-white/10 rounded-xl hover:border-white/20 transition-colors">
+                                                <h3 className="font-medium text-gray-200 text-sm truncate">{chat.title}</h3>
+                                                <a href={url} target="_blank" rel="noreferrer" className="text-xs text-accent-blue hover:underline truncate block mt-1">
+                                                    {url}
+                                                </a>
+                                            </div>
+                                        ))
+                                    )
+                            ) : (
+                                <div className="text-center py-8">
+                                    <p className="text-sm text-gray-400">No documentations have been fully processed yet.</p>
+                                </div>
+                            )}
+                        </div>
+                        
+                        {/* Modal Footer */}
+                        <div className="p-4 border-t border-white/5 bg-[#0b0b0f] shrink-0 text-right">
+                            <button
+                                onClick={() => setIsDocsListOpen(false)}
+                                className="px-5 py-2 rounded-lg text-sm font-medium text-white bg-white/10 hover:bg-white/15 transition-colors"
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Create Chat Modal */}
             {isModalOpen && (

@@ -6,6 +6,7 @@ import {
     Settings as SettingsIcon,
     User,
     LogOut,
+    Activity
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -21,6 +22,7 @@ export const Sidebar = ({ isCollapsed = false }: SidebarProps) => {
     const navItems = [
         { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
         { name: "All Chats", path: "/chats", icon: MessageSquare },
+        { name: "Usage", path: "/usage", icon: Activity },
         { name: "Settings", path: "/settings", icon: SettingsIcon },
         { name: "Profile", path: "/profile", icon: User },
     ];

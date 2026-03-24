@@ -160,7 +160,7 @@ const AllChats = () => {
                                                         href={u}
                                                         target="_blank"
                                                         rel="noreferrer"
-                                                        className="text-xs text-gray-500 hover:text-accent-blue flex items-center gap-1.5 bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 px-2 py-0.5 rounded transition-all truncate max-w-[150px]"
+                                                        className="text-xs text-gray-500 hover:text-accent-blue flex items-center gap-1.5 bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 px-2 py-0.5 rounded transition-all truncate max-w-37.5"
                                                         title={u}
                                                     >
                                                         {(() => { try { return new URL(u).hostname; } catch { return u; } })()} <ExternalLink className="w-3 h-3 shrink-0" />
