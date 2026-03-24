@@ -1,21 +1,24 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
     Terminal,
     LayoutDashboard,
     MessageSquare,
     Settings as SettingsIcon,
+    User,
     LogOut,
 } from "lucide-react";
 import clsx from "clsx";
 
 export const Sidebar = () => {
     const location = useLocation();
+    const navigate = useNavigate();
     const path = location.pathname;
 
     const navItems = [
         { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
         { name: "All Chats", path: "/chats", icon: MessageSquare },
         { name: "Settings", path: "/settings", icon: SettingsIcon },
+        { name: "Profile", path: "/profile", icon: User },
     ];
 
     return (
@@ -56,7 +59,10 @@ export const Sidebar = () => {
 
             {/* Profile Bottom */}
             <div className="p-4 border-t border-white/5">
-                <button className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-white/5 transition-colors group">
+                <button
+                    onClick={() => navigate("/profile")}
+                    className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-white/5 transition-colors group"
+                >
                     <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-linear-to-br from-accent-blue to-accent-purple flex items-center justify-center text-sm font-bold shadow-lg text-white">
                             D

@@ -263,7 +263,7 @@ const Settings = () => {
                                                 <h4 className="font-medium text-gray-200">
                                                     {key.name}
                                                 </h4>
-                                                <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-white/10 text-accent-blue">
+                                                <span className="px-2 py-0.5 rounded text-xs font-medium bg-white/10 text-accent-blue">
                                                     {key.provider}
                                                 </span>
                                             </div>

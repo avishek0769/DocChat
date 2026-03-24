@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Sidebar } from "../components/Sidebar";
 
 import {
@@ -13,16 +13,39 @@ import {
     CheckCircle2,
     X,
     Zap,
+    Eye,
+    EyeOff,
+    RefreshCw,
 } from "lucide-react";
 
+interface Chat {
+    id: string;
+    title: string;
+    url: string;
+    status: string;
+    pages: number;
+    totalPages: number;
+    size: string;
+    updatedAt: string;
+}
+
+interface ApiKeyEntry {
+    id: string;
+    name: string;
+    keyMasked: string;
+    provider: string;
+    model: string;
+}
+
 // Mock Data
-const MOCK_CHATS = [
+const MOCK_CHATS: Chat[] = [
     {
         id: "1",
         title: "React Documentation",
         url: "https://react.dev/reference",
-        status: "ready", 
+        status: "ready",
         pages: 142,
+        totalPages: 142,
         size: "1.2 MB",
         updatedAt: "2 hours ago",
     },
@@ -32,6 +55,7 @@ const MOCK_CHATS = [
         url: "https://docs.stripe.com/api",
         status: "processing",
         pages: 45,
+        totalPages: 128,
         size: "...",
         updatedAt: "Just now",
     },
@@ -41,6 +65,7 @@ const MOCK_CHATS = [
         url: "https://wiki.internal.dev/v1",
         status: "failed",
         pages: 0,
+        totalPages: 0,
         size: "0 B",
         updatedAt: "2 days ago",
     },
@@ -55,83 +80,207 @@ const PROVIDER_MODELS: Record<string, string[]> = {
 };
 
 const Dashboard = () => {
-    const [chats, setChats] = useState(MOCK_CHATS);
+    const [chats, setChats] = useState<Chat[]>(MOCK_CHATS);
     const [isModalOpen, setIsModalOpen] = useState(false);
-    
+
     // New Chat Form State
     const [chatName, setChatName] = useState("");
     const [chatUrl, setChatUrl] = useState("");
-    
+
     // API Keys State
-    const [apiKeys, setApiKeys] = useState<{id: string, name: string, provider: string}[]>([]);
+    const [apiKeys, setApiKeys] = useState<ApiKeyEntry[]>([
+        {
+            id: "default-1",
+            name: "My Sandbox Key",
+            keyMasked: "sk-...89ab",
+            provider: "OpenAI",
+            model: "GPT-4o",
+        },
+    ]);
     const [useOwnKey, setUseOwnKey] = useState(false);
     const [selectedKeyId, setSelectedKeyId] = useState("");
-    
+
     // Inline new key form
     const [newKeyName, setNewKeyName] = useState("");
     const [newKeyValue, setNewKeyValue] = useState("");
     const [selectedProvider, setSelectedProvider] = useState("");
     const [selectedModel, setSelectedModel] = useState("");
+    const [showKeyValue, setShowKeyValue] = useState(false);
 
-    // Auto-detect provider based on key prefix gracefully without useEffect limits
+    // Delete Confirmation
+    const [deleteTarget, setDeleteTarget] = useState<Chat | null>(null);
+
+    // Success toast
+    const [toast, setToast] = useState<string | null>(null);
+
+    const showToast = useCallback((message: string) => {
+        setToast(message);
+        setTimeout(() => setToast(null), 2500);
+    }, []);
+
+    // Auto-detect provider based on key prefix
     const handleKeyChange = (val: string) => {
         setNewKeyValue(val);
         if (!val) return;
-        
+
         let detected = "";
         if (val.startsWith("sk-ant")) detected = "Anthropic";
-        else if (val.startsWith("sk-proj-") || val.startsWith("sk-")) detected = "OpenAI";
+        else if (val.startsWith("sk-proj-") || val.startsWith("sk-"))
+            detected = "OpenAI";
         else if (val.startsWith("xai-")) detected = "xAI";
         else if (val.startsWith("AIza")) detected = "Google";
-        
+
         if (detected && detected !== selectedProvider) {
-          setSelectedProvider(detected);
-          setSelectedModel("");
+            setSelectedProvider(detected);
+            setSelectedModel("");
         }
     };
 
     const handleProviderChange = (val: string) => {
         setSelectedProvider(val);
-        setSelectedModel(""); // Reset model when user manually overrides
+        setSelectedModel("");
     };
 
     const handleSaveInlineKey = () => {
-        if (!newKeyName || !newKeyValue || !selectedProvider) return; // model optional
-        
-        const newKey = {
-            id: Math.random().toString(),
+        if (!newKeyName || !newKeyValue || !selectedProvider) return;
+
+        const keyMasked =
+            newKeyValue.length > 10
+                ? newKeyValue.substring(0, 4) + "..." + newKeyValue.slice(-4)
+                : "sk-...";
+
+        const newKey: ApiKeyEntry = {
+            id: Math.random().toString(36).substring(2),
             name: newKeyName,
-            provider: selectedProvider
+            keyMasked,
+            provider: selectedProvider,
+            model: selectedModel || "",
         };
-        
-        setApiKeys([...apiKeys, newKey]);
+
+        setApiKeys((prev) => [...prev, newKey]);
         setSelectedKeyId(newKey.id);
-        
+
         // Reset inline form
         setNewKeyName("");
         setNewKeyValue("");
         setSelectedProvider("");
         setSelectedModel("");
+        setShowKeyValue(false);
+        showToast(`API key "${newKey.name}" saved successfully!`);
     };
 
     const handleCreateChat = () => {
-        const newChat = {
-            id: Math.random().toString(),
-            title: chatName || (chatUrl ? new URL(chatUrl).hostname : "New Documentation"),
-            url: chatUrl || "https://example.com",
+        if (!chatUrl) return;
+
+        const randomTotalPages = Math.floor(Math.random() * 200) + 30;
+        const newChat: Chat = {
+            id: Math.random().toString(36).substring(2),
+            title:
+                chatName ||
+                (() => {
+                    try {
+                        return new URL(chatUrl).hostname;
+                    } catch {
+                        return "New Documentation";
+                    }
+                })(),
+            url: chatUrl,
             status: "processing",
             pages: 0,
+            totalPages: randomTotalPages,
             size: "0 B",
-            updatedAt: "Just now"
+            updatedAt: "Just now",
         };
-        setChats([newChat, ...chats]);
+        setChats((prev) => [newChat, ...prev]);
         setIsModalOpen(false);
         setChatName("");
         setChatUrl("");
+        setUseOwnKey(false);
+        setSelectedKeyId("");
+        showToast(`Chat "${newChat.title}" created and processing started!`);
+
+        // Simulate processing progress
+        simulateProcessing(newChat.id, randomTotalPages);
+    };
+
+    const simulateProcessing = (chatId: string, totalPages: number) => {
+        let currentPage = 0;
+        const interval = setInterval(() => {
+            currentPage += Math.floor(Math.random() * 8) + 2;
+            if (currentPage >= totalPages) {
+                currentPage = totalPages;
+                clearInterval(interval);
+                setChats((prev) =>
+                    prev.map((c) =>
+                        c.id === chatId
+                            ? {
+                                  ...c,
+                                  pages: totalPages,
+                                  status: "ready",
+                                  size: `${(totalPages * 0.008).toFixed(1)} MB`,
+                                  updatedAt: "Just now",
+                              }
+                            : c,
+                    ),
+                );
+                showToast("Processing complete! Chat is ready.");
+                return;
+            }
+            setChats((prev) =>
+                prev.map((c) =>
+                    c.id === chatId
+                        ? {
+                              ...c,
+                              pages: currentPage,
+                              size: `${(currentPage * 0.008).toFixed(1)} MB`,
+                          }
+                        : c,
+                ),
+            );
+        }, 1200);
+    };
+
+    const handleDeleteChat = () => {
+        if (!deleteTarget) return;
+        const title = deleteTarget.title;
+        setChats((prev) => prev.filter((c) => c.id !== deleteTarget.id));
+        setDeleteTarget(null);
+        showToast(`"${title}" deleted successfully.`);
+    };
+
+    const handleRetryFailed = (chatId: string) => {
+        const chat = chats.find((c) => c.id === chatId);
+        if (!chat) return;
+        const totalPages = Math.floor(Math.random() * 150) + 30;
+        setChats((prev) =>
+            prev.map((c) =>
+                c.id === chatId
+                    ? {
+                          ...c,
+                          status: "processing",
+                          pages: 0,
+                          totalPages,
+                          size: "0 B",
+                          updatedAt: "Just now",
+                      }
+                    : c,
+            ),
+        );
+        showToast(`Retrying "${chat.title}"...`);
+        simulateProcessing(chatId, totalPages);
     };
 
     // Disabled state for the Start Processing button
-    const isStartDisabled = !chatUrl || (useOwnKey && (apiKeys.length === 0 || !selectedKeyId));
+    const isStartDisabled =
+        !chatUrl || (useOwnKey && (apiKeys.length === 0 || !selectedKeyId));
+
+    const totalPagesIndexed = chats
+        .filter((c) => c.status === "ready")
+        .reduce((sum, c) => sum + c.pages, 0);
+
+    const totalDataProcessed = chats
+        .filter((c) => c.status === "ready")
+        .reduce((sum, c) => sum + parseFloat(c.size) || 0, 0);
 
     const getStatusBadge = (status: string) => {
         switch (status) {
@@ -179,8 +328,10 @@ const Dashboard = () => {
                         </div>
                         <div className="flex items-center gap-4">
                             <div className="text-sm font-medium text-gray-400 bg-white/5 px-3 py-1.5 rounded-full border border-white/5">
-                                <span className="text-white">{chats.length}</span> / 5 chats
-                                used
+                                <span className="text-white">
+                                    {chats.length}
+                                </span>{" "}
+                                / 5 chats used
                             </div>
                             <button
                                 onClick={() => setIsModalOpen(true)}
@@ -203,14 +354,14 @@ const Dashboard = () => {
                             },
                             {
                                 label: "Pages Indexed",
-                                value: "142",
+                                value: totalPagesIndexed.toString(),
                                 icon: (
                                     <FileText className="w-5 h-5 text-indigo-400" />
                                 ),
                             },
                             {
                                 label: "Data Processed",
-                                value: "1.2 MB",
+                                value: `${totalDataProcessed.toFixed(1)} MB`,
                                 icon: (
                                     <Database className="w-5 h-5 text-purple-400" />
                                 ),
@@ -246,76 +397,138 @@ const Dashboard = () => {
 
                         {chats.length > 0 ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {chats.map((chat) => (
-                                    <div
-                                        key={chat.id}
-                                        className="group relative flex flex-col bg-[#0d0d12] rounded-xl border border-white/5 hover:border-white/15 p-5 transition-all hover:shadow-2xl hover:-translate-y-1"
-                                    >
-                                        <div className="flex justify-between items-start mb-4">
-                                            <div className="truncate pr-4">
-                                                <h3
-                                                    className="font-semibold text-gray-100 truncate"
-                                                    title={chat.title}
-                                                >
-                                                    {chat.title}
-                                                </h3>
-                                                <a
-                                                    href={chat.url}
-                                                    target="_blank"
-                                                    rel="noreferrer"
-                                                    className="text-xs text-gray-500 hover:text-accent-blue truncate block mt-1 transition-colors"
-                                                >
-                                                    {chat.url}
-                                                </a>
-                                            </div>
-                                            <div className=" shrink-0">
-                                                {getStatusBadge(chat.status)}
-                                            </div>
-                                        </div>
+                                {chats.map((chat) => {
+                                    const progressPercent =
+                                        chat.status === "processing" &&
+                                        chat.totalPages > 0
+                                            ? Math.round(
+                                                  (chat.pages /
+                                                      chat.totalPages) *
+                                                      100,
+                                              )
+                                            : 0;
 
-                                        <div className="grid grid-cols-3 gap-2 mt-2 mb-6">
-                                            <div className="bg-white/5 rounded-lg p-2 flex flex-col items-center justify-center border border-white/5">
-                                                <FileText className="w-3 h-3 text-gray-400 mb-1" />
-                                                <span className="text-xs font-medium text-gray-300">
-                                                    {chat.pages}
-                                                </span>
+                                    return (
+                                        <div
+                                            key={chat.id}
+                                            className="group relative flex flex-col bg-[#0d0d12] rounded-xl border border-white/5 hover:border-white/15 p-5 transition-all hover:shadow-2xl hover:-translate-y-1"
+                                        >
+                                            <div className="flex justify-between items-start mb-4">
+                                                <div className="truncate pr-4">
+                                                    <h3
+                                                        className="font-semibold text-gray-100 truncate"
+                                                        title={chat.title}
+                                                    >
+                                                        {chat.title}
+                                                    </h3>
+                                                    <a
+                                                        href={chat.url}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="text-xs text-gray-500 hover:text-accent-blue truncate block mt-1 transition-colors"
+                                                    >
+                                                        {chat.url}
+                                                    </a>
+                                                </div>
+                                                <div className="shrink-0">
+                                                    {getStatusBadge(
+                                                        chat.status,
+                                                    )}
+                                                </div>
                                             </div>
-                                            <div className="bg-white/5 rounded-lg p-2 flex flex-col items-center justify-center border border-white/5">
-                                                <Database className="w-3 h-3 text-gray-400 mb-1" />
-                                                <span className="text-xs font-medium text-gray-300">
-                                                    {chat.size}
-                                                </span>
-                                            </div>
-                                            <div className="bg-white/5 rounded-lg p-2 flex flex-col items-center justify-center border border-white/5">
-                                                <Clock className="w-3 h-3 text-gray-400 mb-1" />
-                                                <span className="text-xs font-medium text-gray-300 truncate w-full text-center">
-                                                    {chat.updatedAt}
-                                                </span>
-                                            </div>
-                                        </div>
 
-                                        <div className="mt-auto flex items-center gap-3 pt-4 border-t border-white/5">
-                                            <button
-                                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors ${
-                                                    chat.status === "ready"
-                                                        ? "bg-white/10 hover:bg-white/15 text-white"
-                                                        : "bg-white/5 text-gray-500 cursor-not-allowed"
-                                                }`}
-                                                disabled={
-                                                    chat.status !== "ready"
-                                                }
-                                            >
-                                                Open Chat
-                                            </button>
-                                            <button 
-                                                onClick={() => setChats(chats.filter(c => c.id !== chat.id))}
-                                                className="p-2 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-400/10 transition-colors border border-transparent hover:border-red-400/20"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
+                                            {/* Processing Progress Bar */}
+                                            {chat.status === "processing" && (
+                                                <div className="mb-4">
+                                                    <div className="flex items-center justify-between text-xs mb-2">
+                                                        <span className="text-gray-400 flex items-center gap-1.5">
+                                                            <Loader2 className="w-3 h-3 animate-spin text-yellow-400" />
+                                                            Ingesting pages...
+                                                        </span>
+                                                        <span className="text-yellow-400 font-medium font-mono">
+                                                            {chat.pages}/
+                                                            {chat.totalPages}
+                                                        </span>
+                                                    </div>
+                                                    <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden border border-white/5">
+                                                        <div
+                                                            className="h-full bg-linear-to-r from-yellow-500 to-amber-400 rounded-full transition-all duration-500 ease-out"
+                                                            style={{
+                                                                width: `${progressPercent}%`,
+                                                            }}
+                                                        />
+                                                    </div>
+                                                    <p className="text-xs text-gray-500 mt-1.5 text-right">
+                                                        {progressPercent}%
+                                                        complete
+                                                    </p>
+                                                </div>
+                                            )}
+
+                                            {/* Stats for ready/failed */}
+                                            {chat.status !== "processing" && (
+                                                <div className="grid grid-cols-3 gap-2 mt-2 mb-6">
+                                                    <div className="bg-white/5 rounded-lg p-2 flex flex-col items-center justify-center border border-white/5">
+                                                        <FileText className="w-3 h-3 text-gray-400 mb-1" />
+                                                        <span className="text-xs font-medium text-gray-300">
+                                                            {chat.pages}
+                                                        </span>
+                                                    </div>
+                                                    <div className="bg-white/5 rounded-lg p-2 flex flex-col items-center justify-center border border-white/5">
+                                                        <Database className="w-3 h-3 text-gray-400 mb-1" />
+                                                        <span className="text-xs font-medium text-gray-300">
+                                                            {chat.size}
+                                                        </span>
+                                                    </div>
+                                                    <div className="bg-white/5 rounded-lg p-2 flex flex-col items-center justify-center border border-white/5">
+                                                        <Clock className="w-3 h-3 text-gray-400 mb-1" />
+                                                        <span className="text-xs font-medium text-gray-300 truncate w-full text-center">
+                                                            {chat.updatedAt}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            <div className="mt-auto flex items-center gap-3 pt-4 border-t border-white/5">
+                                                {chat.status === "ready" && (
+                                                    <button className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors bg-white/10 hover:bg-white/15 text-white">
+                                                        Open Chat
+                                                    </button>
+                                                )}
+                                                {chat.status ===
+                                                    "processing" && (
+                                                    <button
+                                                        disabled
+                                                        className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors bg-white/10 text-white/40 cursor-not-allowed opacity-50"
+                                                    >
+                                                        Open Chat
+                                                    </button>
+                                                )}
+                                                {chat.status === "failed" && (
+                                                    <button
+                                                        onClick={() =>
+                                                            handleRetryFailed(
+                                                                chat.id,
+                                                            )
+                                                        }
+                                                        className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/10"
+                                                    >
+                                                        <RefreshCw className="w-3.5 h-3.5" />
+                                                        Retry
+                                                    </button>
+                                                )}
+                                                <button
+                                                    onClick={() =>
+                                                        setDeleteTarget(chat)
+                                                    }
+                                                    className="p-2 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-400/10 transition-colors border border-transparent hover:border-red-400/20"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         ) : (
                             /* Empty State */
@@ -351,7 +564,7 @@ const Dashboard = () => {
                         onClick={() => setIsModalOpen(false)}
                     />
 
-                    <div className="relative w-full max-w-md bg-[#0b0b0f] border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 lg:max-h-[90vh] overflow-y-auto custom-scrollbar">
+                    <div className="relative w-full max-w-md bg-[#0b0b0f] border border-white/10 rounded-2xl shadow-2xl overflow-hidden lg:max-h-[90vh] overflow-y-auto custom-scrollbar">
                         {/* Modal Header */}
                         <div className="flex items-center justify-between p-5 border-b border-white/5 bg-white/2 sticky top-0 z-10 backdrop-blur-md">
                             <h2 className="text-lg font-semibold flex items-center gap-2">
@@ -379,7 +592,9 @@ const Dashboard = () => {
                                 <input
                                     type="text"
                                     value={chatName}
-                                    onChange={(e) => setChatName(e.target.value)}
+                                    onChange={(e) =>
+                                        setChatName(e.target.value)
+                                    }
                                     placeholder="e.g. React Docs 18.2"
                                     className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-blue/50 focus:ring-1 focus:ring-accent-blue/50 transition-all"
                                 />
@@ -388,7 +603,8 @@ const Dashboard = () => {
                             {/* URL Input */}
                             <div className="space-y-1.5">
                                 <label className="text-sm font-medium text-gray-300">
-                                    Documentation URL <span className="text-red-400">*</span>
+                                    Documentation URL{" "}
+                                    <span className="text-red-400">*</span>
                                 </label>
                                 <input
                                     type="url"
@@ -425,84 +641,380 @@ const Dashboard = () => {
                                 </label>
 
                                 {useOwnKey && (
-                                    <div
-                                        className="space-y-4 pt-1 animate-in fade-in"
-                                    >
+                                    <div className="space-y-4 pt-1">
                                         {apiKeys.length > 0 ? (
                                             <div className="space-y-1.5">
-                                                <label className="text-xs font-medium text-gray-400">Select Provider Key <span className="text-red-400">*</span></label>
-                                                <select 
+                                                <label className="text-xs font-medium text-gray-400">
+                                                    Select Provider Key{" "}
+                                                    <span className="text-red-400">
+                                                        *
+                                                    </span>
+                                                </label>
+                                                <select
                                                     value={selectedKeyId}
-                                                    onChange={(e) => setSelectedKeyId(e.target.value)}
+                                                    onChange={(e) =>
+                                                        setSelectedKeyId(
+                                                            e.target.value,
+                                                        )
+                                                    }
                                                     className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-accent-blue/50 appearance-none"
                                                 >
-                                                    <option value="" disabled>Select your saved key...</option>
-                                                    {apiKeys.map(k => (
-                                                        <option key={k.id} value={k.id}>{k.name} ({k.provider})</option>
+                                                    <option value="" disabled>
+                                                        Select your saved key...
+                                                    </option>
+                                                    {apiKeys.map((k) => (
+                                                        <option
+                                                            key={k.id}
+                                                            value={k.id}
+                                                        >
+                                                            {k.name} (
+                                                            {k.provider})
+                                                        </option>
                                                     ))}
                                                 </select>
-                                                <p className="text-xs text-gray-500 mt-2">Manage more keys in Settings.</p>
+                                                <p className="text-xs text-gray-500 mt-2">
+                                                    Manage more keys in
+                                                    Settings.
+                                                </p>
+
+                                                {/* Inline add another key */}
+                                                <details className="mt-3 group/details">
+                                                    <summary className="text-xs text-accent-blue cursor-pointer hover:text-accent-blue/80 transition-colors font-medium">
+                                                        + Add another key
+                                                    </summary>
+                                                    <div className="mt-3 p-4 bg-white/2 border border-white/5 rounded-xl space-y-3">
+                                                        <div className="space-y-1.5">
+                                                            <label className="text-xs font-medium text-gray-400">
+                                                                Key Name
+                                                            </label>
+                                                            <input
+                                                                type="text"
+                                                                value={
+                                                                    newKeyName
+                                                                }
+                                                                onChange={(e) =>
+                                                                    setNewKeyName(
+                                                                        e.target
+                                                                            .value,
+                                                                    )
+                                                                }
+                                                                placeholder="e.g. My OpenAI Key"
+                                                                className="w-full bg-[#111] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent-blue/50"
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-1.5">
+                                                            <label className="text-xs font-medium text-gray-400">
+                                                                API Key
+                                                            </label>
+                                                            <div className="relative">
+                                                                <input
+                                                                    type={
+                                                                        showKeyValue
+                                                                            ? "text"
+                                                                            : "password"
+                                                                    }
+                                                                    value={
+                                                                        newKeyValue
+                                                                    }
+                                                                    onChange={(
+                                                                        e,
+                                                                    ) =>
+                                                                        handleKeyChange(
+                                                                            e
+                                                                                .target
+                                                                                .value,
+                                                                        )
+                                                                    }
+                                                                    placeholder="sk-... (Auto-detects provider)"
+                                                                    className="w-full bg-[#111] border border-white/10 rounded-lg px-3 pr-10 py-2 text-sm text-white font-mono focus:outline-none focus:border-accent-blue/50"
+                                                                />
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() =>
+                                                                        setShowKeyValue(
+                                                                            !showKeyValue,
+                                                                        )
+                                                                    }
+                                                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
+                                                                >
+                                                                    {showKeyValue ? (
+                                                                        <EyeOff className="w-3.5 h-3.5" />
+                                                                    ) : (
+                                                                        <Eye className="w-3.5 h-3.5" />
+                                                                    )}
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                        <div className="grid grid-cols-2 gap-2">
+                                                            <div className="space-y-1.5">
+                                                                <label className="text-xs font-medium text-gray-400">
+                                                                    Provider
+                                                                </label>
+                                                                <select
+                                                                    value={
+                                                                        selectedProvider
+                                                                    }
+                                                                    onChange={(
+                                                                        e,
+                                                                    ) =>
+                                                                        handleProviderChange(
+                                                                            e
+                                                                                .target
+                                                                                .value,
+                                                                        )
+                                                                    }
+                                                                    className="w-full bg-[#111] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent-blue/50 appearance-none"
+                                                                >
+                                                                    <option
+                                                                        value=""
+                                                                        disabled
+                                                                    >
+                                                                        Select...
+                                                                    </option>
+                                                                    {PROVIDERS.map(
+                                                                        (p) => (
+                                                                            <option
+                                                                                key={
+                                                                                    p
+                                                                                }
+                                                                                value={
+                                                                                    p
+                                                                                }
+                                                                            >
+                                                                                {
+                                                                                    p
+                                                                                }
+                                                                            </option>
+                                                                        ),
+                                                                    )}
+                                                                </select>
+                                                            </div>
+                                                            <div className="space-y-1.5">
+                                                                <label className="text-xs font-medium text-gray-400">
+                                                                    Model{" "}
+                                                                    <span className="text-gray-500 font-normal">
+                                                                        (Opt.)
+                                                                    </span>
+                                                                </label>
+                                                                <select
+                                                                    value={
+                                                                        selectedModel
+                                                                    }
+                                                                    onChange={(
+                                                                        e,
+                                                                    ) =>
+                                                                        setSelectedModel(
+                                                                            e
+                                                                                .target
+                                                                                .value,
+                                                                        )
+                                                                    }
+                                                                    disabled={
+                                                                        !selectedProvider
+                                                                    }
+                                                                    className="w-full bg-[#111] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent-blue/50 appearance-none disabled:opacity-50"
+                                                                >
+                                                                    <option
+                                                                        value=""
+                                                                        disabled
+                                                                    >
+                                                                        Model...
+                                                                    </option>
+                                                                    {selectedProvider &&
+                                                                        PROVIDER_MODELS[
+                                                                            selectedProvider
+                                                                        ]?.map(
+                                                                            (
+                                                                                m,
+                                                                            ) => (
+                                                                                <option
+                                                                                    key={
+                                                                                        m
+                                                                                    }
+                                                                                    value={
+                                                                                        m
+                                                                                    }
+                                                                                >
+                                                                                    {
+                                                                                        m
+                                                                                    }
+                                                                                </option>
+                                                                            ),
+                                                                        )}
+                                                                </select>
+                                                            </div>
+                                                        </div>
+                                                        <button
+                                                            onClick={
+                                                                handleSaveInlineKey
+                                                            }
+                                                            disabled={
+                                                                !newKeyName ||
+                                                                !newKeyValue ||
+                                                                !selectedProvider
+                                                            }
+                                                            className="w-full mt-1 py-2 rounded-lg bg-white/10 hover:bg-white/15 disabled:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-medium transition-colors"
+                                                        >
+                                                            Save Key
+                                                        </button>
+                                                    </div>
+                                                </details>
                                             </div>
                                         ) : (
                                             <div className="p-4 bg-white/2 border border-white/5 rounded-xl space-y-4">
-                                                <p className="text-xs text-gray-400">You haven't saved any API keys yet.</p>
-                                                
+                                                <p className="text-xs text-gray-400">
+                                                    You haven't saved any API
+                                                    keys yet.
+                                                </p>
+
                                                 <div className="space-y-1.5">
-                                                    <label className="text-xs font-medium text-gray-400">Key Name</label>
+                                                    <label className="text-xs font-medium text-gray-400">
+                                                        Key Name
+                                                    </label>
                                                     <input
                                                         type="text"
                                                         value={newKeyName}
-                                                        onChange={(e) => setNewKeyName(e.target.value)}
+                                                        onChange={(e) =>
+                                                            setNewKeyName(
+                                                                e.target.value,
+                                                            )
+                                                        }
                                                         placeholder="e.g. My OpenAI Key"
                                                         className="w-full bg-[#111] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent-blue/50"
                                                     />
                                                 </div>
 
                                                 <div className="space-y-1.5">
-                                                    <label className="text-xs font-medium text-gray-400">API Key</label>
-                                                    <input
-                                                        type="password"
-                                                        value={newKeyValue}
-                                                        onChange={(e) => handleKeyChange(e.target.value)}
-                                                        placeholder="sk-... (Auto-detects provider)"
-                                                        className="w-full bg-[#111] border border-white/10 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-accent-blue/50"
-                                                    />
+                                                    <label className="text-xs font-medium text-gray-400">
+                                                        API Key
+                                                    </label>
+                                                    <div className="relative">
+                                                        <input
+                                                            type={
+                                                                showKeyValue
+                                                                    ? "text"
+                                                                    : "password"
+                                                            }
+                                                            value={newKeyValue}
+                                                            onChange={(e) =>
+                                                                handleKeyChange(
+                                                                    e.target
+                                                                        .value,
+                                                                )
+                                                            }
+                                                            placeholder="sk-... (Auto-detects provider)"
+                                                            className="w-full bg-[#111] border border-white/10 rounded-lg px-3 pr-10 py-2 text-sm text-white font-mono focus:outline-none focus:border-accent-blue/50"
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                setShowKeyValue(
+                                                                    !showKeyValue,
+                                                                )
+                                                            }
+                                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
+                                                        >
+                                                            {showKeyValue ? (
+                                                                <EyeOff className="w-3.5 h-3.5" />
+                                                            ) : (
+                                                                <Eye className="w-3.5 h-3.5" />
+                                                            )}
+                                                        </button>
+                                                    </div>
                                                 </div>
 
                                                 <div className="grid grid-cols-2 gap-2">
                                                     <div className="space-y-1.5">
-                                                        <label className="text-xs font-medium text-gray-400">Provider</label>
+                                                        <label className="text-xs font-medium text-gray-400">
+                                                            Provider
+                                                        </label>
                                                         <select
-                                                            value={selectedProvider}
-                                                            onChange={(e) => handleProviderChange(e.target.value)}
+                                                            value={
+                                                                selectedProvider
+                                                            }
+                                                            onChange={(e) =>
+                                                                handleProviderChange(
+                                                                    e.target
+                                                                        .value,
+                                                                )
+                                                            }
                                                             className="w-full bg-[#111] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent-blue/50 appearance-none"
                                                         >
-                                                            <option value="" disabled>Select...</option>
-                                                            {PROVIDERS.map(p => (
-                                                                <option key={p} value={p}>{p}</option>
-                                                            ))}
+                                                            <option
+                                                                value=""
+                                                                disabled
+                                                            >
+                                                                Select...
+                                                            </option>
+                                                            {PROVIDERS.map(
+                                                                (p) => (
+                                                                    <option
+                                                                        key={p}
+                                                                        value={
+                                                                            p
+                                                                        }
+                                                                    >
+                                                                        {p}
+                                                                    </option>
+                                                                ),
+                                                            )}
                                                         </select>
                                                     </div>
 
                                                     <div className="space-y-1.5">
-                                                        <label className="text-xs font-medium text-gray-400">Preferred Model <span className="text-gray-500 font-normal">(Optional)</span></label>
+                                                        <label className="text-xs font-medium text-gray-400">
+                                                            Preferred Model{" "}
+                                                            <span className="text-gray-500 font-normal">
+                                                                (Optional)
+                                                            </span>
+                                                        </label>
                                                         <select
-                                                            value={selectedModel}
-                                                            onChange={(e) => setSelectedModel(e.target.value)}
-                                                            disabled={!selectedProvider}
+                                                            value={
+                                                                selectedModel
+                                                            }
+                                                            onChange={(e) =>
+                                                                setSelectedModel(
+                                                                    e.target
+                                                                        .value,
+                                                                )
+                                                            }
+                                                            disabled={
+                                                                !selectedProvider
+                                                            }
                                                             className="w-full bg-[#111] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent-blue/50 appearance-none disabled:opacity-50"
                                                         >
-                                                            <option value="" disabled>Model...</option>
-                                                            {selectedProvider && PROVIDER_MODELS[selectedProvider]?.map(m => (
-                                                                <option key={m} value={m}>{m}</option>
-                                                            ))}
+                                                            <option
+                                                                value=""
+                                                                disabled
+                                                            >
+                                                                Model...
+                                                            </option>
+                                                            {selectedProvider &&
+                                                                PROVIDER_MODELS[
+                                                                    selectedProvider
+                                                                ]?.map((m) => (
+                                                                    <option
+                                                                        key={m}
+                                                                        value={
+                                                                            m
+                                                                        }
+                                                                    >
+                                                                        {m}
+                                                                    </option>
+                                                                ))}
                                                         </select>
                                                     </div>
                                                 </div>
 
                                                 <button
-                                                    onClick={handleSaveInlineKey}
-                                                    disabled={!newKeyName || !newKeyValue || !selectedProvider}
+                                                    onClick={
+                                                        handleSaveInlineKey
+                                                    }
+                                                    disabled={
+                                                        !newKeyName ||
+                                                        !newKeyValue ||
+                                                        !selectedProvider
+                                                    }
                                                     className="w-full mt-2 py-2 rounded-lg bg-white/10 hover:bg-white/15 disabled:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-medium transition-colors"
                                                 >
                                                     Save Key to Continue
@@ -522,7 +1034,7 @@ const Dashboard = () => {
                             >
                                 Cancel
                             </button>
-                            <button 
+                            <button
                                 onClick={handleCreateChat}
                                 disabled={isStartDisabled}
                                 className="px-5 py-2 rounded-lg bg-accent-blue hover:bg-accent-blue/90 disabled:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors shadow-lg shadow-accent-blue/20"
@@ -530,6 +1042,59 @@ const Dashboard = () => {
                                 Start Processing
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Delete Confirmation Modal */}
+            {deleteTarget && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div
+                        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                        onClick={() => setDeleteTarget(null)}
+                    />
+                    <div className="relative w-full max-w-sm bg-[#0b0b0f] border border-white/10 rounded-2xl shadow-2xl p-6 text-center">
+                        <div className="w-14 h-14 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-4">
+                            <Trash2 className="w-6 h-6 text-red-400" />
+                        </div>
+                        <h3 className="text-lg font-semibold mb-2">
+                            Delete Chat?
+                        </h3>
+                        <p className="text-sm text-gray-400 mb-2">
+                            Are you sure you want to delete{" "}
+                            <strong className="text-gray-200">
+                                "{deleteTarget.title}"
+                            </strong>
+                            ?
+                        </p>
+                        <p className="text-xs text-gray-500 mb-6">
+                            This will permanently remove all indexed pages and
+                            chat history. This action cannot be undone.
+                        </p>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setDeleteTarget(null)}
+                                className="flex-1 px-4 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleDeleteChat}
+                                className="flex-1 px-4 py-2 rounded-lg text-sm font-medium text-white bg-red-500 hover:bg-red-600 transition-colors"
+                            >
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Toast Notification */}
+            {toast && (
+                <div className="fixed bottom-6 right-6 z-60 animate-in slide-in-from-bottom-4 fade-in duration-300">
+                    <div className="flex items-center gap-3 px-5 py-3 rounded-xl bg-[#1a1a24] border border-white/10 shadow-2xl shadow-black/40">
+                        <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />
+                        <span className="text-sm text-gray-200">{toast}</span>
                     </div>
                 </div>
             )}

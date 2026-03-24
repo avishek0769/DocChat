@@ -3,6 +3,9 @@ import LandingPage from "./pages/LandingPage";
 import Dashboard from "./pages/Dashboard";
 import AllChats from "./pages/AllChats";
 import Settings from "./pages/Settings";
+import SignIn from "./pages/SignIn";
+import SignUp from "./pages/SignUp";
+import Profile from "./pages/Profile";
 
 function App() {
     return (
@@ -12,6 +15,9 @@ function App() {
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/chats" element={<AllChats />} />
                 <Route path="/settings" element={<Settings />} />
+                <Route path="/signin" element={<SignIn />} />
+                <Route path="/signup" element={<SignUp />} />
+                <Route path="/profile" element={<Profile />} />
             </Routes>
         </BrowserRouter>
     );

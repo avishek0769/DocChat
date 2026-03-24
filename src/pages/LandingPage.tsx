@@ -1,3 +1,4 @@
+import { Link as RouterLink } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
     MessageSquare,
@@ -65,12 +66,18 @@ const LandingPage = () => {
                     </a>
                 </div>
                 <div className="flex items-center gap-4">
-                    <button className="text-sm font-medium text-gray-300 hover:text-white transition-colors hidden sm:block">
+                    <RouterLink
+                        to="/signin"
+                        className="text-sm font-medium text-gray-300 hover:text-white transition-colors hidden sm:block"
+                    >
                         Sign In
-                    </button>
-                    <button className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/15 border border-white/10 text-sm font-medium transition-all">
+                    </RouterLink>
+                    <RouterLink
+                        to="/signup"
+                        className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/15 border border-white/10 text-sm font-medium transition-all"
+                    >
                         Get Started
-                    </button>
+                    </RouterLink>
                 </div>
             </nav>
 
@@ -110,12 +117,18 @@ const LandingPage = () => {
                     transition={{ duration: 0.6, delay: 0.3 }}
                     className="flex flex-col sm:flex-row items-center justify-center gap-4 w-full"
                 >
-                    <button className="w-full sm:w-auto px-8 py-3 rounded-lg bg-linear-to-r from-accent-blue to-accent-purple hover:bg-opacity-90 font-medium text-white flex items-center justify-center gap-2 transition-all">
+                    <RouterLink
+                        to="/signup"
+                        className="w-full sm:w-auto px-8 py-3 rounded-lg bg-linear-to-r from-accent-blue to-accent-purple hover:bg-opacity-90 font-medium text-white flex items-center justify-center gap-2 transition-all"
+                    >
                         Get Started
-                    </button>
-                    <button className="w-full sm:w-auto px-8 py-3 rounded-lg glass border border-white/10 font-medium text-white hover:bg-white/10 transition-colors flex items-center justify-center gap-2">
+                    </RouterLink>
+                    <RouterLink
+                        to="/dashboard"
+                        className="w-full sm:w-auto px-8 py-3 rounded-lg glass border border-white/10 font-medium text-white hover:bg-white/10 transition-colors flex items-center justify-center gap-2"
+                    >
                         Try Demo
-                    </button>
+                    </RouterLink>
                 </motion.div>
             </section>
 
@@ -164,9 +177,7 @@ const LandingPage = () => {
                 className="relative z-10 py-20 px-6 max-w-5xl mx-auto"
             >
                 <div className="text-center mb-12">
-                    <h2 className="text-3xl font-bold mb-4">
-                        How It Works
-                    </h2>
+                    <h2 className="text-3xl font-bold mb-4">How It Works</h2>
                     <p className="text-lg text-gray-400">
                         Paste a documentation link and we handle the rest.
                     </p>
@@ -182,13 +193,17 @@ const LandingPage = () => {
                         },
                         {
                             step: "2",
-                            icon: <Database className="w-6 h-6 text-indigo-400" />,
+                            icon: (
+                                <Database className="w-6 h-6 text-indigo-400" />
+                            ),
                             title: "We Process",
                             desc: "We mechanically crawl, extract structure, and create vector embeddings.",
                         },
                         {
                             step: "3",
-                            icon: <MessageSquare className="w-6 h-6 text-accent-purple" />,
+                            icon: (
+                                <MessageSquare className="w-6 h-6 text-accent-purple" />
+                            ),
                             title: "Start Chatting",
                             desc: "Ask questions and get precision answers backed by source citations.",
                         },
@@ -249,7 +264,7 @@ const LandingPage = () => {
                                         parameters in your request...
                                     </div>
                                     <div className="flex gap-2">
-                                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-white/5 border border-white/10 text-[10px] text-gray-400">
+                                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-white/5 border border-white/10 text-xs text-gray-400">
                                             <Target className="w-3 h-3 text-accent-blue" />{" "}
                                             API Reference Models
                                         </span>
@@ -433,12 +448,18 @@ const LandingPage = () => {
                     Stop searching docs. Start asking.
                 </h2>
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                    <button className="px-8 py-3 rounded-lg bg-white text-black font-semibold hover:bg-gray-200 transition-colors">
+                    <RouterLink
+                        to="/signup"
+                        className="px-8 py-3 rounded-lg bg-white text-black font-semibold hover:bg-gray-200 transition-colors"
+                    >
                         Create your first chat
-                    </button>
-                    <button className="px-8 py-3 rounded-lg glass border border-white/10 font-medium text-white hover:bg-white/10 transition-colors">
+                    </RouterLink>
+                    <RouterLink
+                        to="/dashboard"
+                        className="px-8 py-3 rounded-lg glass border border-white/10 font-medium text-white hover:bg-white/10 transition-colors"
+                    >
                         Try with your own API key
-                    </button>
+                    </RouterLink>
                 </div>
             </section>
 
