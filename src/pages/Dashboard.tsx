@@ -22,7 +22,7 @@ import {
 interface Chat {
     id: string;
     title: string;
-    url: string;
+    urls: string[];
     status: string;
     pages: number;
     totalPages: number;
@@ -43,7 +43,7 @@ const MOCK_CHATS: Chat[] = [
     {
         id: "1",
         title: "React Documentation",
-        url: "https://react.dev/reference",
+        urls: ["https://react.dev/reference", "https://reactrouter.com/en/main"],
         status: "ready",
         pages: 142,
         totalPages: 142,
@@ -53,7 +53,7 @@ const MOCK_CHATS: Chat[] = [
     {
         id: "2",
         title: "Stripe API Reference",
-        url: "https://docs.stripe.com/api",
+        urls: ["https://docs.stripe.com/api"],
         status: "processing",
         pages: 45,
         totalPages: 128,
@@ -63,7 +63,7 @@ const MOCK_CHATS: Chat[] = [
     {
         id: "3",
         title: "Legacy Internal Docs",
-        url: "https://wiki.internal.dev/v1",
+        urls: ["https://wiki.internal.dev/v1"],
         status: "failed",
         pages: 0,
         totalPages: 0,
@@ -186,7 +186,7 @@ const Dashboard = () => {
                         return "New Documentation";
                     }
                 })(),
-            url: chatUrl,
+            urls: [chatUrl],
             status: "processing",
             pages: 0,
             totalPages: randomTotalPages,
@@ -423,14 +423,20 @@ const Dashboard = () => {
                                                     >
                                                         {chat.title}
                                                     </h3>
-                                                    <a
-                                                        href={chat.url}
-                                                        target="_blank"
-                                                        rel="noreferrer"
-                                                        className="text-xs text-gray-500 hover:text-accent-blue truncate block mt-1 transition-colors"
-                                                    >
-                                                        {chat.url}
-                                                    </a>
+                                                    <div className="flex flex-wrap gap-1.5 mt-2">
+                                                        {chat.urls.map((u, i) => (
+                                                            <a
+                                                                key={i}
+                                                                href={u}
+                                                                target="_blank"
+                                                                rel="noreferrer"
+                                                                className="text-xs text-gray-500 hover:text-accent-blue bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 px-2 py-0.5 rounded transition-all truncate max-w-[150px]"
+                                                                title={u}
+                                                            >
+                                                                {(() => { try { return new URL(u).hostname; } catch { return u; } })()}
+                                                            </a>
+                                                        ))}
+                                                    </div>
                                                 </div>
                                                 <div className="shrink-0">
                                                     {getStatusBadge(

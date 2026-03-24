@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
     Search,
     Filter,
@@ -18,7 +19,7 @@ const MOCK_CHATS = [
     {
         id: "1",
         title: "React Documentation",
-        url: "https://react.dev/reference",
+        urls: ["https://react.dev/reference", "https://reactrouter.com/en/main"],
         status: "ready",
         pages: 142,
         size: "1.2 MB",
@@ -27,7 +28,7 @@ const MOCK_CHATS = [
     {
         id: "2",
         title: "Stripe API Reference",
-        url: "https://docs.stripe.com/api",
+        urls: ["https://docs.stripe.com/api"],
         status: "processing",
         pages: 45,
         size: "...",
@@ -36,7 +37,7 @@ const MOCK_CHATS = [
     {
         id: "3",
         title: "Legacy Internal Docs",
-        url: "https://wiki.internal.dev/v1",
+        urls: ["https://wiki.internal.dev/v1"],
         status: "failed",
         pages: 0,
         size: "0 B",
@@ -45,7 +46,7 @@ const MOCK_CHATS = [
     {
         id: "4",
         title: "Tailwind CSS v4",
-        url: "https://tailwindcss.com/docs",
+        urls: ["https://tailwindcss.com/docs"],
         status: "ready",
         pages: 89,
         size: "840 KB",
@@ -54,13 +55,14 @@ const MOCK_CHATS = [
 ];
 
 const AllChats = () => {
+    const navigate = useNavigate();
     const [search, setSearch] = useState("");
     const [filter, setFilter] = useState("all");
 
     const filteredChats = MOCK_CHATS.filter((chat) => {
         const matchesSearch =
             chat.title.toLowerCase().includes(search.toLowerCase()) ||
-            chat.url.toLowerCase().includes(search.toLowerCase());
+            chat.urls.some(u => u.toLowerCase().includes(search.toLowerCase()));
         const matchesFilter = filter === "all" || chat.status === filter;
         return matchesSearch && matchesFilter;
     });
@@ -151,15 +153,20 @@ const AllChats = () => {
                                             <h3 className="font-medium text-gray-200 truncate">
                                                 {chat.title}
                                             </h3>
-                                            <a
-                                                href={chat.url}
-                                                target="_blank"
-                                                rel="noreferrer"
-                                                className="text-xs text-gray-500 hover:text-accent-blue flex items-center gap-1 mt-0.5 truncate transition-colors"
-                                            >
-                                                {chat.url}{" "}
-                                                <ExternalLink className="w-3 h-3" />
-                                            </a>
+                                            <div className="flex flex-wrap gap-1.5 mt-1.5">
+                                                {chat.urls.map((u, i) => (
+                                                    <a
+                                                        key={i}
+                                                        href={u}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="text-xs text-gray-500 hover:text-accent-blue flex items-center gap-1.5 bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 px-2 py-0.5 rounded transition-all truncate max-w-[150px]"
+                                                        title={u}
+                                                    >
+                                                        {(() => { try { return new URL(u).hostname; } catch { return u; } })()} <ExternalLink className="w-3 h-3 shrink-0" />
+                                                    </a>
+                                                ))}
+                                            </div>
                                         </div>
                                     </div>
 
@@ -177,6 +184,7 @@ const AllChats = () => {
 
                                         <div className="flex items-center gap-2 border-l border-white/10 pl-6">
                                             <button
+                                                onClick={() => navigate(`/chat/${chat.id}`)}
                                                 className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
                                                     chat.status === "ready"
                                                         ? "bg-white/10 hover:bg-white/15 text-white"

@@ -18,6 +18,7 @@ import {
     X,
     Plus,
     Loader2,
+    Database,
     Link as LinkIcon,
 } from "lucide-react";
 import clsx from "clsx";
@@ -25,9 +26,10 @@ import hljs from "highlight.js";
 import "highlight.js/styles/atom-one-dark.css";
 
 const MOCK_DOCS = {
-    title: "React Documentation",
+    title: "React Docs Assist",
     url: "https://react.dev/reference",
     pages: 142,
+    size: "1.2 MB",
     lastUpdated: "2 hours ago",
     status: "ready",
     tree: [
@@ -289,6 +291,15 @@ export const ChatPage = () => {
                                             {MOCK_DOCS.lastUpdated}
                                         </div>
                                     </div>
+                                    <div className="col-span-2 bg-white/5 border border-white/10 rounded-lg p-3 flex items-center justify-between">
+                                        <div className="text-sm text-gray-500 flex items-center gap-1">
+                                            <Database className="w-3 h-3 text-accent-blue" />
+                                            Data Processed
+                                        </div>
+                                        <div className="font-medium text-sm text-gray-200 bg-white/5 px-2 py-0.5 rounded border border-white/5 font-mono">
+                                            {MOCK_DOCS.size}
+                                        </div>
+                                    </div>
                                 </div>
                                 <button
                                     onClick={() => setIsIndexedModalOpen(true)}
@@ -412,7 +423,7 @@ export const ChatPage = () => {
                             </button>
                             <div>
                                 <h1 className="text-lg font-semibold text-white flex items-center gap-2">
-                                    Chat with {MOCK_DOCS.title}
+                                    {MOCK_DOCS.title}
                                 </h1>
                             </div>
                         </div>
