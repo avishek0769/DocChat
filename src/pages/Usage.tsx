@@ -167,7 +167,7 @@ export const Usage = () => {
                         </div>
                         <div className="flex items-center gap-3 bg-white/5 border border-white/10 px-4 py-2 rounded-lg">
                             <Calendar className="w-4 h-4 text-gray-400" />
-                            <span className="text-sm font-medium text-gray-200">Current Billing Cycle: <strong className="text-white">Feb 1 - Feb 28</strong></span>
+                            <span className="text-sm font-medium text-gray-200">Current Cycle: <strong className="text-white">Feb 1 - Feb 28</strong></span>
                         </div>
                     </header>
 
