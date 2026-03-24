@@ -396,7 +396,7 @@ const Dashboard = () => {
                                         <span className="w-3.5 h-3.5 rounded-full bg-white/10 text-[9px] flex items-center justify-center cursor-help border border-white/20 hover:bg-white/20 transition-colors">
                                             i
                                         </span>
-                                        <div className="absolute bottom-full left-0 mb-2 w-48 p-2 rounded-lg bg-[#2a2a35] text-xs text-gray-200 shadow-xl border border-white/10 opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none z-50 text-center whitespace-normal normal-case font-normal tracking-normal text-left">
+                                        <div className="absolute bottom-full left-0 mb-2 w-48 p-2 rounded-lg bg-[#2a2a35] text-xs text-gray-200 shadow-xl border border-white/10 opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none z-50 whitespace-normal normal-case font-normal tracking-normal text-left">
                                             Total tokens used for creating embeddings and retrieval.
                                         </div>
                                     </span>
