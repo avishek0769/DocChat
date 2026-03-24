@@ -66,8 +66,8 @@ const SignUp = () => {
                 <div className="flex items-center justify-center gap-2 mb-10">
                     <Link to="/" className="flex items-center gap-2 group">
                         <Terminal className="w-7 h-7 text-accent-blue group-hover:text-accent-purple transition-colors" />
-                        <span className="font-semibold text-2xl tracking-tight">
-                            DocTalk
+                        <span className="font-semibold text-3xl tracking-tight text-transparent bg-clip-text bg-linear-to-r from-white to-gray-400">
+                            DocChat
                         </span>
                     </Link>
                 </div>

@@ -36,7 +36,7 @@ const LandingPage = () => {
                 <div className="flex items-center gap-2">
                     <Terminal className="w-6 h-6 text-accent-blue" />
                     <span className="font-semibold text-xl tracking-tight">
-                        DocTalk
+                        DocChat
                     </span>
                 </div>
                 <div className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-400">
@@ -362,10 +362,9 @@ const LandingPage = () => {
                 <h2 className="text-3xl font-bold mb-4">
                     Built for real-world developer workflows
                 </h2>
-                <p className="text-gray-400 mb-8 max-w-2xl mx-auto">
-                    Whether you are reading API docs, SDK guides, or internal
-                    wikis, DocTalk keeps context in one place.
-                </p>
+                <div className="text-gray-400 mb-8 max-w-2xl mx-auto">
+                    Never lose track of the right docs again. From massive API references to internal component wikis, DocChat keeps context in one place.
+                </div>
                 <div className="flex flex-wrap justify-center gap-4 text-sm font-medium text-gray-300">
                     <span className="px-4 py-2 rounded-full glass border border-white/10">
                         Works with API docs, SDK docs, guides
@@ -466,9 +465,9 @@ const LandingPage = () => {
             {/* 11. Footer */}
             <footer className="relative z-10 border-t border-white/10 bg-[#0a0a0c] py-8 px-6">
                 <div className="max-w-4xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-                    <div className="flex items-center gap-2 text-gray-500">
-                        <Terminal className="w-4 h-4" />
-                        <span className="font-semibold text-sm">DocTalk</span>
+                    <div className="flex items-center gap-2 mb-4">
+                        <Terminal className="w-5 h-5 text-accent-blue" />
+                        <span className="font-semibold text-sm">DocChat</span>
                     </div>
                     <div className="flex gap-6 text-sm text-gray-500">
                         <a

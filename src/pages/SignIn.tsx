@@ -47,7 +47,7 @@ const SignIn = () => {
                     <Link to="/" className="flex items-center gap-2 group">
                         <Terminal className="w-7 h-7 text-accent-blue group-hover:text-accent-purple transition-colors" />
                         <span className="font-semibold text-2xl tracking-tight">
-                            DocTalk
+                            DocChat
                         </span>
                     </Link>
                 </div>

@@ -539,7 +539,7 @@ export const ChatPage = () => {
                             </form>
                             <div className="text-center mt-3">
                                 <span className="text-sm text-gray-500 font-medium tracking-wide">
-                                    Doctalk AI can make mistakes. Verify
+                                    DocChat AI can make mistakes. Verify
                                     important information.
                                 </span>
                             </div>

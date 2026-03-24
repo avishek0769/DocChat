@@ -34,7 +34,7 @@ export const Sidebar = ({ isCollapsed = false }: SidebarProps) => {
                 <Terminal className="w-6 h-6 text-accent-blue shrink-0" />
                 {!isCollapsed && (
                     <span className="font-semibold text-xl tracking-tight text-white">
-                        DocTalk
+                        DocChat
                     </span>
                 )}
             </div>
