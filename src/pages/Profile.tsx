@@ -4,7 +4,6 @@ import { Sidebar } from "../components/Sidebar";
 import {
     User,
     Mail,
-    Shield,
     LogOut,
     Save,
     Key,

@@ -26,7 +26,7 @@ interface Chat {
     status: string;
     pages: number;
     totalPages: number;
-    size: string;
+    tokens: number;
     updatedAt: string;
 }
 
@@ -47,7 +47,7 @@ const MOCK_CHATS: Chat[] = [
         status: "ready",
         pages: 142,
         totalPages: 142,
-        size: "1.2 MB",
+        tokens: 845000,
         updatedAt: "2 hours ago",
     },
     {
@@ -57,7 +57,7 @@ const MOCK_CHATS: Chat[] = [
         status: "processing",
         pages: 45,
         totalPages: 128,
-        size: "...",
+        tokens: 0,
         updatedAt: "Just now",
     },
     {
@@ -67,7 +67,7 @@ const MOCK_CHATS: Chat[] = [
         status: "failed",
         pages: 0,
         totalPages: 0,
-        size: "0 B",
+        tokens: 0,
         updatedAt: "2 days ago",
     },
 ];
@@ -79,6 +79,8 @@ const PROVIDER_MODELS: Record<string, string[]> = {
     xAI: ["Grok-2", "Grok-1.5"],
     Google: ["Gemini 1.5 Pro", "Gemini 1.5 Flash"],
 };
+
+const getRandom = () => Math.random();
 
 const Dashboard = () => {
     const navigate = useNavigate();
@@ -153,7 +155,7 @@ const Dashboard = () => {
                 : "sk-...";
 
         const newKey: ApiKeyEntry = {
-            id: Math.random().toString(36).substring(2),
+            id: getRandom().toString(36).substring(2),
             name: newKeyName,
             keyMasked,
             provider: selectedProvider,
@@ -175,9 +177,9 @@ const Dashboard = () => {
     const handleCreateChat = () => {
         if (!chatUrl) return;
 
-        const randomTotalPages = Math.floor(Math.random() * 200) + 30;
+        const randomTotalPages = Math.floor(getRandom() * 200) + 30;
         const newChat: Chat = {
-            id: Math.random().toString(36).substring(2),
+            id: getRandom().toString(36).substring(2),
             title:
                 chatName ||
                 (() => {
@@ -191,7 +193,7 @@ const Dashboard = () => {
             status: "processing",
             pages: 0,
             totalPages: randomTotalPages,
-            size: "0 B",
+            tokens: 0,
             updatedAt: "Just now",
         };
         setChats((prev) => [newChat, ...prev]);
@@ -209,7 +211,7 @@ const Dashboard = () => {
     const simulateProcessing = (chatId: string, totalPages: number) => {
         let currentPage = 0;
         const interval = setInterval(() => {
-            currentPage += Math.floor(Math.random() * 8) + 2;
+            currentPage += Math.floor(getRandom() * 8) + 2;
             if (currentPage >= totalPages) {
                 currentPage = totalPages;
                 clearInterval(interval);
@@ -220,7 +222,7 @@ const Dashboard = () => {
                                   ...c,
                                   pages: totalPages,
                                   status: "ready",
-                                  size: `${(totalPages * 0.008).toFixed(1)} MB`,
+                                  tokens: totalPages * 5000 + Math.floor(getRandom() * 10000),
                                   updatedAt: "Just now",
                               }
                             : c,
@@ -235,7 +237,7 @@ const Dashboard = () => {
                         ? {
                               ...c,
                               pages: currentPage,
-                              size: `${(currentPage * 0.008).toFixed(1)} MB`,
+                              tokens: Math.floor(currentPage * 5000),
                           }
                         : c,
                 ),
@@ -254,7 +256,7 @@ const Dashboard = () => {
     const handleRetryFailed = (chatId: string) => {
         const chat = chats.find((c) => c.id === chatId);
         if (!chat) return;
-        const totalPages = Math.floor(Math.random() * 150) + 30;
+        const totalPages = Math.floor(getRandom() * 150) + 30;
         setChats((prev) =>
             prev.map((c) =>
                 c.id === chatId
@@ -263,7 +265,7 @@ const Dashboard = () => {
                           status: "processing",
                           pages: 0,
                           totalPages,
-                          size: "0 B",
+                          tokens: 0,
                           updatedAt: "Just now",
                       }
                     : c,
@@ -277,9 +279,15 @@ const Dashboard = () => {
     const isStartDisabled =
         !chatUrl || (useOwnKey && (apiKeys.length === 0 || !selectedKeyId));
 
-    const totalDataProcessed = chats
+    const totalTokensUsed = chats
         .filter((c) => c.status === "ready")
-        .reduce((sum, c) => sum + parseFloat(c.size) || 0, 0);
+        .reduce((sum, c) => sum + (c.tokens || 0), 0);
+
+    const formatTokens = (tokens: number) => {
+        if (tokens >= 1000000) return (tokens / 1000000).toFixed(1) + "M";
+        if (tokens >= 1000) return (tokens / 1000).toFixed(1) + "k";
+        return tokens.toString();
+    };
 
     const getStatusBadge = (status: string) => {
         switch (status) {
@@ -382,11 +390,19 @@ const Dashboard = () => {
                                 )
                             },
                             {
-                                label: "Data Processed",
-                                value: `${totalDataProcessed.toFixed(1)} MB`,
-                                icon: (
-                                    <Database className="w-5 h-5 text-purple-400" />
+                                label: (
+                                    <span className="flex items-center gap-1.5 relative group/tooltip w-fit">
+                                        Total Tokens
+                                        <span className="w-3.5 h-3.5 rounded-full bg-white/10 text-[9px] flex items-center justify-center cursor-help border border-white/20 hover:bg-white/20 transition-colors">
+                                            i
+                                        </span>
+                                        <div className="absolute bottom-full left-0 mb-2 w-48 p-2 rounded-lg bg-[#2a2a35] text-xs text-gray-200 shadow-xl border border-white/10 opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none z-50 text-center whitespace-normal normal-case font-normal tracking-normal text-left">
+                                            Total tokens used for creating embeddings and retrieval.
+                                        </div>
+                                    </span>
                                 ),
+                                value: formatTokens(totalTokensUsed),
+                                icon: <Database className="w-5 h-5 text-purple-400" />,
                             },
                         ].map((stat, i) => (
                             <div
@@ -503,10 +519,13 @@ const Dashboard = () => {
                                                             {chat.pages}
                                                         </span>
                                                     </div>
-                                                    <div className="bg-white/5 rounded-lg p-2 flex flex-col items-center justify-center border border-white/5">
+                                                    <div 
+                                                        className="bg-white/5 rounded-lg p-2 flex flex-col items-center justify-center border border-white/5"
+                                                        title="Tokens used"
+                                                    >
                                                         <Database className="w-3 h-3 text-gray-400 mb-1" />
                                                         <span className="text-xs font-medium text-gray-300">
-                                                            {chat.size}
+                                                            {formatTokens(chat.tokens)}
                                                         </span>
                                                     </div>
                                                     <div className="bg-white/5 rounded-lg p-2 flex flex-col items-center justify-center border border-white/5">

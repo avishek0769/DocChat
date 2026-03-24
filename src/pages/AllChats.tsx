@@ -22,7 +22,7 @@ const MOCK_CHATS = [
         urls: ["https://react.dev/reference", "https://reactrouter.com/en/main"],
         status: "ready",
         pages: 142,
-        size: "1.2 MB",
+        tokens: 845000,
         updatedAt: "2 hours ago",
     },
     {
@@ -31,7 +31,7 @@ const MOCK_CHATS = [
         urls: ["https://docs.stripe.com/api"],
         status: "processing",
         pages: 45,
-        size: "...",
+        tokens: 0,
         updatedAt: "Just now",
     },
     {
@@ -40,7 +40,7 @@ const MOCK_CHATS = [
         urls: ["https://wiki.internal.dev/v1"],
         status: "failed",
         pages: 0,
-        size: "0 B",
+        tokens: 0,
         updatedAt: "2 days ago",
     },
     {
@@ -49,10 +49,16 @@ const MOCK_CHATS = [
         urls: ["https://tailwindcss.com/docs"],
         status: "ready",
         pages: 89,
-        size: "840 KB",
+        tokens: 420000,
         updatedAt: "1 week ago",
     },
 ];
+
+const formatTokens = (tokens: number) => {
+    if (tokens >= 1000000) return (tokens / 1000000).toFixed(1) + "M";
+    if (tokens >= 1000) return (tokens / 1000).toFixed(1) + "k";
+    return tokens.toString();
+};
 
 const AllChats = () => {
     const navigate = useNavigate();
@@ -172,9 +178,16 @@ const AllChats = () => {
 
                                     <div className="flex items-center gap-6 shrink-0 ml-4">
                                         <div className="hidden md:flex items-center gap-6">
-                                            <div className="flex items-center gap-1.5 text-xs text-gray-400 w-16">
+                                            <div className="flex items-center gap-1.5 text-xs text-gray-400 w-16" title="Pages Indexed">
                                                 <FileText className="w-3.5 h-3.5" />{" "}
                                                 {chat.pages}
+                                            </div>
+                                            <div 
+                                                className="flex items-center gap-1.5 text-xs text-gray-400 w-20"
+                                                title="Tokens used"
+                                            >
+                                                <Database className="w-3.5 h-3.5" />{" "}
+                                                {formatTokens(chat.tokens)}
                                             </div>
                                             <div className="flex items-center gap-1.5 text-xs text-gray-400 w-24">
                                                 <Clock className="w-3.5 h-3.5" />{" "}
