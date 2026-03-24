@@ -12,14 +12,17 @@ import {
     User,
     Clock,
     Search,
-    ExternalLink,
     ArrowLeft,
     Check,
     Code,
     X,
     Plus,
+    Loader2,
+    Link as LinkIcon,
 } from "lucide-react";
 import clsx from "clsx";
+import hljs from "highlight.js";
+import "highlight.js/styles/atom-one-dark.css";
 
 const MOCK_DOCS = {
     title: "React Documentation",
@@ -83,39 +86,66 @@ export const ChatPage = () => {
     const [messages, setMessages] = useState<any[]>([]);
     const [isTyping, setIsTyping] = useState(false);
     const [selectedSources, setSelectedSources] = useState<any[]>([]);
+    const [isSourcesLoading, setIsSourcesLoading] = useState(false);
 
     const [isIndexedModalOpen, setIsIndexedModalOpen] = useState(false);
-    const [links, setLinks] = useState([...MOCK_DOCS.tree]);
+    const [links, setLinks] = useState([
+        { title: MOCK_DOCS.title, url: MOCK_DOCS.url, isHighlight: false },
+    ]);
     const [isAddingLink, setIsAddingLink] = useState(false);
     const [newLinkUrl, setNewLinkUrl] = useState("");
     const [linkProgress, setLinkProgress] = useState(0);
+    const [scrapeStats, setScrapeStats] = useState({ done: 0, total: 0 });
 
     const handleAddLink = (e: React.FormEvent) => {
         e.preventDefault();
         if (!newLinkUrl.trim()) return;
         setIsAddingLink(true);
         setLinkProgress(0);
+        const total = Math.floor(Math.random() * 30) + 10;
+        setScrapeStats({ done: 0, total });
 
         let progress = 0;
+        let currentDone = 0;
         const interval = setInterval(() => {
-            progress += Math.floor(Math.random() * 15) + 5;
+            progress += Math.floor(Math.random() * 10) + 5;
+            currentDone = Math.floor((progress / 100) * total);
+
             if (progress >= 100) {
                 progress = 100;
                 setLinkProgress(progress);
+                setScrapeStats({ done: total, total });
                 clearInterval(interval);
                 setTimeout(() => {
                     setIsAddingLink(false);
-                    setLinks(prev => [...prev, { title: "Added Document", url: newLinkUrl, isHighlight: false }]);
+                    setLinks((prev) => [
+                        ...prev,
+                        {
+                            title: "Added Document",
+                            url: newLinkUrl,
+                            isHighlight: false,
+                        },
+                    ]);
                     setNewLinkUrl("");
-                }, 300);
+                }, 400);
             } else {
                 setLinkProgress(progress);
+                setScrapeStats({ done: currentDone, total });
             }
-        }, 150);
+        }, 300);
     };
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+    const handleViewSources = (sources: any[]) => {
+        setRightPanelOpen(true);
+        setIsSourcesLoading(true);
+        setTimeout(() => {
+            setSelectedSources(sources);
+            setIsSourcesLoading(false);
+        }, 1000);
+    };
 
     // Auto-resize textarea
     useEffect(() => {
@@ -241,20 +271,17 @@ export const ChatPage = () => {
 
                                 {/* Stats Cards */}
                                 <div className="grid grid-cols-2 gap-2">
-                                    <button 
-                                        onClick={() => setIsIndexedModalOpen(true)}
-                                        className="bg-white/5 border border-white/10 rounded-lg p-3 hover:bg-white/10 transition-colors text-left flex flex-col items-start"
-                                    >
-                                        <div className="text-xs text-gray-400 mb-1 flex items-center gap-1 group-hover:text-accent-blue transition-colors">
-                                            <FileText className="w-3 h-3 text-accent-blue" />
+                                    <div className="bg-white/5 border border-white/10 rounded-lg p-3">
+                                        <div className="text-sm text-gray-500 mb-1 flex items-center gap-1">
+                                            <FileText className="w-3 h-3" />
                                             Indexed
                                         </div>
                                         <div className="font-medium text-sm text-gray-200">
-                                            142 pages
+                                            {MOCK_DOCS.pages} pages
                                         </div>
-                                    </button>
+                                    </div>
                                     <div className="bg-white/5 border border-white/10 rounded-lg p-3">
-                                        <div className="text-xs text-gray-500 mb-1 flex items-center gap-1">
+                                        <div className="text-sm text-gray-500 mb-1 flex items-center gap-1">
                                             <Clock className="w-3 h-3" />
                                             Updated
                                         </div>
@@ -263,11 +290,18 @@ export const ChatPage = () => {
                                         </div>
                                     </div>
                                 </div>
+                                <button
+                                    onClick={() => setIsIndexedModalOpen(true)}
+                                    className="w-full py-2.5 mt-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-sm font-semibold transition-all flex items-center justify-center gap-2 text-gray-200"
+                                >
+                                    <FileText className="w-4 h-4 text-accent-blue" />
+                                    Show all pages
+                                </button>
                             </div>
 
                             {/* Scraped Pages List */}
                             <div className="flex-1 overflow-y-auto p-4 w-[280px]">
-                                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
+                                <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">
                                     Current Links
                                 </h4>
                                 <div className="space-y-1 mb-4">
@@ -281,31 +315,44 @@ export const ChatPage = () => {
                                                     {page.title}
                                                 </span>
                                             </div>
-                                            <div className="text-[10px] opacity-60 truncate mt-0.5 font-mono">
+                                            <a
+                                                href={page.url}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="text-sm opacity-60 truncate mt-0.5 font-mono hover:text-accent-blue hover:underline block"
+                                            >
                                                 {page.url}
-                                            </div>
+                                            </a>
                                         </div>
                                     ))}
                                 </div>
 
                                 {/* Add Link Section */}
                                 <div className="border-t border-white/5 pt-4">
-                                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
+                                    <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">
                                         Add More Links
                                     </h4>
-                                    <form onSubmit={handleAddLink} className="flex gap-2">
-                                        <input 
+                                    <form
+                                        onSubmit={handleAddLink}
+                                        className="flex gap-2"
+                                    >
+                                        <input
                                             type="url"
                                             value={newLinkUrl}
-                                            onChange={(e) => setNewLinkUrl(e.target.value)}
+                                            onChange={(e) =>
+                                                setNewLinkUrl(e.target.value)
+                                            }
                                             placeholder="https://..."
-                                            className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-accent-blue/50"
+                                            className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-accent-blue/50"
                                             disabled={isAddingLink}
                                             required
                                         />
-                                        <button 
+                                        <button
                                             type="submit"
-                                            disabled={isAddingLink || !newLinkUrl.trim()}
+                                            disabled={
+                                                isAddingLink ||
+                                                !newLinkUrl.trim()
+                                            }
                                             className="w-8 h-8 rounded-lg bg-accent-blue text-white flex items-center justify-center hover:bg-blue-600 disabled:opacity-50 transition-colors shrink-0"
                                         >
                                             <Plus className="w-4 h-4" />
@@ -314,14 +361,21 @@ export const ChatPage = () => {
 
                                     {isAddingLink && (
                                         <div className="mt-4 p-3 bg-white/5 border border-white/10 rounded-lg">
-                                            <div className="flex items-center justify-between text-xs mb-2">
-                                                <span className="text-gray-400 truncate pr-2">Processing link...</span>
-                                                <span className="text-accent-blue font-medium">{linkProgress}%</span>
+                                            <div className="flex items-center justify-between text-sm mb-2">
+                                                <span className="text-gray-400 truncate pr-2">
+                                                    Scraping...
+                                                </span>
+                                                <span className="text-accent-blue font-medium">
+                                                    {scrapeStats.done}/
+                                                    {scrapeStats.total} pages
+                                                </span>
                                             </div>
                                             <div className="h-1.5 w-full bg-[#0b0b0f] rounded-full overflow-hidden">
-                                                <div 
+                                                <div
                                                     className="h-full bg-linear-to-r from-accent-blue to-accent-purple rounded-full transition-all duration-200 ease-out"
-                                                    style={{ width: `${linkProgress}%` }}
+                                                    style={{
+                                                        width: `${linkProgress}%`,
+                                                    }}
                                                 />
                                             </div>
                                         </div>
@@ -360,17 +414,6 @@ export const ChatPage = () => {
                                 <h1 className="text-lg font-semibold text-white flex items-center gap-2">
                                     Chat with {MOCK_DOCS.title}
                                 </h1>
-                                <div className="text-xs text-gray-400 flex items-center gap-1.5 truncate">
-                                    <ExternalLink className="w-3.5 h-3.5" />
-                                    <a
-                                        href={MOCK_DOCS.url}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="hover:text-accent-blue transition-colors truncate"
-                                    >
-                                        {MOCK_DOCS.url}
-                                    </a>
-                                </div>
                             </div>
                         </div>
                         <div className="flex items-center gap-3">
@@ -430,7 +473,7 @@ export const ChatPage = () => {
                                                         0,
                                                     ); // Focus input trick could go here
                                                 }}
-                                                className="px-4 py-2 rounded-full border border-white/10 bg-white/5 text-xs text-gray-300 hover:bg-white/10 hover:border-white/20 transition-all font-medium"
+                                                className="px-4 py-2 rounded-full border border-white/10 bg-white/5 text-sm text-gray-300 hover:bg-white/10 hover:border-white/20 transition-all font-medium"
                                             >
                                                 {suggestion}
                                             </button>
@@ -442,10 +485,7 @@ export const ChatPage = () => {
                                     <ChatMessage
                                         key={msg.id}
                                         message={msg}
-                                        onViewSources={(sources) => {
-                                            setSelectedSources(sources);
-                                            setRightPanelOpen(true);
-                                        }}
+                                        onViewSources={handleViewSources}
                                     />
                                 ))
                             )}
@@ -498,7 +538,7 @@ export const ChatPage = () => {
                                 </div>
                             </form>
                             <div className="text-center mt-3">
-                                <span className="text-[10px] text-gray-500 font-medium tracking-wide">
+                                <span className="text-sm text-gray-500 font-medium tracking-wide">
                                     Doctalk AI can make mistakes. Verify
                                     important information.
                                 </span>
@@ -536,13 +576,20 @@ export const ChatPage = () => {
                                         Sources Retreived
                                     </h2>
                                 </div>
-                                <span className="text-xs font-mono text-gray-500 bg-white/5 px-2 py-0.5 rounded-full">
+                                <span className="text-sm font-mono text-gray-500 bg-white/5 px-2 py-0.5 rounded-full">
                                     {selectedSources.length} found
                                 </span>
                             </div>
 
                             <div className="flex-1 overflow-y-auto p-4 w-[320px] space-y-4">
-                                {selectedSources.length === 0 ? (
+                                {isSourcesLoading ? (
+                                    <div className="flex flex-col items-center justify-center h-40 text-gray-400 gap-3">
+                                        <Loader2 className="w-6 h-6 animate-spin text-accent-blue" />
+                                        <span className="text-sm">
+                                            Fetching source chunks...
+                                        </span>
+                                    </div>
+                                ) : selectedSources.length === 0 ? (
                                     <div className="text-center text-gray-500 text-sm py-10">
                                         No sources fetched yet. Ask a question
                                         to see references.
@@ -555,7 +602,7 @@ export const ChatPage = () => {
                                         >
                                             <div className="p-3 border-b border-white/5 bg-white/5 flex items-start justify-between gap-2">
                                                 <div className="flex items-center gap-2 overflow-hidden">
-                                                    <div className="w-5 h-5 rounded-md bg-accent-blue/10 border border-accent-blue/20 flex items-center justify-center text-[10px] font-bold text-accent-blue shrink-0">
+                                                    <div className="w-5 h-5 rounded-md bg-accent-blue/10 border border-accent-blue/20 flex items-center justify-center text-sm font-bold text-accent-blue shrink-0">
                                                         {idx + 1}
                                                     </div>
                                                     <div className="truncate">
@@ -566,7 +613,7 @@ export const ChatPage = () => {
                                                             href={source.url}
                                                             target="_blank"
                                                             rel="noreferrer"
-                                                            className="text-[10px] text-gray-500 hover:text-accent-blue truncate block"
+                                                            className="text-sm text-gray-500 hover:text-accent-blue truncate block"
                                                         >
                                                             {
                                                                 new URL(
@@ -576,11 +623,11 @@ export const ChatPage = () => {
                                                         </a>
                                                     </div>
                                                 </div>
-                                                <div className="text-[10px] font-mono text-green-400/80 bg-green-500/10 px-1.5 py-0.5 rounded shrink-0">
+                                                <div className="text-sm font-mono text-green-400/80 bg-green-500/10 px-1.5 py-0.5 rounded shrink-0">
                                                     {source.relevance}%
                                                 </div>
                                             </div>
-                                            <div className="p-3 text-xs text-gray-400 leading-relaxed max-h-40 overflow-y-auto custom-scrollbar relative">
+                                            <div className="p-3 text-sm text-gray-400 leading-relaxed max-h-40 overflow-y-auto custom-scrollbar relative">
                                                 <div className="absolute top-0 left-0 w-1 h-full bg-accent-blue/30 rounded-full"></div>
                                                 <div className="pl-3 relative z-10">
                                                     {source.snippet
@@ -596,7 +643,7 @@ export const ChatPage = () => {
                                                                         line.startsWith(
                                                                             "```",
                                                                         )
-                                                                            ? "font-mono text-[10px] text-gray-300 my-1 bg-white/5 p-1 rounded"
+                                                                            ? "font-mono text-sm text-gray-300 my-1 bg-white/5 p-1 rounded"
                                                                             : "",
                                                                     )}
                                                                 >
@@ -604,6 +651,15 @@ export const ChatPage = () => {
                                                                 </p>
                                                             ),
                                                         )}
+                                                    <a
+                                                        href={source.url}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="flex items-center gap-1.5 mt-3 text-accent-blue hover:underline font-mono text-sm opacity-80 decoration-accent-blue/50"
+                                                    >
+                                                        <LinkIcon className="w-3.5 h-3.5" />
+                                                        {source.url}
+                                                    </a>
                                                 </div>
                                             </div>
                                         </div>
@@ -619,22 +675,24 @@ export const ChatPage = () => {
             <AnimatePresence>
                 {isIndexedModalOpen && (
                     <div className="fixed inset-0 z-100 flex items-center justify-center p-4">
-                        <motion.div 
-                            initial={{ opacity: 0 }} 
-                            animate={{ opacity: 1 }} 
-                            exit={{ opacity: 0 }} 
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
                             onClick={() => setIsIndexedModalOpen(false)}
-                            className="absolute inset-0 bg-[#0b0b0f]/80 backdrop-blur-sm" 
+                            className="absolute inset-0 bg-[#0b0b0f]/80 backdrop-blur-sm"
                         />
-                        <motion.div 
+                        <motion.div
                             initial={{ scale: 0.95, opacity: 0, y: 10 }}
                             animate={{ scale: 1, opacity: 1, y: 0 }}
                             exit={{ scale: 0.95, opacity: 0, y: 10 }}
                             className="bg-[#1a1a24] border border-white/10 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col relative z-10"
                         >
                             <div className="p-6 border-b border-white/10 flex items-center justify-between">
-                                <h2 className="text-xl font-semibold text-white">Indexed Pages</h2>
-                                <button 
+                                <h2 className="text-xl font-semibold text-white">
+                                    Indexed Pages
+                                </h2>
+                                <button
                                     onClick={() => setIsIndexedModalOpen(false)}
                                     className="p-2 -mr-2 text-gray-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors"
                                 >
@@ -643,13 +701,22 @@ export const ChatPage = () => {
                             </div>
                             <div className="flex-1 overflow-y-auto p-6 space-y-3 custom-scrollbar">
                                 {Array.from({ length: 142 }).map((_, idx) => (
-                                    <div key={idx} className="p-4 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 transition-colors">
+                                    <div
+                                        key={idx}
+                                        className="p-4 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 transition-colors"
+                                    >
                                         <h3 className="font-semibold text-gray-200 flex items-center gap-2 mb-1">
                                             <FileText className="w-4 h-4 text-accent-blue" />
                                             Dummy Page {idx + 1}
                                         </h3>
-                                        <a href={`https://react.dev/reference/page-${idx + 1}`} target="_blank" rel="noreferrer" className="text-xs font-mono text-gray-400 hover:text-accent-blue block truncate ml-6">
-                                            https://react.dev/reference/page-{idx + 1}
+                                        <a
+                                            href={`https://react.dev/reference/page-${idx + 1}`}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="text-sm font-mono text-gray-400 hover:text-accent-blue block truncate ml-6"
+                                        >
+                                            https://react.dev/reference/page-
+                                            {idx + 1}
                                         </a>
                                     </div>
                                 ))}
@@ -664,24 +731,15 @@ export const ChatPage = () => {
 
 // --- Helper Components ---
 
-// --- Syntax Highlighter Helper ---
-const syntaxHighlight = (code: string) => {
-    let text = code.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    
-    // Keywords
-    const keywords = ['const', 'let', 'var', 'function', 'return', 'import', 'from', 'export', 'default', 'if', 'else', 'for', 'while', 'class', 'extends', 'true', 'false', 'null', 'undefined', 'async', 'await'];
-    text = text.replace(new RegExp(`\\b(${keywords.join('|')})\\b`, 'g'), '<span class="text-accent-purple font-semibold">$1</span>');
-    
-    // Function calls
-    text = text.replace(/([a-zA-Z_$][0-9a-zA-Z_$]*)\s*(?=\()/g, '<span class="text-accent-blue">$1</span>');
-    
-    // Strings
-    text = text.replace(/(['"\`].*?['"\`])/g, '<span class="text-green-400">$1</span>');
-    
-    // Comments
-    text = text.replace(/(\/\/.*)/g, '<span class="text-gray-500 italic">$1</span>');
-    
-    return text;
+const highlightCode = (language: string, code: string) => {
+    try {
+        if (language && hljs.getLanguage(language)) {
+            return hljs.highlight(code, { language }).value;
+        }
+        return hljs.highlightAuto(code).value;
+    } catch {
+        return code.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
 };
 
 const parseCustomMarkdown = (content: string) => {
@@ -701,20 +759,24 @@ const parseCustomMarkdown = (content: string) => {
                     className="my-4 rounded-xl overflow-hidden bg-[#0a0a0e] border border-white/10 shadow-xl"
                 >
                     <div className="flex items-center justify-between px-4 py-2 bg-white/5 border-b border-white/5">
-                        <div className="flex items-center gap-2 text-xs font-medium text-gray-400">
+                        <div className="flex items-center gap-2 text-sm font-medium text-gray-400">
                             <Code className="w-3.5 h-3.5" />
                             {language || "code"}
                         </div>
                         <button
                             onClick={() => navigator.clipboard.writeText(code)}
-                            className="text-[10px] uppercase font-bold tracking-wider text-gray-500 hover:text-white transition-colors"
+                            className="text-sm uppercase font-bold tracking-wider text-gray-500 hover:text-white transition-colors cursor-pointer"
                         >
                             Copy
                         </button>
                     </div>
-                    <div className="p-4 overflow-x-auto text-[13px] font-mono leading-relaxed text-gray-300 custom-scrollbar">
+                    <div className="p-4 overflow-x-auto text-sm font-mono leading-relaxed text-gray-300 custom-scrollbar w-full max-w-full">
                         <pre>
-                            <code dangerouslySetInnerHTML={{ __html: syntaxHighlight(code) }} />
+                            <code
+                                dangerouslySetInnerHTML={{
+                                    __html: highlightCode(language, code),
+                                }}
+                            />
                         </pre>
                     </div>
                 </div>
@@ -770,7 +832,7 @@ const formatInline = (text: string) => {
             return (
                 <code
                     key={i}
-                    className="bg-white/10 px-1.5 py-0.5 rounded-md font-mono text-[11px] text-accent-blue mx-0.5 border border-white/5 shadow-sm"
+                    className="bg-white/10 px-1.5 py-0.5 rounded-md font-mono text-sm text-accent-blue mx-0.5 border border-white/5 shadow-sm"
                 >
                     {seg.slice(1, -1)}
                 </code>
@@ -821,20 +883,20 @@ const ChatMessage = ({
             {/* Content Area */}
             <div
                 className={clsx(
-                    "flex flex-col gap-2 max-w-[85%]",
+                    "flex flex-col gap-2 max-w-[75%] min-w-0",
                     isAi ? "items-start" : "items-end",
                 )}
             >
                 <div
                     className={clsx(
-                        "px-5 py-3.5 rounded-2xl text-sm leading-relaxed",
+                        "px-5 py-3.5 rounded-2xl text-sm leading-relaxed overflow-hidden max-w-full",
                         isAi
                             ? "bg-white/5 border border-white/10 rounded-tl-sm text-gray-200"
                             : "bg-linear-to-br from-accent-blue to-blue-600 text-white rounded-tr-sm shadow-xl shadow-accent-blue/20",
                     )}
                 >
                     {isAi ? (
-                        <div className="prose prose-invert prose-sm max-w-none">
+                        <div className="prose prose-invert text-[15px] max-w-full overflow-hidden">
                             {parseCustomMarkdown(message.content)}
 
                             {/* Mock Citations */}
@@ -847,7 +909,7 @@ const ChatMessage = ({
                                                 onClick={() =>
                                                     onViewSources([src])
                                                 }
-                                                className="inline-flex items-center gap-1.5 px-2 py-1 bg-[#1a1a24] border border-white/10 rounded-md text-[10px] font-medium text-gray-400 hover:text-white hover:border-white/20 transition-colors"
+                                                className="inline-flex items-center gap-1.5 px-2 py-1 bg-[#1a1a24] border border-white/10 rounded-md text-sm font-medium text-gray-400 hover:text-white hover:border-white/20 transition-colors"
                                             >
                                                 <div className="w-1.5 h-1.5 rounded-full bg-accent-blue"></div>
                                                 [{idx + 1}] {src.title}
@@ -867,7 +929,7 @@ const ChatMessage = ({
                     <div className="flex items-center gap-2 opacity-100 transition-opacity mt-1">
                         <button
                             onClick={handleCopy}
-                            className="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-1.5 text-xs font-medium"
+                            className="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-1.5 text-sm font-medium"
                         >
                             {copied ? (
                                 <Check className="w-3.5 h-3.5 text-green-400" />
@@ -888,7 +950,7 @@ const ChatMessage = ({
                                     onClick={() =>
                                         onViewSources(message.sources)
                                     }
-                                    className="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-1.5 text-xs font-medium"
+                                    className="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-1.5 text-sm font-medium"
                                 >
                                     <Search className="w-3.5 h-3.5 text-accent-blue" />
                                     View Sources
