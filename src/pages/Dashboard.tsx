@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { Sidebar } from "../components/Sidebar";
 
 import {
@@ -80,6 +81,7 @@ const PROVIDER_MODELS: Record<string, string[]> = {
 };
 
 const Dashboard = () => {
+    const navigate = useNavigate();
     const [chats, setChats] = useState<Chat[]>(MOCK_CHATS);
     const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -491,7 +493,10 @@ const Dashboard = () => {
 
                                             <div className="mt-auto flex items-center gap-3 pt-4 border-t border-white/5">
                                                 {chat.status === "ready" && (
-                                                    <button className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors bg-white/10 hover:bg-white/15 text-white">
+                                                    <button 
+                                                        onClick={() => navigate(`/chat/${chat.id}`)}
+                                                        className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors bg-white/10 hover:bg-white/15 text-white"
+                                                    >
                                                         Open Chat
                                                     </button>
                                                 )}
