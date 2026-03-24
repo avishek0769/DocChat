@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+@theme {
+  --color-accent-blue: #3b82f6;
+  --color-accent-purple: #8b5cf6;
+}
+
+@layer base {
+  body {
+    @apply bg-[#0b0b0f] text-gray-50 antialiased;
+  }
+}
+
+.glass {
+  @apply bg-white/5 border border-white/10 backdrop-blur-md;
+}
+
+.glow-blue {
+  box-shadow: 0 0 40px -10px rgba(59, 130, 246, 0.4);
+}
+
+.glow-purple {
+  box-shadow: 0 0 40px -10px rgba(139, 92, 246, 0.4);
+}
+
