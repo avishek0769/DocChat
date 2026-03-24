@@ -15,17 +15,9 @@ interface ApiKey {
     name: string;
     keyMasked: string;
     provider: string;
-    model: string;
 }
 
 const PROVIDERS = ["OpenAI", "Anthropic", "xAI", "Google"];
-
-const PROVIDER_MODELS: Record<string, string[]> = {
-    OpenAI: ["GPT-4o", "GPT-4o Mini"],
-    Anthropic: ["Claude 3.5 Sonnet", "Claude 3 Haiku"],
-    xAI: ["Grok-2", "Grok-1.5"],
-    Google: ["Gemini 1.5 Pro", "Gemini 1.5 Flash"],
-};
 
 const Settings = () => {
     const [apiKeys, setApiKeys] = useState<ApiKey[]>([
@@ -34,14 +26,12 @@ const Settings = () => {
             name: "My Sandbox Key",
             keyMasked: "sk-...89ab",
             provider: "OpenAI",
-            model: "GPT-4o",
         },
     ]);
 
     const [newKeyName, setNewKeyName] = useState("");
     const [newKeyValue, setNewKeyValue] = useState("");
     const [selectedProvider, setSelectedProvider] = useState("");
-    const [selectedModel, setSelectedModel] = useState("");
     const [showKey, setShowKey] = useState(false);
 
     // Auto-detect provider based on key prefix
@@ -58,13 +48,11 @@ const Settings = () => {
 
         if (detected && detected !== selectedProvider) {
             setSelectedProvider(detected);
-            setSelectedModel(""); // Reset model when provider auto-changes
         }
     };
 
     const handleProviderChange = (val: string) => {
         setSelectedProvider(val);
-        setSelectedModel(""); // Reset model when provider manually changes
     };
 
     const handleSaveKey = () => {
@@ -76,20 +64,18 @@ const Settings = () => {
                 : "sk-...";
 
         setApiKeys([
-            ...apiKeys,
+            ...apiKeys.filter((k) => k.provider !== selectedProvider),
             {
                 id: Math.random().toString(),
                 name: newKeyName,
                 keyMasked,
                 provider: selectedProvider,
-                model: selectedModel || "", // Allows optional empty saving
             },
         ]);
 
         setNewKeyName("");
         setNewKeyValue("");
         setSelectedProvider("");
-        setSelectedModel("");
         setShowKey(false);
     };
 
@@ -215,38 +201,6 @@ const Settings = () => {
                                         ))}
                                     </select>
                                 </div>
-
-                                <div className="space-y-1.5">
-                                    <label className="text-sm font-medium text-gray-400">
-                                        Preferred Model{" "}
-                                        <span className="text-gray-500 font-normal">
-                                            (Optional)
-                                        </span>
-                                    </label>
-                                    <select
-                                        value={selectedModel}
-                                        onChange={(e) =>
-                                            setSelectedModel(e.target.value)
-                                        }
-                                        disabled={!selectedProvider}
-                                        className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-accent-blue/50 appearance-none disabled:opacity-50"
-                                    >
-                                        <option value="" disabled>
-                                            Select model...
-                                        </option>
-                                        {selectedProvider &&
-                                            PROVIDER_MODELS[
-                                                selectedProvider
-                                            ]?.map((model) => (
-                                                <option
-                                                    key={model}
-                                                    value={model}
-                                                >
-                                                    {model}
-                                                </option>
-                                            ))}
-                                    </select>
-                                </div>
                             </div>
 
                             <div className="pt-4 border-t border-white/5 mt-4 relative z-10 flex justify-end">
@@ -292,15 +246,6 @@ const Settings = () => {
                                             <div className="flex items-center gap-3 text-sm">
                                                 <span className="text-gray-500 font-mono">
                                                     {key.keyMasked}
-                                                </span>
-                                                <span className="text-gray-600">
-                                                    •
-                                                </span>
-                                                <span className="text-gray-400">
-                                                    Default Model:{" "}
-                                                    <strong className="text-gray-300 font-medium">
-                                                        {key.model || "None"}
-                                                    </strong>
                                                 </span>
                                             </div>
                                         </div>

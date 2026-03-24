@@ -11,6 +11,7 @@ import {
     Loader2,
     CheckCircle2,
     ExternalLink,
+    Pencil,
 } from "lucide-react";
 import { Sidebar } from "../components/Sidebar";
 
@@ -62,10 +63,27 @@ const formatTokens = (tokens: number) => {
 
 const AllChats = () => {
     const navigate = useNavigate();
+    const [chats, setChats] = useState(MOCK_CHATS);
     const [search, setSearch] = useState("");
     const [filter, setFilter] = useState("all");
+    
+    // Edit state
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [editTitle, setEditTitle] = useState("");
 
-    const filteredChats = MOCK_CHATS.filter((chat) => {
+    const handleSaveTitle = (id: string) => {
+        if (!editTitle.trim()) return;
+        setChats(prev => prev.map(c => c.id === id ? { ...c, title: editTitle } : c));
+        setEditingId(null);
+    };
+
+    const handleDelete = (id: string) => {
+        if (confirm("Are you sure you want to delete this chat?")) {
+            setChats(prev => prev.filter(c => c.id !== id));
+        }
+    };
+
+    const filteredChats = chats.filter((chat) => {
         const matchesSearch =
             chat.title.toLowerCase().includes(search.toLowerCase()) ||
             chat.urls.some(u => u.toLowerCase().includes(search.toLowerCase()));
@@ -156,9 +174,27 @@ const AllChats = () => {
                                     <div className="flex items-center gap-4 min-w-0">
                                         {getStatusBadge(chat.status)}
                                         <div className="min-w-0">
-                                            <h3 className="font-medium text-gray-200 truncate">
-                                                {chat.title}
-                                            </h3>
+                                            {editingId === chat.id ? (
+                                                <div className="flex items-center gap-2">
+                                                    <input
+                                                        type="text"
+                                                        value={editTitle}
+                                                        onChange={(e) => setEditTitle(e.target.value)}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === "Enter") handleSaveTitle(chat.id);
+                                                            if (e.key === "Escape") setEditingId(null);
+                                                        }}
+                                                        autoFocus
+                                                        className="bg-[#1a1a24] text-gray-200 text-sm border border-accent-blue/50 rounded px-2 py-0.5 focus:outline-none"
+                                                    />
+                                                    <button onClick={() => handleSaveTitle(chat.id)} className="text-xs text-accent-blue hover:text-accent-blue/80">Save</button>
+                                                    <button onClick={() => setEditingId(null)} className="text-xs text-gray-500 hover:text-gray-400">Cancel</button>
+                                                </div>
+                                            ) : (
+                                                <h3 className="font-medium text-gray-200 truncate">
+                                                    {chat.title}
+                                                </h3>
+                                            )}
                                             <div className="flex flex-wrap gap-1.5 mt-1.5">
                                                 {chat.urls.map((u, i) => (
                                                     <a
@@ -209,7 +245,20 @@ const AllChats = () => {
                                             >
                                                 Open
                                             </button>
-                                            <button className="p-1.5 rounded-md text-gray-500 hover:text-red-400 hover:bg-red-400/10 transition-colors">
+                                            <button
+                                                onClick={() => {
+                                                    setEditingId(chat.id);
+                                                    setEditTitle(chat.title);
+                                                }}
+                                                className="p-1.5 rounded-md text-gray-500 hover:text-accent-blue hover:bg-accent-blue/10 transition-colors"
+                                                title="Edit chat name"
+                                            >
+                                                <Pencil className="w-4 h-4" />
+                                            </button>
+                                            <button 
+                                                onClick={() => handleDelete(chat.id)}
+                                                className="p-1.5 rounded-md text-gray-500 hover:text-red-400 hover:bg-red-400/10 transition-colors"
+                                            >
                                                 <Trash2 className="w-4 h-4" />
                                             </button>
                                         </div>

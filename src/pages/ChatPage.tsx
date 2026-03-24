@@ -2,6 +2,24 @@ import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sidebar } from "../components/Sidebar";
+
+export interface Source {
+    id: string;
+    title: string;
+    url: string;
+    snippet: string;
+    relevance?: number;
+}
+
+export interface Message {
+    id: string;
+    role: "user" | "ai";
+    content: string;
+    timestamp: Date;
+    sources?: Source[];
+    isStreaming?: boolean;
+}
+
 import {
     Send,
     FileText,
@@ -29,7 +47,7 @@ const MOCK_DOCS = {
     title: "React Docs Assist",
     url: "https://react.dev/reference",
     pages: 142,
-    size: "1.2 MB",
+    tokensUsed: 845000,
     lastUpdated: "2 hours ago",
     status: "ready",
     tree: [
@@ -76,8 +94,32 @@ const MOCK_SOURCES = [
     },
 ];
 
+const PROVIDER_MODELS: Record<string, string[]> = {
+    OpenAI: ["GPT-4o", "GPT-4o Mini"],
+    Anthropic: ["Claude 3.5 Sonnet", "Claude 3 Haiku"],
+    xAI: ["Grok-2", "Grok-1.5"],
+    Google: ["Gemini 1.5 Pro", "Gemini 1.5 Flash"],
+};
+
 export const ChatPage = () => {
     const navigate = useNavigate();
+
+    // MOCK: In a real app this would come from global state/context
+    const [apiKeys] = useState([
+        { id: "1", provider: "OpenAI" },
+        { id: "2", provider: "Anthropic" }
+    ]);
+    const availableModels = apiKeys.length > 0 
+        ? apiKeys.flatMap(key => PROVIDER_MODELS[key.provider] || [])
+        : ["Default Hosted Model"];
+        
+    const [selectedModel, setSelectedModel] = useState(availableModels[0]);
+
+    const formatTokens = (tokens: number) => {
+        if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(1)}M`;
+        if (tokens >= 1000) return `${(tokens / 1000).toFixed(1)}k`;
+        return tokens.toString();
+    };
 
     // Layout configuration
     const [leftPanelOpen, setLeftPanelOpen] = useState(true);
@@ -85,9 +127,9 @@ export const ChatPage = () => {
 
     // Chat state
     const [input, setInput] = useState("");
-    const [messages, setMessages] = useState<any[]>([]);
+    const [messages, setMessages] = useState<Message[]>([]);
     const [isTyping, setIsTyping] = useState(false);
-    const [selectedSources, setSelectedSources] = useState<any[]>([]);
+    const [selectedSources, setSelectedSources] = useState<Source[]>([]);
     const [isSourcesLoading, setIsSourcesLoading] = useState(false);
 
     const [isIndexedModalOpen, setIsIndexedModalOpen] = useState(false);
@@ -140,7 +182,7 @@ export const ChatPage = () => {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-    const handleViewSources = (sources: any[]) => {
+    const handleViewSources = (sources: Source[]) => {
         setRightPanelOpen(true);
         setIsSourcesLoading(true);
         setTimeout(() => {
@@ -294,10 +336,10 @@ export const ChatPage = () => {
                                     <div className="col-span-2 bg-white/5 border border-white/10 rounded-lg p-3 flex items-center justify-between">
                                         <div className="text-sm text-gray-500 flex items-center gap-1">
                                             <Database className="w-3 h-3 text-accent-blue" />
-                                            Data Processed
+                                            Total Tokens Used
                                         </div>
                                         <div className="font-medium text-sm text-gray-200 bg-white/5 px-2 py-0.5 rounded border border-white/5 font-mono">
-                                            {MOCK_DOCS.size}
+                                            {formatTokens(MOCK_DOCS.tokensUsed)}
                                         </div>
                                     </div>
                                 </div>
@@ -428,6 +470,27 @@ export const ChatPage = () => {
                             </div>
                         </div>
                         <div className="flex items-center gap-3">
+                            <div className="hidden sm:flex items-center mr-2">
+                                <div className="relative inline-flex items-center gap-2 rounded-xl border border-white/15 bg-linear-to-r from-white/5 to-white/[0.02] px-2.5 py-1.5 shadow-inner shadow-black/30">
+                                    <span className="text-[11px] tracking-wide uppercase text-gray-500 font-semibold">
+                                        Model
+                                    </span>
+                                    <select
+                                        value={selectedModel}
+                                        onChange={(e) =>
+                                            setSelectedModel(e.target.value)
+                                        }
+                                        className="appearance-none bg-[#12121a] border border-white/10 rounded-lg pl-2.5 pr-7 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-accent-blue/60 focus:ring-2 focus:ring-accent-blue/25 transition-all"
+                                    >
+                                        {availableModels.map((m) => (
+                                            <option key={m} value={m}>
+                                                {m}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <ChevronRight className="w-3.5 h-3.5 text-gray-500 absolute right-3 pointer-events-none rotate-90" />
+                                </div>
+                            </div>
                             <button
                                 onClick={() =>
                                     setRightPanelOpen(!rightPanelOpen)
@@ -857,8 +920,8 @@ const ChatMessage = ({
     message,
     onViewSources,
 }: {
-    message: any;
-    onViewSources: (sources: any) => void;
+    message: Message;
+    onViewSources: (sources: Source[]) => void;
 }) => {
     const isAi = message.role === "ai";
     const [copied, setCopied] = useState(false);
@@ -914,7 +977,7 @@ const ChatMessage = ({
                             {!message.isStreaming && message.sources && (
                                 <div className="mt-4 pt-4 border-t border-white/5 flex flex-wrap gap-2">
                                     {message.sources.map(
-                                        (src: any, idx: number) => (
+                                        (src: Source, idx: number) => (
                                             <button
                                                 key={src.id}
                                                 onClick={() =>

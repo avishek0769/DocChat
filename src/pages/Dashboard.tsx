@@ -13,10 +13,8 @@ import {
     Loader2,
     CheckCircle2,
     X,
-    Zap,
-    Eye,
-    EyeOff,
     RefreshCw,
+    Zap,
 } from "lucide-react";
 
 interface Chat {
@@ -43,7 +41,10 @@ const MOCK_CHATS: Chat[] = [
     {
         id: "1",
         title: "React Documentation",
-        urls: ["https://react.dev/reference", "https://reactrouter.com/en/main"],
+        urls: [
+            "https://react.dev/reference",
+            "https://reactrouter.com/en/main",
+        ],
         status: "ready",
         pages: 142,
         totalPages: 142,
@@ -72,7 +73,6 @@ const MOCK_CHATS: Chat[] = [
     },
 ];
 
-const PROVIDERS = ["OpenAI", "Anthropic", "xAI", "Google"];
 const PROVIDER_MODELS: Record<string, string[]> = {
     OpenAI: ["GPT-4o", "GPT-4o Mini"],
     Anthropic: ["Claude 3.5 Sonnet", "Claude 3 Haiku"],
@@ -93,7 +93,7 @@ const Dashboard = () => {
     const [chatUrl, setChatUrl] = useState("");
 
     // API Keys State
-    const [apiKeys, setApiKeys] = useState<ApiKeyEntry[]>([
+    const [apiKeys] = useState<ApiKeyEntry[]>([
         {
             id: "default-1",
             name: "My Sandbox Key",
@@ -102,15 +102,7 @@ const Dashboard = () => {
             model: "GPT-4o",
         },
     ]);
-    const [useOwnKey, setUseOwnKey] = useState(false);
-    const [selectedKeyId, setSelectedKeyId] = useState("");
-
-    // Inline new key form
-    const [newKeyName, setNewKeyName] = useState("");
-    const [newKeyValue, setNewKeyValue] = useState("");
-    const [selectedProvider, setSelectedProvider] = useState("");
     const [selectedModel, setSelectedModel] = useState("");
-    const [showKeyValue, setShowKeyValue] = useState(false);
 
     // Delete Confirmation
     const [deleteTarget, setDeleteTarget] = useState<Chat | null>(null);
@@ -122,57 +114,6 @@ const Dashboard = () => {
         setToast(message);
         setTimeout(() => setToast(null), 2500);
     }, []);
-
-    // Auto-detect provider based on key prefix
-    const handleKeyChange = (val: string) => {
-        setNewKeyValue(val);
-        if (!val) return;
-
-        let detected = "";
-        if (val.startsWith("sk-ant")) detected = "Anthropic";
-        else if (val.startsWith("sk-proj-") || val.startsWith("sk-"))
-            detected = "OpenAI";
-        else if (val.startsWith("xai-")) detected = "xAI";
-        else if (val.startsWith("AIza")) detected = "Google";
-
-        if (detected && detected !== selectedProvider) {
-            setSelectedProvider(detected);
-            setSelectedModel("");
-        }
-    };
-
-    const handleProviderChange = (val: string) => {
-        setSelectedProvider(val);
-        setSelectedModel("");
-    };
-
-    const handleSaveInlineKey = () => {
-        if (!newKeyName || !newKeyValue || !selectedProvider) return;
-
-        const keyMasked =
-            newKeyValue.length > 10
-                ? newKeyValue.substring(0, 4) + "..." + newKeyValue.slice(-4)
-                : "sk-...";
-
-        const newKey: ApiKeyEntry = {
-            id: getRandom().toString(36).substring(2),
-            name: newKeyName,
-            keyMasked,
-            provider: selectedProvider,
-            model: selectedModel || "",
-        };
-
-        setApiKeys((prev) => [...prev, newKey]);
-        setSelectedKeyId(newKey.id);
-
-        // Reset inline form
-        setNewKeyName("");
-        setNewKeyValue("");
-        setSelectedProvider("");
-        setSelectedModel("");
-        setShowKeyValue(false);
-        showToast(`API key "${newKey.name}" saved successfully!`);
-    };
 
     const handleCreateChat = () => {
         if (!chatUrl) return;
@@ -200,8 +141,7 @@ const Dashboard = () => {
         setIsModalOpen(false);
         setChatName("");
         setChatUrl("");
-        setUseOwnKey(false);
-        setSelectedKeyId("");
+        setSelectedModel("");
         showToast(`Chat "${newChat.title}" created and processing started!`);
 
         // Simulate processing progress
@@ -222,7 +162,9 @@ const Dashboard = () => {
                                   ...c,
                                   pages: totalPages,
                                   status: "ready",
-                                  tokens: totalPages * 5000 + Math.floor(getRandom() * 10000),
+                                  tokens:
+                                      totalPages * 5000 +
+                                      Math.floor(getRandom() * 10000),
                                   updatedAt: "Just now",
                               }
                             : c,
@@ -276,8 +218,11 @@ const Dashboard = () => {
     };
 
     // Disabled state for the Start Processing button
-    const isStartDisabled =
-        !chatUrl || (useOwnKey && (apiKeys.length === 0 || !selectedKeyId));
+    const isStartDisabled = !chatUrl || (apiKeys.length > 0 && !selectedModel);
+
+    const availableModels = Array.from(
+        new Set(apiKeys.flatMap((k) => PROVIDER_MODELS[k.provider] || [])),
+    );
 
     const totalTokensUsed = chats
         .filter((c) => c.status === "ready")
@@ -361,7 +306,10 @@ const Dashboard = () => {
                             },
                             {
                                 label: "Docs Processed",
-                                value: chats.filter(c => c.status === "ready").reduce((acc, c) => acc + c.urls.length, 0).toString(),
+                                value: chats
+                                    .filter((c) => c.status === "ready")
+                                    .reduce((acc, c) => acc + c.urls.length, 0)
+                                    .toString(),
                                 icon: (
                                     <CheckCircle2 className="w-5 h-5 text-green-400" />
                                 ),
@@ -372,7 +320,7 @@ const Dashboard = () => {
                                     >
                                         View List
                                     </button>
-                                )
+                                ),
                             },
                             {
                                 label: "Tokens Used (Month)",
@@ -382,12 +330,12 @@ const Dashboard = () => {
                                 ),
                                 action: (
                                     <button
-                                        onClick={() => navigate('/usage')}
+                                        onClick={() => navigate("/usage")}
                                         className="text-xs text-accent-blue hover:text-accent-blue/80 hover:underline mt-1 block"
                                     >
                                         View Details
                                     </button>
-                                )
+                                ),
                             },
                             {
                                 label: (
@@ -397,12 +345,15 @@ const Dashboard = () => {
                                             i
                                         </span>
                                         <div className="absolute bottom-full left-0 mb-2 w-48 p-2 rounded-lg bg-[#2a2a35] text-xs text-gray-200 shadow-xl border border-white/10 opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none z-50 whitespace-normal normal-case font-normal tracking-normal text-left">
-                                            Total tokens used for creating embeddings and retrieval.
+                                            Total tokens used for creating
+                                            embeddings and retrieval.
                                         </div>
                                     </span>
                                 ),
                                 value: formatTokens(totalTokensUsed),
-                                icon: <Database className="w-5 h-5 text-purple-400" />,
+                                icon: (
+                                    <Database className="w-5 h-5 text-purple-400" />
+                                ),
                             },
                         ].map((stat, i) => (
                             <div
@@ -461,18 +412,29 @@ const Dashboard = () => {
                                                         {chat.title}
                                                     </h3>
                                                     <div className="flex flex-wrap gap-1.5 mt-2">
-                                                        {chat.urls.map((u, i) => (
-                                                            <a
-                                                                key={i}
-                                                                href={u}
-                                                                target="_blank"
-                                                                rel="noreferrer"
-                                                                className="text-xs text-gray-500 hover:text-accent-blue bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 px-2 py-0.5 rounded transition-all truncate max-w-37.5"
-                                                                title={u}
-                                                            >
-                                                                {(() => { try { return new URL(u).hostname; } catch { return u; } })()}
-                                                            </a>
-                                                        ))}
+                                                        {chat.urls.map(
+                                                            (u, i) => (
+                                                                <a
+                                                                    key={i}
+                                                                    href={u}
+                                                                    target="_blank"
+                                                                    rel="noreferrer"
+                                                                    className="text-xs text-gray-500 hover:text-accent-blue bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 px-2 py-0.5 rounded transition-all truncate max-w-37.5"
+                                                                    title={u}
+                                                                >
+                                                                    {(() => {
+                                                                        try {
+                                                                            return new URL(
+                                                                                u,
+                                                                            )
+                                                                                .hostname;
+                                                                        } catch {
+                                                                            return u;
+                                                                        }
+                                                                    })()}
+                                                                </a>
+                                                            ),
+                                                        )}
                                                     </div>
                                                 </div>
                                                 <div className="shrink-0">
@@ -519,13 +481,15 @@ const Dashboard = () => {
                                                             {chat.pages}
                                                         </span>
                                                     </div>
-                                                    <div 
+                                                    <div
                                                         className="bg-white/5 rounded-lg p-2 flex flex-col items-center justify-center border border-white/5"
                                                         title="Tokens used"
                                                     >
                                                         <Database className="w-3 h-3 text-gray-400 mb-1" />
                                                         <span className="text-xs font-medium text-gray-300">
-                                                            {formatTokens(chat.tokens)}
+                                                            {formatTokens(
+                                                                chat.tokens,
+                                                            )}
                                                         </span>
                                                     </div>
                                                     <div className="bg-white/5 rounded-lg p-2 flex flex-col items-center justify-center border border-white/5">
@@ -539,8 +503,12 @@ const Dashboard = () => {
 
                                             <div className="mt-auto flex items-center gap-3 pt-4 border-t border-white/5">
                                                 {chat.status === "ready" && (
-                                                    <button 
-                                                        onClick={() => navigate(`/chat/${chat.id}`)}
+                                                    <button
+                                                        onClick={() =>
+                                                            navigate(
+                                                                `/chat/${chat.id}`,
+                                                            )
+                                                        }
                                                         className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors bg-white/10 hover:bg-white/15 text-white"
                                                     >
                                                         Open Chat
@@ -631,26 +599,40 @@ const Dashboard = () => {
 
                         {/* Modal Body */}
                         <div className="p-5 overflow-y-auto custom-scrollbar flex-1 space-y-4">
-                            {chats.filter(c => c.status === "ready").length > 0 ? (
+                            {chats.filter((c) => c.status === "ready").length >
+                            0 ? (
                                 chats
-                                    .filter(c => c.status === "ready")
-                                    .flatMap(chat => 
+                                    .filter((c) => c.status === "ready")
+                                    .flatMap((chat) =>
                                         chat.urls.map((url, i) => (
-                                            <div key={`${chat.id}-${i}`} className="p-3 bg-white/5 border border-white/10 rounded-xl hover:border-white/20 transition-colors">
-                                                <h3 className="font-medium text-gray-200 text-sm truncate">{chat.title}</h3>
-                                                <a href={url} target="_blank" rel="noreferrer" className="text-xs text-accent-blue hover:underline truncate block mt-1">
+                                            <div
+                                                key={`${chat.id}-${i}`}
+                                                className="p-3 bg-white/5 border border-white/10 rounded-xl hover:border-white/20 transition-colors"
+                                            >
+                                                <h3 className="font-medium text-gray-200 text-sm truncate">
+                                                    {chat.title}
+                                                </h3>
+                                                <a
+                                                    href={url}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    className="text-xs text-accent-blue hover:underline truncate block mt-1"
+                                                >
                                                     {url}
                                                 </a>
                                             </div>
-                                        ))
+                                        )),
                                     )
                             ) : (
                                 <div className="text-center py-8">
-                                    <p className="text-sm text-gray-400">No documentations have been fully processed yet.</p>
+                                    <p className="text-sm text-gray-400">
+                                        No documentations have been fully
+                                        processed yet.
+                                    </p>
                                 </div>
                             )}
                         </div>
-                        
+
                         {/* Modal Footer */}
                         <div className="p-4 border-t border-white/5 bg-[#0b0b0f] shrink-0 text-right">
                             <button
@@ -727,408 +709,40 @@ const Dashboard = () => {
                                 </p>
                             </div>
 
-                            {/* API Key Toggle and Select */}
+                            {/* Model Selection */}
                             <div className="pt-2 border-t border-white/5 space-y-4">
-                                <label className="flex items-center gap-3 cursor-pointer group">
-                                    <div className="relative flex items-center justify-center">
-                                        <input
-                                            type="checkbox"
-                                            className="sr-only peer"
-                                            checked={useOwnKey}
+                                {apiKeys.length > 0 ? (
+                                    <div className="space-y-1.5">
+                                        <label className="text-sm font-medium text-gray-300">
+                                            Model <span className="text-red-400">*</span>
+                                        </label>
+                                        <select
+                                            value={selectedModel}
                                             onChange={(e) =>
-                                                setUseOwnKey(e.target.checked)
+                                                setSelectedModel(e.target.value)
                                             }
-                                        />
-                                        <div className="w-10 h-5 bg-white/10 rounded-full peer peer-checked:bg-accent-blue/30 transition-colors"></div>
-                                        <div className="absolute left-1 w-3.5 h-3.5 bg-gray-400 rounded-full peer-checked:translate-x-5 peer-checked:bg-accent-blue transition-transform"></div>
+                                            className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-accent-blue/50"
+                                        >
+                                            <option value="" disabled>
+                                                Select a model...
+                                            </option>
+                                            {availableModels.map((model) => (
+                                                <option key={model} value={model}>
+                                                    {model}
+                                                </option>
+                                            ))}
+                                        </select>
                                     </div>
-                                    <span className="text-sm font-medium text-gray-300 group-hover:text-white transition-colors flex items-center gap-1.5">
-                                        Use API key from provider{" "}
-                                        <Zap className="w-3.5 h-3.5 text-yellow-400" />
-                                    </span>
-                                </label>
-
-                                {useOwnKey && (
-                                    <div className="space-y-4 pt-1">
-                                        {apiKeys.length > 0 ? (
-                                            <div className="space-y-1.5">
-                                                <label className="text-xs font-medium text-gray-400">
-                                                    Select Provider Key{" "}
-                                                    <span className="text-red-400">
-                                                        *
-                                                    </span>
-                                                </label>
-                                                <select
-                                                    value={selectedKeyId}
-                                                    onChange={(e) =>
-                                                        setSelectedKeyId(
-                                                            e.target.value,
-                                                        )
-                                                    }
-                                                    className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-accent-blue/50 appearance-none"
-                                                >
-                                                    <option value="" disabled>
-                                                        Select your saved key...
-                                                    </option>
-                                                    {apiKeys.map((k) => (
-                                                        <option
-                                                            key={k.id}
-                                                            value={k.id}
-                                                        >
-                                                            {k.name} (
-                                                            {k.provider})
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                                <p className="text-xs text-gray-500 mt-2">
-                                                    Manage more keys in
-                                                    Settings.
-                                                </p>
-
-                                                {/* Inline add another key */}
-                                                <details className="mt-3 group/details">
-                                                    <summary className="text-xs text-accent-blue cursor-pointer hover:text-accent-blue/80 transition-colors font-medium">
-                                                        + Add another key
-                                                    </summary>
-                                                    <div className="mt-3 p-4 bg-white/2 border border-white/5 rounded-xl space-y-3">
-                                                        <div className="space-y-1.5">
-                                                            <label className="text-xs font-medium text-gray-400">
-                                                                Key Name
-                                                            </label>
-                                                            <input
-                                                                type="text"
-                                                                value={
-                                                                    newKeyName
-                                                                }
-                                                                onChange={(e) =>
-                                                                    setNewKeyName(
-                                                                        e.target
-                                                                            .value,
-                                                                    )
-                                                                }
-                                                                placeholder="e.g. My OpenAI Key"
-                                                                className="w-full bg-[#111] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent-blue/50"
-                                                            />
-                                                        </div>
-                                                        <div className="space-y-1.5">
-                                                            <label className="text-xs font-medium text-gray-400">
-                                                                API Key
-                                                            </label>
-                                                            <div className="relative">
-                                                                <input
-                                                                    type={
-                                                                        showKeyValue
-                                                                            ? "text"
-                                                                            : "password"
-                                                                    }
-                                                                    value={
-                                                                        newKeyValue
-                                                                    }
-                                                                    onChange={(
-                                                                        e,
-                                                                    ) =>
-                                                                        handleKeyChange(
-                                                                            e
-                                                                                .target
-                                                                                .value,
-                                                                        )
-                                                                    }
-                                                                    placeholder="sk-... (Auto-detects provider)"
-                                                                    className="w-full bg-[#111] border border-white/10 rounded-lg px-3 pr-10 py-2 text-sm text-white font-mono focus:outline-none focus:border-accent-blue/50"
-                                                                />
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() =>
-                                                                        setShowKeyValue(
-                                                                            !showKeyValue,
-                                                                        )
-                                                                    }
-                                                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
-                                                                >
-                                                                    {showKeyValue ? (
-                                                                        <EyeOff className="w-3.5 h-3.5" />
-                                                                    ) : (
-                                                                        <Eye className="w-3.5 h-3.5" />
-                                                                    )}
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                        <div className="grid grid-cols-2 gap-2">
-                                                            <div className="space-y-1.5">
-                                                                <label className="text-xs font-medium text-gray-400">
-                                                                    Provider
-                                                                </label>
-                                                                <select
-                                                                    value={
-                                                                        selectedProvider
-                                                                    }
-                                                                    onChange={(
-                                                                        e,
-                                                                    ) =>
-                                                                        handleProviderChange(
-                                                                            e
-                                                                                .target
-                                                                                .value,
-                                                                        )
-                                                                    }
-                                                                    className="w-full bg-[#111] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent-blue/50 appearance-none"
-                                                                >
-                                                                    <option
-                                                                        value=""
-                                                                        disabled
-                                                                    >
-                                                                        Select...
-                                                                    </option>
-                                                                    {PROVIDERS.map(
-                                                                        (p) => (
-                                                                            <option
-                                                                                key={
-                                                                                    p
-                                                                                }
-                                                                                value={
-                                                                                    p
-                                                                                }
-                                                                            >
-                                                                                {
-                                                                                    p
-                                                                                }
-                                                                            </option>
-                                                                        ),
-                                                                    )}
-                                                                </select>
-                                                            </div>
-                                                            <div className="space-y-1.5">
-                                                                <label className="text-xs font-medium text-gray-400">
-                                                                    Model{" "}
-                                                                    <span className="text-gray-500 font-normal">
-                                                                        (Opt.)
-                                                                    </span>
-                                                                </label>
-                                                                <select
-                                                                    value={
-                                                                        selectedModel
-                                                                    }
-                                                                    onChange={(
-                                                                        e,
-                                                                    ) =>
-                                                                        setSelectedModel(
-                                                                            e
-                                                                                .target
-                                                                                .value,
-                                                                        )
-                                                                    }
-                                                                    disabled={
-                                                                        !selectedProvider
-                                                                    }
-                                                                    className="w-full bg-[#111] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent-blue/50 appearance-none disabled:opacity-50"
-                                                                >
-                                                                    <option
-                                                                        value=""
-                                                                        disabled
-                                                                    >
-                                                                        Model...
-                                                                    </option>
-                                                                    {selectedProvider &&
-                                                                        PROVIDER_MODELS[
-                                                                            selectedProvider
-                                                                        ]?.map(
-                                                                            (
-                                                                                m,
-                                                                            ) => (
-                                                                                <option
-                                                                                    key={
-                                                                                        m
-                                                                                    }
-                                                                                    value={
-                                                                                        m
-                                                                                    }
-                                                                                >
-                                                                                    {
-                                                                                        m
-                                                                                    }
-                                                                                </option>
-                                                                            ),
-                                                                        )}
-                                                                </select>
-                                                            </div>
-                                                        </div>
-                                                        <button
-                                                            onClick={
-                                                                handleSaveInlineKey
-                                                            }
-                                                            disabled={
-                                                                !newKeyName ||
-                                                                !newKeyValue ||
-                                                                !selectedProvider
-                                                            }
-                                                            className="w-full mt-1 py-2 rounded-lg bg-white/10 hover:bg-white/15 disabled:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-medium transition-colors"
-                                                        >
-                                                            Save Key
-                                                        </button>
-                                                    </div>
-                                                </details>
-                                            </div>
-                                        ) : (
-                                            <div className="p-4 bg-white/2 border border-white/5 rounded-xl space-y-4">
-                                                <p className="text-xs text-gray-400">
-                                                    You haven't saved any API
-                                                    keys yet.
-                                                </p>
-
-                                                <div className="space-y-1.5">
-                                                    <label className="text-xs font-medium text-gray-400">
-                                                        Key Name
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        value={newKeyName}
-                                                        onChange={(e) =>
-                                                            setNewKeyName(
-                                                                e.target.value,
-                                                            )
-                                                        }
-                                                        placeholder="e.g. My OpenAI Key"
-                                                        className="w-full bg-[#111] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent-blue/50"
-                                                    />
-                                                </div>
-
-                                                <div className="space-y-1.5">
-                                                    <label className="text-xs font-medium text-gray-400">
-                                                        API Key
-                                                    </label>
-                                                    <div className="relative">
-                                                        <input
-                                                            type={
-                                                                showKeyValue
-                                                                    ? "text"
-                                                                    : "password"
-                                                            }
-                                                            value={newKeyValue}
-                                                            onChange={(e) =>
-                                                                handleKeyChange(
-                                                                    e.target
-                                                                        .value,
-                                                                )
-                                                            }
-                                                            placeholder="sk-... (Auto-detects provider)"
-                                                            className="w-full bg-[#111] border border-white/10 rounded-lg px-3 pr-10 py-2 text-sm text-white font-mono focus:outline-none focus:border-accent-blue/50"
-                                                        />
-                                                        <button
-                                                            type="button"
-                                                            onClick={() =>
-                                                                setShowKeyValue(
-                                                                    !showKeyValue,
-                                                                )
-                                                            }
-                                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
-                                                        >
-                                                            {showKeyValue ? (
-                                                                <EyeOff className="w-3.5 h-3.5" />
-                                                            ) : (
-                                                                <Eye className="w-3.5 h-3.5" />
-                                                            )}
-                                                        </button>
-                                                    </div>
-                                                </div>
-
-                                                <div className="grid grid-cols-2 gap-2">
-                                                    <div className="space-y-1.5">
-                                                        <label className="text-xs font-medium text-gray-400">
-                                                            Provider
-                                                        </label>
-                                                        <select
-                                                            value={
-                                                                selectedProvider
-                                                            }
-                                                            onChange={(e) =>
-                                                                handleProviderChange(
-                                                                    e.target
-                                                                        .value,
-                                                                )
-                                                            }
-                                                            className="w-full bg-[#111] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent-blue/50 appearance-none"
-                                                        >
-                                                            <option
-                                                                value=""
-                                                                disabled
-                                                            >
-                                                                Select...
-                                                            </option>
-                                                            {PROVIDERS.map(
-                                                                (p) => (
-                                                                    <option
-                                                                        key={p}
-                                                                        value={
-                                                                            p
-                                                                        }
-                                                                    >
-                                                                        {p}
-                                                                    </option>
-                                                                ),
-                                                            )}
-                                                        </select>
-                                                    </div>
-
-                                                    <div className="space-y-1.5">
-                                                        <label className="text-xs font-medium text-gray-400">
-                                                            Preferred Model{" "}
-                                                            <span className="text-gray-500 font-normal">
-                                                                (Optional)
-                                                            </span>
-                                                        </label>
-                                                        <select
-                                                            value={
-                                                                selectedModel
-                                                            }
-                                                            onChange={(e) =>
-                                                                setSelectedModel(
-                                                                    e.target
-                                                                        .value,
-                                                                )
-                                                            }
-                                                            disabled={
-                                                                !selectedProvider
-                                                            }
-                                                            className="w-full bg-[#111] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent-blue/50 appearance-none disabled:opacity-50"
-                                                        >
-                                                            <option
-                                                                value=""
-                                                                disabled
-                                                            >
-                                                                Model...
-                                                            </option>
-                                                            {selectedProvider &&
-                                                                PROVIDER_MODELS[
-                                                                    selectedProvider
-                                                                ]?.map((m) => (
-                                                                    <option
-                                                                        key={m}
-                                                                        value={
-                                                                            m
-                                                                        }
-                                                                    >
-                                                                        {m}
-                                                                    </option>
-                                                                ))}
-                                                        </select>
-                                                    </div>
-                                                </div>
-
-                                                <button
-                                                    onClick={
-                                                        handleSaveInlineKey
-                                                    }
-                                                    disabled={
-                                                        !newKeyName ||
-                                                        !newKeyValue ||
-                                                        !selectedProvider
-                                                    }
-                                                    className="w-full mt-2 py-2 rounded-lg bg-white/10 hover:bg-white/15 disabled:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-medium transition-colors"
-                                                >
-                                                    Save Key to Continue
-                                                </button>
-                                            </div>
-                                        )}
+                                ) : (
+                                    <div className="p-3 bg-white/5 border border-white/10 rounded-xl">
+                                        <p className="text-sm text-gray-300 font-medium">
+                                            Default Hosted Model
+                                        </p>
+                                        <p className="text-xs text-gray-500 mt-1">
+                                            Note: You can add your own API key in
+                                            Settings to choose other models and waive
+                                            off usage limits.
+                                        </p>
                                     </div>
                                 )}
                             </div>
