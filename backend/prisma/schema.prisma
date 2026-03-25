@@ -7,14 +7,93 @@ datasource db {
     provider = "postgresql"
 }
 
-model User {
-    id           String  @id @default(uuid())
-    fullname     String
-    username     String  @unique
-    email        String  @unique
-    password     String
-    refreshToken String?
+enum ChatStatus {
+    QUEUED
+    PROCESSING
+    READY
+    FAILED
+}
 
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+model User {
+    id           String        @id @unique @default(uuid())
+    fullname     String
+    username     String        @unique
+    password     String
+    chats        Chat[]
+    apikeys      ApiKey[]
+    usageEvents  UsageEvents[]
+    refreshToken String?       @map("refresh_token")
+    createdAt    DateTime      @default(now()) @map("created_at")
+}
+
+model Chat {
+    id                 String       @id @unique @default(uuid())
+    name               String
+    documentationLinks ChatSource[]
+    userId             String       @map("user_id")
+    createdBy          User         @relation(fields: [userId], references: [id])
+    status             ChatStatus   @default(QUEUED)
+    createdAt          DateTime     @default(now()) @map("created_at")
+}
+
+model ChatSource {
+    id               String         @id @unique @default(uuid())
+    heading          String
+    documentationUrl String         @map("documentation_url")
+    pagesIndexed     DocumentPage[]
+    chatId           String         @map("chat_id")
+    chat             Chat           @relation(fields: [chatId], references: [id])
+}
+
+model DocumentPage {
+    id           String     @id @unique @default(uuid())
+    heading      String
+    page_url     String     @map("page_url")
+    chatSourceId String     @map("chat_source_id")
+    chatSource   ChatSource @relation(fields: [chatSourceId], references: [id])
+}
+
+model ChatMessage {
+    id           String              @id @unique @default(uuid())
+    chatId       String              @map("chat_id")
+    userPrompt   String              @map("user_prompt")
+    llmResponse  String              @map("llm_response")
+    llmModel     String              @map("llm_model")
+    sourceChunks ChatMessageSource[]
+    createdAt    DateTime            @default(now()) @map("created_at")
+    usageEvents  UsageEvents[]
+}
+
+model ChatMessageSource {
+    id            String      @id @unique @default(uuid())
+    chunkText     String      @map("chunk_text")
+    heading       String
+    pageUrl       String      @map("page_url")
+    chatMessageId String      @map("chat_message_id")
+    chatMessage   ChatMessage @relation(fields: [chatMessageId], references: [id])
+}
+
+model ApiKey {
+    id          String        @id @unique @default(uuid())
+    userId      String        @map("user_id")
+    user        User          @relation(fields: [userId], references: [id])
+    name        String
+    hashed_key  String        @unique
+    provider    String
+    createdAt   DateTime      @default(now()) @map("created_at")
+    usageEvents UsageEvents[]
+}
+
+model UsageEvents {
+    id           String      @id @unique @default(uuid())
+    userId       String      @map("user_id")
+    user         User        @relation(fields: [userId], references: [id])
+    messageId    String      @map("message_id")
+    message      ChatMessage @relation(fields: [messageId], references: [id])
+    apikeyId     String      @map("apikey_id")
+    apiKey       ApiKey      @relation(fields: [apikeyId], references: [id])
+    inputTokens  Int         @map("input_tokens")
+    outputTokens Int         @map("output_tokens")
+    eventType    String      @map("event_type")
+    timestamp    DateTime    @default(now())
 }
