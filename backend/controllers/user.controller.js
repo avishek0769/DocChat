@@ -4,6 +4,10 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
+import redis from "../utils/redis.js";
+import { Resend } from "resend";
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 const AccessOptions = {
     httpOnly: true,
@@ -26,7 +30,6 @@ const generateAccessToken = (user) => {
     return jwt.sign(
         {
             id: user.id,
-            email: user.email,
             username: user.username,
             fullname: user.fullname,
         },
@@ -66,6 +69,60 @@ const generateAccessAndRefreshTokens = async (userId) => {
     }
 };
 
+const sendVerificationCode = asyncHandler(async (req, res) => {
+    const { email } = req.body;
+    const user = await prisma.user.findFirst({
+        where: { email: email },
+    });
+
+    if (user) {
+        throw new ApiError(401, "User with this email already exists");
+    }
+
+    await prisma.user.create({
+        data: { email },
+    });
+
+    const code = Math.floor(Math.random() * 99999 + 10000);
+    await redis.set(email, code, "EX", 3 * 60);
+
+    await resend.emails.send({
+        from: "DocChat <onboarding@avishekadhikary.tech>",
+        to: email,
+        subject: "DocChat - Email Verification Code",
+        html: `<p>Your verification code is: <strong>${code}</strong></p>`,
+    });
+
+    res.status(200).json(
+        new ApiResponse(
+            200,
+            { emailSent: true },
+            "Verification code sent to email successfully !!",
+        ),
+    );
+});
+
+const verifyEmail = asyncHandler(async (req, res) => {
+    const { email, code } = req.body;
+    const storedCode = await redis.get(email);
+
+    if (Number(code) != storedCode) {
+        throw new ApiError(400, "Invalid verification code");
+    }
+
+    const user = await prisma.user.update({
+        where: { email },
+        data: {
+            isVerified: true,
+        },
+    });
+
+    await redis.del(email);
+    res.status(200).json(
+        new ApiResponse(200, { ...user }, "Email verified successfully !!"),
+    );
+});
+
 const userRegister = asyncHandler(async (req, res) => {
     const { fullname, username, email, password } = req.body;
 
@@ -78,25 +135,21 @@ const userRegister = asyncHandler(async (req, res) => {
     }
 
     const existingUser = await prisma.user.findFirst({
-        where: {
-            OR: [
-                { username: username.toLowerCase() },
-                { email: email.toLowerCase() },
-            ],
-        },
+        where: { email },
     });
 
-    if (existingUser) {
-        throw new ApiError(409, "User with email or username already exists");
+    if (!existingUser.isVerified) {
+        throw new ApiError(400, "User not verified");
     }
 
     const hashedPassword = await hashPassword(password);
 
-    const user = await prisma.user.create({
+    const user = await prisma.user.update({
+        where: { email },
         data: {
             fullname: fullname,
-            username: username.toLowerCase(),
-            email: email.toLowerCase(),
+            username: username,
+            email: email,
             password: hashedPassword,
         },
         select: {
@@ -105,7 +158,6 @@ const userRegister = asyncHandler(async (req, res) => {
             username: true,
             email: true,
             createdAt: true,
-            updatedAt: true,
         },
     });
 
@@ -115,17 +167,14 @@ const userRegister = asyncHandler(async (req, res) => {
 });
 
 const userLogIn = asyncHandler(async (req, res) => {
-    const { email, username, password } = req.body;
-    if (!(username || email)) {
+    const { username, email, password } = req.body;
+    if (!username && !email) {
         throw new ApiError(404, "Username or email is required");
     }
 
     const user = await prisma.user.findFirst({
         where: {
-            OR: [
-                { username: username?.toLowerCase() },
-                { email: email?.toLowerCase() },
-            ],
+            OR: [{ email: email }, { username: username }],
         },
     });
 
@@ -155,7 +204,7 @@ const userLogIn = asyncHandler(async (req, res) => {
             new ApiResponse(
                 200,
                 {
-                    user: loggedInUser,
+                    ...loggedInUser,
                     accessToken: accessToken,
                     refreshToken: refreshToken,
                 },
@@ -176,11 +225,8 @@ const userLogOut = asyncHandler(async (req, res) => {
         .json(new ApiResponse(200, {}, "User Logged out Successfully"));
 });
 
-const refreshAccessToken = asyncHandler(async (req, res) => {
-    const incomingToken =
-        req.cookies?.refreshToken ||
-        req.header("Authorization")?.replace("Bearer ", "");
-
+const refreshTokens = asyncHandler(async (req, res) => {
+    const incomingToken = req.user?.refreshToken || "";
     if (!incomingToken) throw new ApiError(401, "No Refresh Token found");
 
     try {
@@ -221,7 +267,7 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
                 new ApiResponse(
                     200,
                     {
-                        user: safeUser,
+                        ...safeUser,
                         accessToken,
                         refreshToken: newRefreshToken,
                     },
@@ -233,4 +279,23 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
     }
 });
 
-export { userRegister, userLogIn, userLogOut, refreshAccessToken };
+const currentUserProfile = asyncHandler(async (req, res) => {
+    const user = req.user;
+    res.status(200).json(
+        new ApiResponse(
+            200,
+            user,
+            "Current user profile fetched successfully !",
+        ),
+    );
+});
+
+export {
+    userRegister,
+    userLogIn,
+    userLogOut,
+    refreshTokens,
+    sendVerificationCode,
+    verifyEmail,
+    currentUserProfile,
+};

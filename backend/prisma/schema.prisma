@@ -16,9 +16,11 @@ enum ChatStatus {
 
 model User {
     id           String        @id @unique @default(uuid())
-    fullname     String
-    username     String        @unique
-    password     String
+    fullname     String?
+    username     String?        @unique
+    email        String?        @unique
+    password     String?
+    isVerified   Boolean       @default(false) @map("is_verified")
     chats        Chat[]
     apikeys      ApiKey[]
     usageEvents  UsageEvents[]
