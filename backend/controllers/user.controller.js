@@ -290,6 +290,61 @@ const currentUserProfile = asyncHandler(async (req, res) => {
     );
 });
 
+const sendResetCode = asyncHandler(async (req, res) => {
+    const { email } = req.body;
+
+    const user = await prisma.user.findUnique({
+        where: { email },
+    });
+
+    if (!user) {
+        throw new ApiError(404, "User with this email does not exist");
+    }
+
+    const code = Math.floor(10000 + Math.random() * 99999);
+    await redis.set(email, code, "EX", 3 * 60);
+
+    await resend.emails.send({
+        from: "DocChat <onboarding@avishekadhikary.tech>",
+        to: email,
+        subject: "DocChat - Password Reset Code",
+        html: `<p>Your password reset code is: <strong>${code}</strong></p>`,
+    });
+
+    res.status(200).json(
+        new ApiResponse(200, { emailSent: true }, "Reset code sent successfully !!"),
+    );
+});
+
+const resetPassword = asyncHandler(async (req, res) => {
+    const { email, code, password } = req.body;
+
+    const storedCode = await redis.get(email);
+    if (Number(code) !== Number(storedCode)) {
+        throw new ApiError(400, "Invalid verification code");
+    }
+
+    const user = await prisma.user.findUnique({
+        where: { email },
+    });
+
+    if (!user) {
+        throw new ApiError(404, "User with this email does not exist");
+    }
+
+    const hashedPassword = await hashPassword(password);
+    await prisma.user.update({
+        where: { email },
+        data: { password: hashedPassword },
+    });
+
+    await redis.del(email);
+
+    res.status(200).json(
+        new ApiResponse(200, { reset: true }, "Password reset successfully !!"),
+    );
+});
+
 export {
     userRegister,
     userLogIn,
@@ -298,4 +353,6 @@ export {
     sendVerificationCode,
     verifyEmail,
     currentUserProfile,
+    resetPassword,
+    sendResetCode
 };
