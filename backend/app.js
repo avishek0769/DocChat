@@ -27,6 +27,9 @@ app.use(cookieParser());
 import userRouter from "./routers/user.route.js";
 app.use("/api/v1/user", userRouter);
 
+import apikeyRouter from "./routers/apikey.route.js";
+app.use("/api/v1/apikey", apikeyRouter);
+
 app.use(errorHandler);
 
 export { app };

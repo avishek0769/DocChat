@@ -15,7 +15,14 @@ const verifyStrictJWT = async (req, res, next) => {
         const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
         const user = await prisma.user.findUnique({
             where: { id: decodedToken.id },
-            select: { id: true, fullname: true, username: true, email: true }, // excluding password and refreshToken
+            select: {
+                id: true,
+                fullname: true,
+                username: true,
+                email: true,
+                apikeys: true,
+                refreshToken: true,
+            },
         });
 
         if (!user) throw new ApiError(452, "Invalid Access Token");

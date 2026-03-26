@@ -17,8 +17,8 @@ enum ChatStatus {
 model User {
     id           String        @id @unique @default(uuid())
     fullname     String?
-    username     String?        @unique
-    email        String?        @unique
+    username     String?       @unique
+    email        String?       @unique
     password     String?
     isVerified   Boolean       @default(false) @map("is_verified")
     chats        Chat[]
@@ -76,14 +76,16 @@ model ChatMessageSource {
 }
 
 model ApiKey {
-    id          String        @id @unique @default(uuid())
-    userId      String        @map("user_id")
-    user        User          @relation(fields: [userId], references: [id])
-    name        String
-    hashed_key  String        @unique
-    provider    String
-    createdAt   DateTime      @default(now()) @map("created_at")
-    usageEvents UsageEvents[]
+    id           String        @id @unique @default(uuid())
+    userId       String        @map("user_id")
+    user         User          @relation(fields: [userId], references: [id])
+    name         String
+    encryptedKey String        @unique @map("encrypted_key")
+    iv           String
+    tag          String
+    provider     String
+    createdAt    DateTime      @default(now()) @map("created_at")
+    usageEvents  UsageEvents[]
 }
 
 model UsageEvents {
