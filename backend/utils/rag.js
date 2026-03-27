@@ -1,5 +1,11 @@
 import * as cheerio from "cheerio";
 
+async function scrapeTitle(url) {
+    const data = await (await fetch(url)).text();
+    const $ = cheerio.load(data);
+    return $("title").text();
+}
+
 async function scrapeWebpage(url = "", rootUrl = "") {
     const data = await (await fetch(url)).text();
     const $ = cheerio.load(data);
@@ -124,4 +130,4 @@ function extractHrefsFromScripts($, rootUrl = "") {
     return hrefs;
 }
 
-export { scrapeWebpage };
+export { normalizeUrl, isValidDocUrl, scrapeWebpage, scrapeTitle };

@@ -2,7 +2,10 @@ import prisma from "../utils/prismaClient.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
-import { scrapeWebpage } from "../utils/rag.js";
+import { scrapeTitle, scrapeWebpage } from "../utils/rag.js";
+import { Queue } from 'bullmq';
+
+const chatCreationQueue = new Queue("chatCreation")
 
 const expectation = asyncHandler(async (req, res) => {
     const { docsUrl } = req.query;
@@ -48,6 +51,47 @@ const expectation = asyncHandler(async (req, res) => {
     }
 });
 
+const createChat = asyncHandler(async (req, res) => {
+    const { name, model, docsUrl } = req.body
 
+    const docsAlreadyIngested = await prisma.chat.findFirst({
+        where: {
+            documentationLinks: {
+                some: {
+                    documentationUrl: docsUrl
+                }
+            }
+        }
+    })
 
-export { expectation };
+    if (docsAlreadyIngested) {
+        // TODO: Coming soon
+    }
+    else {
+        const title = await scrapeTitle(docsUrl);
+        const chat = await prisma.chat.create({
+            data: {
+                name,
+                model,
+                chatSources: {
+                    create: {
+                        heading: title,
+                        documentationUrl: docsUrl,
+                        pagesIndexed: 0
+                    }
+                },
+                status: "QUEUED",
+                userId: req.user.id
+            }
+        })
+
+        chatCreationQueue.add(`${chat.id}-job`, {
+            chatId: chat.id,
+            docsUrl
+        })
+
+        
+    }
+})
+
+export { expectation, createChat };

@@ -37,13 +37,13 @@ model User {
 }
 
 model Chat {
-    id                 String       @id @unique @default(uuid())
-    name               String
-    documentationLinks ChatSource[]
-    userId             String       @map("user_id")
-    createdBy          User         @relation(fields: [userId], references: [id])
-    status             ChatStatus   @default(QUEUED)
-    createdAt          DateTime     @default(now()) @map("created_at")
+    id          String       @id @unique @default(uuid())
+    name        String
+    chatSources ChatSource[]
+    userId      String       @map("user_id")
+    createdBy   User         @relation(fields: [userId], references: [id])
+    status      ChatStatus   @default(QUEUED)
+    createdAt   DateTime     @default(now()) @map("created_at")
 }
 
 model ChatSource {
