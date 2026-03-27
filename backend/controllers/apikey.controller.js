@@ -3,6 +3,7 @@ import asyncHandler from "../utils/asyncHandler.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
 import crypto from "crypto";
+import { decryptApiKey } from "../utils/decrypt.js";
 
 function encryptApiKey(apikey) {
     const iv = crypto.randomBytes(12).toString("base64");
@@ -97,12 +98,37 @@ const addApiKey = asyncHandler(async (req, res) => {
 
 const listApiKeys = asyncHandler(async (req, res) => {
     const apiKeys = await prisma.apiKey.findMany({
-        where: {
-            userId: req.user.id,
+        where: { userId: req.user.id },
+        select: {
+            id: true,
+            name: true,
+            provider: true,
+            createdAt: true,
+            encryptedKey: true,
+            iv: true,
+            tag: true,
         },
     });
+
+    const formattedApiKeys = apiKeys.map((key) => {
+        const decryptedKey = decryptApiKey(key.encryptedKey, key.iv, key.tag);
+
+        const startingSection = decryptedKey.slice(0, 5)
+        const endingSection = decryptedKey.slice(-5)
+
+        let formattedKey = startingSection + "*****" + endingSection;
+
+        key.formattedKey = formattedKey;
+
+        delete key.encryptedKey;
+        delete key.iv;
+        delete key.tag;
+
+        return key;
+    });
+
     res.status(200).json(
-        new ApiResponse(200, { apiKeys }, "API keys listed successfully"),
+        new ApiResponse(200, { apiKeys: formattedApiKeys }, "API keys listed successfully"),
     );
 });
 
