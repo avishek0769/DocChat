@@ -6,7 +6,7 @@ const apikeyRouter = Router();
 
 apikeyRouter.route("/add").post(verifyStrictJWT, addApiKey);
 apikeyRouter.route("/list").get(verifyStrictJWT, listApiKeys);
-apikeyRouter.route("/remove").delete(verifyStrictJWT, removeApiKey);
+apikeyRouter.route("/:id").delete(verifyStrictJWT, removeApiKey);
 apikeyRouter.route("/:id").get(verifyStrictJWT, getApiKey);
 
 export default apikeyRouter;
