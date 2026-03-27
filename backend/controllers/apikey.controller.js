@@ -29,28 +29,18 @@ async function checkApiKeyValidity(provider, apikey) {
     if (provider === "OPENAI") {
         url = "https://api.openai.com/v1/models";
         headers.Authorization = `Bearer ${apikey}`;
-    }
-
-    else if (provider === "ANTHROPIC") {
+    } else if (provider === "ANTHROPIC") {
         url = "https://api.anthropic.com/v1/models";
         headers["x-api-key"] = apikey;
         headers["anthropic-version"] = "2023-06-01";
-    }
-
-    else if (provider === "GOOGLE") {
+    } else if (provider === "GOOGLE") {
         url = `https://generativelanguage.googleapis.com/v1/models?key=${apikey}`;
-    }
-
-    else if (provider === "XAI") {
+    } else if (provider === "XAI") {
         url = "https://api.x.ai/v1/models";
         headers.Authorization = `Bearer ${apikey}`;
-    }
-
-    else if (provider === "OPENROUTER") {
+    } else if (provider === "OPENROUTER") {
         return true; // No standard endpoint to validate, assume valid. Actual validation will happen when user tries to use it and fails if invalid.
-    }
-
-    else {
+    } else {
         return false;
     }
 
@@ -62,8 +52,7 @@ async function checkApiKeyValidity(provider, apikey) {
         if (res.status === 401 || res.status === 403) return false; // Unauthorized / invalid
 
         return false;
-    }
-    catch (err) {
+    } catch (err) {
         return false;
     }
 }
@@ -79,6 +68,17 @@ const addApiKey = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Invalid API key or provider");
     }
 
+    const apiKey = await prisma.apiKey.findFirst({
+        where: {
+            userId: req.user.id,
+            provider,
+        },
+    });
+
+    if (apiKey) {
+        throw new ApiError(400, `An API key for provider ${provider} already exists. Please remove it first if you want to add a new one.`);
+    }
+
     const { cipherText, tag, iv } = encryptApiKey(key);
 
     await prisma.apiKey.create({
@@ -91,6 +91,7 @@ const addApiKey = asyncHandler(async (req, res) => {
             provider: provider,
         },
     });
+    
     res.status(201).json(
         new ApiResponse(200, {}, "API key added successfully"),
     );
@@ -113,8 +114,8 @@ const listApiKeys = asyncHandler(async (req, res) => {
     const formattedApiKeys = apiKeys.map((key) => {
         const decryptedKey = decryptApiKey(key.encryptedKey, key.iv, key.tag);
 
-        const startingSection = decryptedKey.slice(0, 5)
-        const endingSection = decryptedKey.slice(-5)
+        const startingSection = decryptedKey.slice(0, 5);
+        const endingSection = decryptedKey.slice(-5);
 
         let formattedKey = startingSection + "*****" + endingSection;
 
@@ -128,7 +129,11 @@ const listApiKeys = asyncHandler(async (req, res) => {
     });
 
     res.status(200).json(
-        new ApiResponse(200, { apiKeys: formattedApiKeys }, "API keys listed successfully"),
+        new ApiResponse(
+            200,
+            { apiKeys: formattedApiKeys },
+            "API keys listed successfully",
+        ),
     );
 });
 
@@ -140,10 +145,50 @@ const removeApiKey = asyncHandler(async (req, res) => {
             userId: req.user.id,
         },
     });
-    
+
     res.status(200).json(
         new ApiResponse(200, {}, "API key removed successfully"),
     );
 });
 
-export { addApiKey, listApiKeys, removeApiKey };
+const getApiKey = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const apiKey = await prisma.apiKey.findUnique({
+        where: {
+            id,
+            userId: req.user.id,
+        },
+        select: {
+            id: true,
+            name: true,
+            provider: true,
+            createdAt: true,
+            encryptedKey: true,
+            iv: true,
+            tag: true,
+        },
+    });
+
+    if (!apiKey) {
+        throw new ApiError(404, "API key not found");
+    }
+
+    const decryptedKey = decryptApiKey(
+        apiKey.encryptedKey,
+        apiKey.iv,
+        apiKey.tag,
+    );
+    delete apiKey.encryptedKey;
+    delete apiKey.iv;
+    delete apiKey.tag;
+
+    res.status(200).json(
+        new ApiResponse(
+            200,
+            { ...apiKey, decryptedKey },
+            "API key retrieved successfully",
+        ),
+    );
+});
+
+export { addApiKey, listApiKeys, removeApiKey, getApiKey };
