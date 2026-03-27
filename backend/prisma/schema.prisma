@@ -14,6 +14,14 @@ enum ChatStatus {
     FAILED
 }
 
+enum Providers {
+    OPENAI
+    ANTHROPIC
+    GOOGLE
+    XAI
+    OPENROUTER
+}
+
 model User {
     id           String        @id @unique @default(uuid())
     fullname     String?
@@ -82,8 +90,8 @@ model ApiKey {
     name         String
     encryptedKey String        @unique @map("encrypted_key")
     iv           String
-    tag          String
-    provider     String
+    tag          Bytes
+    provider     Providers
     createdAt    DateTime      @default(now()) @map("created_at")
     usageEvents  UsageEvents[]
 }

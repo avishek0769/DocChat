@@ -21,10 +21,61 @@ function encryptApiKey(apikey) {
     return { cipherText, tag, iv };
 }
 
+async function checkApiKeyValidity(provider, apikey) {
+    let url;
+    let headers = { "Content-Type": "application/json" };
+
+    if (provider === "OPENAI") {
+        url = "https://api.openai.com/v1/models";
+        headers.Authorization = `Bearer ${apikey}`;
+    }
+
+    else if (provider === "ANTHROPIC") {
+        url = "https://api.anthropic.com/v1/models";
+        headers["x-api-key"] = apikey;
+        headers["anthropic-version"] = "2023-06-01";
+    }
+
+    else if (provider === "GOOGLE") {
+        url = `https://generativelanguage.googleapis.com/v1/models?key=${apikey}`;
+    }
+
+    else if (provider === "XAI") {
+        url = "https://api.x.ai/v1/models";
+        headers.Authorization = `Bearer ${apikey}`;
+    }
+
+    else if (provider === "OPENROUTER") {
+        return true; // No standard endpoint to validate, assume valid. Actual validation will happen when user tries to use it and fails if invalid.
+    }
+
+    else {
+        return false;
+    }
+
+    try {
+        const res = await fetch(url, { headers });
+
+        if (res.status === 200) return true;
+        if (res.status === 429) return true; // Rate limited but valid
+        if (res.status === 401 || res.status === 403) return false; // Unauthorized / invalid
+
+        return false;
+    }
+    catch (err) {
+        return false;
+    }
+}
+
 const addApiKey = asyncHandler(async (req, res) => {
     const { key, name, provider } = req.body;
     if (!key || !provider) {
         throw new ApiError(400, "API key and provider are required");
+    }
+
+    const isValid = await checkApiKeyValidity(provider, key);
+    if (!isValid) {
+        throw new ApiError(400, "Invalid API key or provider");
     }
 
     const { cipherText, tag, iv } = encryptApiKey(key);
