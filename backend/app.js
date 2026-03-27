@@ -30,6 +30,9 @@ app.use("/api/v1/user", userRouter);
 import apikeyRouter from "./routers/apikey.route.js";
 app.use("/api/v1/apikey", apikeyRouter);
 
+import chatRouter from "./routers/chat.route.js";
+app.use("/api/v1/chat", chatRouter);
+
 app.use(errorHandler);
 
 export { app };
