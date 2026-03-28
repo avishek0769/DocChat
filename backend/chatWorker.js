@@ -5,7 +5,8 @@ import { normalizeUrl, isValidDocUrl, scrapeWebpage } from "./utils/rag.js";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import OpenAI from "openai";
 import { QdrantClient } from "@qdrant/js-client-rest";
-import { v4 as uuidv4 } from "uuid"; // Use 'npm install uuid' for valid Qdrant IDs
+import { v4 as uuidv4 } from "uuid";
+import prisma from "./utils/prismaClient.js";
 
 const client = new QdrantClient({
     host: "localhost",
@@ -28,12 +29,12 @@ async function generateVectorEmbeddings(text) {
     return response.data[0].embedding;
 }
 
-async function ingestAll(docsRootUrl, chatId, collectionName) {
+async function ingestAll(docsRootUrl, chatId, collectionName, chatSourceId) {
     const rootUrl = normalizeUrl(docsRootUrl);
     console.log("Scraping root:", rootUrl);
 
     const { internalLinks } = await scrapeWebpage(rootUrl, rootUrl);
-    let allLinks = [rootUrl, ...Array.from(internalLinks)].slice(0, 300);
+    let allLinks = [rootUrl, ...Array.from(internalLinks)].slice(0, 5); // slice 5 - Just for development, slice 300 for production
     const totalLinks = allLinks.length;
 
     console.log("Total unique links found:", totalLinks);
@@ -46,28 +47,40 @@ async function ingestAll(docsRootUrl, chatId, collectionName) {
     }
 
     let batchPoints = [];
+    let batchPage = [];
     let pageCount = 0;
 
     for (const [index, link] of allLinks.entries()) {
         if (!isValidDocUrl(link, rootUrl)) continue;
 
         try {
-            const { body } = await scrapeWebpage(link, rootUrl);
+            const { body, title } = await scrapeWebpage(link, rootUrl);
             const splitter = new RecursiveCharacterTextSplitter({
                 chunkSize: 1000,
                 chunkOverlap: 150,
             });
             const chunks = await splitter.splitText(body);
 
+            batchPage.push({
+                pageUrl: link,
+                heading: title
+            });
+
             console.log(`Processing: ${link} (${chunks.length} chunks)`);
 
             for (const chunk of chunks) {
                 const emb = await generateVectorEmbeddings(chunk);
-                
+
                 batchPoints.push({
                     id: uuidv4(),
                     vector: emb,
-                    payload: { url: link, body: chunk, chatId }
+                    payload: {
+                        url: link,
+                        body: chunk,
+                        chatId,
+                        title,
+                        chatSourceId
+                    }
                 });
             }
 
@@ -80,7 +93,17 @@ async function ingestAll(docsRootUrl, chatId, collectionName) {
                         wait: true,
                         points: batchPoints
                     });
-                    
+
+                    await prisma.documentPage.createMany({
+                        data: batchPage.map(point => ({
+                            pageUrl: point.pageUrl,
+                            heading: point.heading,
+                            chatSourceId
+                        }))
+                    }).catch(err => {
+                        console.error("Failed to update indexed pages:", err.message);
+                    });
+
                     batchPoints = [];
                     pageCount = 0;
                 }
@@ -98,26 +121,32 @@ async function ingestAll(docsRootUrl, chatId, collectionName) {
             continue;
         }
     }
-
-    await redis.setex(collectionName, 3600, JSON.stringify({ status: "READY", progress: 100 }));
 }
 
 
 const worker = new Worker(
     "chatCreation",
     async (job) => {
-        const { chatId, docsUrl, collectionName } = job.data;
-        await ingestAll(docsUrl, chatId, collectionName);
+        const { chatId, docsUrl, collectionName, chatSourceId } = job.data;
+        await ingestAll(docsUrl, chatId, collectionName, chatSourceId);
     },
-    { 
+    {
         connection: redis,
-        removeOnComplete: { count: 100 },
+        removeOnComplete: { count: 50 },
         removeOnFail: { count: 500 }
     },
 );
 
-worker.on("completed", (job) => {
+worker.on("completed", async (job) => {
     console.log(`Job ${job.id} completed!`);
+    await redis.setex(job.data.collectionName, 3600, JSON.stringify({ status: "READY", progress: 100 }));
+
+    await prisma.chat.update({
+        where: { id: job.data.chatId },
+        data: { status: "READY" }
+    }).catch(err => {
+        console.error("Update status Failed:", err.message);
+    });
 });
 
 worker.on("failed", (job, err) => {
