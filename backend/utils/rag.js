@@ -11,6 +11,7 @@ async function scrapeWebpage(url = "", rootUrl = "") {
     const $ = cheerio.load(data);
 
     const hiddenLinks = extractHrefsFromScripts($, rootUrl);
+    const title = $("title").text().split(" ").slice(0, 4).join(" ")
 
     $("script, style, noscript").remove();
 
@@ -52,7 +53,8 @@ async function scrapeWebpage(url = "", rootUrl = "") {
 
     return {
         body: bodyElem,
-        internalLinks,
+        title,
+        internalLinks
     };
 }
 

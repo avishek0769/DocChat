@@ -37,13 +37,14 @@ model User {
 }
 
 model Chat {
-    id          String       @id @unique @default(uuid())
-    name        String
-    chatSources ChatSource[]
-    userId      String       @map("user_id")
-    createdBy   User         @relation(fields: [userId], references: [id])
-    status      ChatStatus   @default(QUEUED)
-    createdAt   DateTime     @default(now()) @map("created_at")
+    id             String       @id @unique @default(uuid())
+    name           String
+    chatSources    ChatSource[]
+    userId         String       @map("user_id")
+    createdBy      User         @relation(fields: [userId], references: [id])
+    status         ChatStatus   @default(QUEUED)
+    collectionName String       @map("collection_name")
+    createdAt      DateTime     @default(now()) @map("created_at")
 }
 
 model ChatSource {
@@ -58,7 +59,7 @@ model ChatSource {
 model DocumentPage {
     id           String     @id @unique @default(uuid())
     heading      String
-    page_url     String     @map("page_url")
+    pageUrl      String     @map("page_url")
     chatSourceId String     @map("chat_source_id")
     chatSource   ChatSource @relation(fields: [chatSourceId], references: [id])
 }
