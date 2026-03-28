@@ -4,12 +4,13 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
 import { scrapeTitle, scrapeWebpage } from "../utils/rag.js";
 import { Queue } from 'bullmq';
+import redis from "../utils/redis.js";
 
 const chatCreationQueue = new Queue("chatCreation")
 
 const expectation = asyncHandler(async (req, res) => {
     const { docsUrl } = req.query;
-    
+
     try {
         const { internalLinks } = await scrapeWebpage(docsUrl, docsUrl);
         let allLinks = [docsUrl, ...Array.from(internalLinks)].slice(0, 300);
@@ -29,11 +30,11 @@ const expectation = asyncHandler(async (req, res) => {
         if (count === 0) {
             throw new Error("Failed to scrape sample pages");
         }
-    
+
         let expectedTokens = Math.ceil(
             ((totalBodyLengthOfCount / count) * allLinks.length) / 3.8,
         );
-    
+
         res.status(200).json(
             new ApiResponse(
                 200,
@@ -52,46 +53,78 @@ const expectation = asyncHandler(async (req, res) => {
 });
 
 const createChat = asyncHandler(async (req, res) => {
-    const { name, model, docsUrl } = req.body
+    let { name, docsUrl } = req.body
+    name = name || (await scrapeTitle(docsUrl)) || "New Chat";
 
     const docsAlreadyIngested = await prisma.chat.findFirst({
         where: {
-            documentationLinks: {
+            chatSources: {
                 some: {
                     documentationUrl: docsUrl
                 }
             }
+        },
+        include: {
+            chatSources: true
         }
     })
 
     if (docsAlreadyIngested) {
-        // TODO: Coming soon
+        // TODO: Coming back to this
     }
     else {
-        const title = await scrapeTitle(docsUrl);
+        const collectionName = `${name.replace(/\s+/g, "-")}-${Date.now()}`;
         const chat = await prisma.chat.create({
             data: {
                 name,
-                model,
+                collectionName,
                 chatSources: {
                     create: {
-                        heading: title,
-                        documentationUrl: docsUrl,
-                        pagesIndexed: 0
+                        heading: name,
+                        documentationUrl: docsUrl
                     }
                 },
                 status: "QUEUED",
                 userId: req.user.id
+            },
+            include: {
+                chatSources: true
             }
         })
 
         chatCreationQueue.add(`${chat.id}-job`, {
             chatId: chat.id,
-            docsUrl
+            docsUrl,
+            collectionName: chat.collectionName,
+            chatSourceId: chat.chatSources[0].id
         })
 
-        
+        res.status(200).json(
+            new ApiResponse(200,
+                { chatId: chat.id },
+                "Chat creation initiated successfully"
+            )
+        );
     }
 })
 
-export { expectation, createChat };
+const progressStatus = asyncHandler(async (req, res) => {
+    const { chatId } = req.params;
+
+    const chat = await prisma.chat.findUnique({
+        where: { id: chatId }
+    })
+
+    const redisData = await redis.get(chat.collectionName);
+    const progress = redisData ? JSON.parse(redisData) : { status: "QUEUED", progress: 0 };
+
+    res.status(200).json(
+        new ApiResponse(200,
+            { progress: progress },
+            "Progress fetched successfully"
+        )
+    );
+})
+
+
+export { expectation, createChat, progressStatus, listAllChats, chatDetails };

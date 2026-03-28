@@ -12,10 +12,14 @@
     "packageManager": "pnpm@10.30.3",
     "type": "module",
     "dependencies": {
+        "@langchain/core": "^1.1.36",
+        "@langchain/textsplitters": "^1.0.1",
         "@prisma/adapter-pg": "^7.5.0",
         "@prisma/client": "^7.5.0",
         "@prisma/client-runtime-utils": "^7.5.0",
+        "@qdrant/js-client-rest": "^1.17.0",
         "bcrypt": "^6.0.0",
+        "bullmq": "^5.71.1",
         "cheerio": "^1.2.0",
         "cookie-parser": "^1.4.7",
         "cors": "^2.8.6",
@@ -23,8 +27,10 @@
         "express": "^5.2.1",
         "ioredis": "^5.10.1",
         "jsonwebtoken": "^9.0.3",
+        "openai": "^6.33.0",
         "pg": "^8.20.0",
         "prisma": "^7.5.0",
-        "resend": "^6.9.4"
+        "resend": "^6.9.4",
+        "uuid": "^13.0.0"
     }
 }
