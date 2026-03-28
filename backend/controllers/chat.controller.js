@@ -13,7 +13,7 @@ const expectation = asyncHandler(async (req, res) => {
 
     try {
         const { internalLinks } = await scrapeWebpage(docsUrl, docsUrl);
-        let allLinks = [docsUrl, ...Array.from(internalLinks)].slice(0, 300);
+        let allLinks = [docsUrl, ...internalLinks].slice(0, 300);
         const sampleLinks = allLinks.slice(0, 10);
 
         let count = 0;
@@ -40,8 +40,8 @@ const expectation = asyncHandler(async (req, res) => {
                 200,
                 {
                     expectedTokens,
-                    pages: internalLinks.size + 1,
-                    pageLimitWarning: internalLinks.size > 300,
+                    pages: internalLinks.length + 1,
+                    pageLimitWarning: internalLinks.length > 300,
                 },
                 "Expectation calculated successfully",
             ),
@@ -56,21 +56,36 @@ const createChat = asyncHandler(async (req, res) => {
     let { name, docsUrl } = req.body
     name = name || (await scrapeTitle(docsUrl)) || "New Chat";
 
-    const docsAlreadyIngested = await prisma.chat.findFirst({
+    const existingChatSource = await prisma.chatSource.findFirst({
         where: {
-            chatSources: {
-                some: {
-                    documentationUrl: docsUrl
-                }
-            }
+            documentationUrl: docsUrl
         },
         include: {
-            chatSources: true
+            chats: { take: 1 }
         }
     })
 
-    if (docsAlreadyIngested) {
-        // TODO: Coming back to this
+    if (existingChatSource) {
+        const chat = await prisma.chat.create({
+            data: {
+                name,
+                collectionName: existingChatSource.chats[0].collectionName,
+                chatSources: {
+                    connect: {
+                        id: existingChatSource.id
+                    }
+                },
+                status: "READY",
+                userId: req.user.id
+            }
+        })
+
+        return res.status(200).json(
+            new ApiResponse(200,
+                { ...chat },
+                "Documentation already ingested, returning existing collection with new chat"
+            )
+        );
     }
     else {
         const collectionName = `${name.replace(/\s+/g, "-")}-${Date.now()}`;
