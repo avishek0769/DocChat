@@ -126,5 +126,51 @@ const progressStatus = asyncHandler(async (req, res) => {
     );
 })
 
+const listAllChats = asyncHandler(async (req, res) => {
+    const chats = await prisma.chat.findMany({
+        where: { userId: req.user.id },
+        include: {
+            chatSources: {
+                include: {
+                    _count: {
+                        select: { pagesIndexed: true }
+                    }
+                }
+            }
+        },
+        orderBy: {
+            createdAt: "desc"
+        }
+    })
+
+    res.status(200).json(
+        new ApiResponse(200,
+            { chats },
+            "Chats fetched successfully"
+        )
+    );
+})
+
+const chatDetails = asyncHandler(async (req, res) => {
+    const { chatId } = req.params;
+
+    const chat = await prisma.chat.findUnique({
+        where: { id: chatId },
+        include: {
+            chatSources: {
+                include: {
+                    pagesIndexed: true
+                }
+            }
+        }
+    })
+
+    res.status(200).json(
+        new ApiResponse(200,
+            { chat },
+            "Chat details fetched successfully"
+        )
+    );
+})
 
 export { expectation, createChat, progressStatus, listAllChats, chatDetails };
