@@ -9,52 +9,37 @@ async function scrapeTitle(url) {
 async function scrapeWebpage(url = "", rootUrl = "") {
     const data = await (await fetch(url)).text();
     const $ = cheerio.load(data);
+    
+    const rootHostname = new URL(rootUrl).hostname;
 
-    const hiddenLinks = extractHrefsFromScripts($, rootUrl);
-    const title = $("title").text().split(" ").slice(0, 4).join(" ")
+    const internalLinks = extractHrefsFromScripts($, rootUrl, rootHostname);
 
+    const title = $("title").text().split(/\s+/).slice(0, 4).join(" ");
     $("script, style, noscript").remove();
-
     const bodyElem = cleanText($("article, body").text());
-    const internalLinks = new Set(hiddenLinks);
 
     $("a").each((_, el) => {
         const href = $(el).attr("href");
-        const isLinkIgnorable =
-            !href ||
-            href.startsWith("http") ||
-            href.startsWith("#") ||
-            href.startsWith(".") ||
-            href.includes("..") ||
-            href.startsWith("mailto:") ||
-            href.startsWith("tel:") ||
-            href.startsWith("javascript:");
+        if (!href) return;
 
-        if (isLinkIgnorable) {
-            return;
-        } else {
-            try {
-                if (href.startsWith("/")) {
-                    const resolved = new URL(href, url).toString();
-                    const normalized = normalizeUrl(resolved);
-
-                    if (isValidDocUrl(normalized, rootUrl)) {
-                        internalLinks.add(normalized);
-                    }
-                } else {
-                    const _url = url + "/" + href;
-                    internalLinks.add(_url);
+        try {
+            const resolved = new URL(href, url);
+            
+            if (resolved.hostname === rootHostname && resolved.protocol.startsWith('http')) {
+                const normalized = normalizeUrl(resolved.toString());
+                if (isValidDocUrl(normalized, rootUrl)) {
+                    internalLinks.add(normalized);
                 }
-            } catch {
-                return;
             }
+        } catch (e) {
+            // Ignore invalid URLs or mailto/tel/javascript schemes
         }
     });
 
     return {
         body: bodyElem,
         title,
-        internalLinks
+        internalLinks: Array.from(internalLinks)
     };
 }
 
@@ -96,40 +81,29 @@ function isValidDocUrl(url, rootUrl = "") {
     return true;
 }
 
-function extractHrefsFromScripts($, rootUrl = "") {
-    const scriptsText = $("script")
-        .map((_, el) => {
-            return $(el).html();
-        })
-        .get()
-        .join("\n");
-
+function extractHrefsFromScripts($, rootUrl, rootHostname) {
+    const scriptsText = $("script").map((_, el) => $(el).html()).get().join("\n");
     const hrefs = new Set();
-
     const regex = /\\"href\\"\s*:\s*\\"([^\\"]+)\\"/g;
 
     let match;
     while ((match = regex.exec(scriptsText)) !== null) {
-        let path = match[1];
-        if (!path.startsWith("/")) {
-            path = "/" + path;
-        }
-        const normalizedUrl = normalizeUrl(rootUrl) + path;
-        const isLinkIgnorable =
-            path.startsWith("http") ||
-            path.startsWith("#") ||
-            path.startsWith(".") ||
-            path.includes("..") ||
-            path.startsWith("mailto:") ||
-            path.startsWith("tel:") ||
-            path.startsWith("javascript:");
+        try {
+            const path = match[1];
+            const resolved = new URL(path, rootUrl);
 
-        if (!isLinkIgnorable && isValidDocUrl(normalizedUrl, rootUrl)) {
-            hrefs.add(normalizedUrl);
+            if (resolved.hostname === rootHostname) {
+                const normalized = normalizeUrl(resolved.toString());
+                if (isValidDocUrl(normalized, rootUrl)) {
+                    hrefs.add(normalized);
+                }
+            }
+        } catch (e) {
+            continue;
         }
     }
-
     return hrefs;
 }
+
 
 export { normalizeUrl, isValidDocUrl, scrapeWebpage, scrapeTitle };

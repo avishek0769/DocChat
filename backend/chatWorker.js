@@ -34,7 +34,7 @@ async function ingestAll(docsRootUrl, chatId, collectionName, chatSourceId) {
     console.log("Scraping root:", rootUrl);
 
     const { internalLinks } = await scrapeWebpage(rootUrl, rootUrl);
-    let allLinks = [rootUrl, ...Array.from(internalLinks)].slice(0, 5); // slice 5 - Just for development, slice 300 for production
+    let allLinks = internalLinks.slice(0, 5); // slice 5 - Just for development, slice 300 for production
     const totalLinks = allLinks.length;
 
     console.log("Total unique links found:", totalLinks);
@@ -105,6 +105,7 @@ async function ingestAll(docsRootUrl, chatId, collectionName, chatSourceId) {
                     });
 
                     batchPoints = [];
+                    batchPage = [];
                     pageCount = 0;
                 }
 
