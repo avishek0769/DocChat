@@ -101,7 +101,7 @@ const createChat = asyncHandler(async (req, res) => {
         const chat = await prisma.chat.create({
             data: {
                 name,
-                collectionName: existingChatSource.chats[0].collectionName,
+                collectionName: existingChatSource.collectionName,
                 chatSources: {
                     connect: {
                         id: existingChatSource.id
@@ -260,4 +260,23 @@ const cancelProcessing = asyncHandler(async (req, res) => {
     }
 })
 
-export { expectation, createChat, progressStatus, listAllChats, chatDetails, cancelProcessing };
+const deleteChat = asyncHandler(async (req, res) => {
+    const { chatId } = req.params;
+
+    const chat = await prisma.chat.delete({
+        where: { id: chatId }
+    })
+
+    if(!chat) {
+        throw new ApiError(404, "Chat not found");
+    }
+
+    res.status(200).json(
+        new ApiResponse(200,
+            null,
+            "Chat deleted successfully"
+        )
+    );
+})
+
+export { expectation, createChat, progressStatus, listAllChats, chatDetails, cancelProcessing, deleteChat };

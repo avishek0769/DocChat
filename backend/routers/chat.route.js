@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { verifyStrictJWT } from "../middlewares/auth.middleware.js";
-import { cancelProcessing, chatDetails, createChat, expectation, listAllChats, progressStatus } from "../controllers/chat.controller.js";
+import { cancelProcessing, chatDetails, createChat, deleteChat, expectation, listAllChats, progressStatus } from "../controllers/chat.controller.js";
 
 const chatRouter = Router();
 
@@ -9,7 +9,7 @@ chatRouter.route("/create").post(verifyStrictJWT, createChat);
 chatRouter.route("/status/:chatId").get(verifyStrictJWT, progressStatus);
 chatRouter.route("/list").get(verifyStrictJWT, listAllChats);
 chatRouter.route("/:chatId").get(verifyStrictJWT, chatDetails);
-chatRouter.route("/:chatId").delete(verifyStrictJWT);
+chatRouter.route("/:chatId").delete(verifyStrictJWT, deleteChat);
 chatRouter.route("/cancel/:chatId").get(verifyStrictJWT, cancelProcessing);
 
 export default chatRouter;

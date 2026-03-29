@@ -54,6 +54,7 @@ model ChatSource {
     totalPages       Int?           @map("total_pages")
     pagesIndexed     DocumentPage[]
     chats            Chat[]         @relation("ChatToChatSource")
+    collectionName   String         @map("collection_name") @default("")
     createdAt        DateTime       @default(now()) @map("created_at")
 }
 
