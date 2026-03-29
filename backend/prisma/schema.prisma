@@ -26,33 +26,35 @@ model User {
     id           String        @id @unique @default(uuid())
     fullname     String?
     username     String?       @unique
-    email        String?       @unique
     password     String?
-    isVerified   Boolean       @default(false) @map("is_verified")
-    chats        Chat[]
-    apikeys      ApiKey[]
-    usageEvents  UsageEvents[]
     refreshToken String?       @map("refresh_token")
     createdAt    DateTime      @default(now()) @map("created_at")
+    email        String?       @unique
+    isVerified   Boolean       @default(false) @map("is_verified")
+    apikeys      ApiKey[]
+    chats        Chat[]
+    usageEvents  UsageEvents[]
 }
 
 model Chat {
     id             String       @id @unique @default(uuid())
     name           String
-    chatSources    ChatSource[]
     userId         String       @map("user_id")
-    createdBy      User         @relation(fields: [userId], references: [id])
     status         ChatStatus   @default(QUEUED)
-    collectionName String       @map("collection_name")
     createdAt      DateTime     @default(now()) @map("created_at")
+    collectionName String       @map("collection_name")
+    createdBy      User         @relation(fields: [userId], references: [id])
+    chatSources    ChatSource[] @relation("ChatToChatSource")
 }
 
 model ChatSource {
     id               String         @id @unique @default(uuid())
     heading          String
     documentationUrl String         @map("documentation_url")
+    totalPages       Int?           @map("total_pages")
     pagesIndexed     DocumentPage[]
-    chats            Chat[]
+    chats            Chat[]         @relation("ChatToChatSource")
+    createdAt        DateTime       @default(now()) @map("created_at")
 }
 
 model DocumentPage {
@@ -69,8 +71,8 @@ model ChatMessage {
     userPrompt   String              @map("user_prompt")
     llmResponse  String              @map("llm_response")
     llmModel     String              @map("llm_model")
-    sourceChunks ChatMessageSource[]
     createdAt    DateTime            @default(now()) @map("created_at")
+    sourceChunks ChatMessageSource[]
     usageEvents  UsageEvents[]
 }
 
@@ -86,26 +88,26 @@ model ChatMessageSource {
 model ApiKey {
     id           String        @id @unique @default(uuid())
     userId       String        @map("user_id")
-    user         User          @relation(fields: [userId], references: [id])
     name         String
+    createdAt    DateTime      @default(now()) @map("created_at")
     encryptedKey String        @unique @map("encrypted_key")
     iv           String
-    tag          Bytes
     provider     Providers
-    createdAt    DateTime      @default(now()) @map("created_at")
+    tag          Bytes
+    user         User          @relation(fields: [userId], references: [id])
     usageEvents  UsageEvents[]
 }
 
 model UsageEvents {
     id           String      @id @unique @default(uuid())
     userId       String      @map("user_id")
-    user         User        @relation(fields: [userId], references: [id])
     messageId    String      @map("message_id")
-    message      ChatMessage @relation(fields: [messageId], references: [id])
     apikeyId     String      @map("apikey_id")
-    apiKey       ApiKey      @relation(fields: [apikeyId], references: [id])
     inputTokens  Int         @map("input_tokens")
     outputTokens Int         @map("output_tokens")
     eventType    String      @map("event_type")
     timestamp    DateTime    @default(now())
+    apiKey       ApiKey      @relation(fields: [apikeyId], references: [id])
+    message      ChatMessage @relation(fields: [messageId], references: [id])
+    user         User        @relation(fields: [userId], references: [id])
 }

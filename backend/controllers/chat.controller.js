@@ -2,7 +2,7 @@ import prisma from "../utils/prismaClient.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
-import { scrapeTitle, scrapeWebpage } from "../utils/rag.js";
+import { scrapeWebpage } from "../utils/rag.js";
 import { Queue } from 'bullmq';
 import redis from "../utils/redis.js";
 
@@ -61,7 +61,7 @@ const expectation = asyncHandler(async (req, res) => {
         let expectedTokens = Math.ceil(
             ((totalBodyLengthOfCount / count) * allLinks.length) / 3.8,
         );
-        let expectedCost = ((expectedTokens/1000000) * 0.02).toFixed(4);
+        let expectedCost = ((expectedTokens / 1000000) * 0.02).toFixed(4);
 
         res.status(200).json(
             new ApiResponse(
@@ -85,7 +85,8 @@ const expectation = asyncHandler(async (req, res) => {
 
 const createChat = asyncHandler(async (req, res) => {
     let { name, docsUrl } = req.body
-    name = name || (await scrapeTitle(docsUrl)) || "New Chat";
+    const { internalLinks, title } = await scrapeWebpage(docsUrl, docsUrl)
+    name = name || title || "Untitled Chat";
 
     const existingChatSource = await prisma.chatSource.findFirst({
         where: {
@@ -126,6 +127,7 @@ const createChat = asyncHandler(async (req, res) => {
                 collectionName,
                 chatSources: {
                     create: {
+                        totalPages: internalLinks.length,
                         heading: name,
                         documentationUrl: docsUrl
                     }
@@ -143,7 +145,7 @@ const createChat = asyncHandler(async (req, res) => {
             docsUrl,
             collectionName: chat.collectionName,
             chatSourceId: chat.chatSources[0].id
-        })
+        }, { jobId: chat.id });
 
         res.status(200).json(
             new ApiResponse(200,
@@ -205,6 +207,7 @@ const chatDetails = asyncHandler(async (req, res) => {
         include: {
             chatSources: {
                 include: {
+                    _count: { select: { pagesIndexed: true } },
                     pagesIndexed: true
                 }
             }
@@ -219,4 +222,42 @@ const chatDetails = asyncHandler(async (req, res) => {
     );
 })
 
-export { expectation, createChat, progressStatus, listAllChats, chatDetails };
+const cancelProcessing = asyncHandler(async (req, res) => {
+    const { chatId } = req.params;
+
+    const chat = await prisma.chat.findUnique({
+        where: { id: chatId }
+    })
+
+    if (!chat) {
+        throw new ApiError(404, "Chat not found");
+    }
+
+    const jobs = await chatCreationQueue.getJobs(["active", "waiting", "delayed"], 0, -1, false)
+    const job = jobs.find(j => j.id === chatId);
+
+    if (job) {
+        await job.remove();
+        await redis.setex(chat.collectionName, 3600, JSON.stringify({ status: "READY", progress: 100 }));
+
+        await prisma.chat.update({
+            where: { id: chatId },
+            data: { status: "READY" }
+        })
+        .catch(err => {
+            throw new ApiError(500, `Failed Update: ${err.message}`, err);
+        });
+
+        res.status(200).json(
+            new ApiResponse(200,
+                null,
+                "Chat processing cancelled successfully"
+            )
+        );
+    }
+    else {
+        throw new ApiError(404, "Job not found or already completed");
+    }
+})
+
+export { expectation, createChat, progressStatus, listAllChats, chatDetails, cancelProcessing };
