@@ -13,8 +13,35 @@ const expectation = asyncHandler(async (req, res) => {
 
     try {
         const { internalLinks } = await scrapeWebpage(docsUrl, docsUrl);
-        let allLinks = [docsUrl, ...internalLinks].slice(0, 300);
+        let allLinks = internalLinks.slice(0, 300);
         const sampleLinks = allLinks.slice(0, 10);
+
+        const existingChatSource = await prisma.chatSource.findFirst({
+            where: {
+                documentationUrl: docsUrl
+            },
+            include: {
+                chats: { take: 1 },
+                _count: {
+                    select: { pagesIndexed: true }
+                }
+            }
+        })
+        if (existingChatSource) {
+            return res.status(200).json(
+                new ApiResponse(200,
+                    {
+                        alreadyIngested: true,
+                        expectedTokens: 0,
+                        expectedCost: 0,
+                        totalPages: allLinks.length,
+                        pagesIndexed: existingChatSource._count.pagesIndexed,
+                        pageLimitWarning: false
+                    },
+                    "Documentation already ingested, returning existing expectation"
+                )
+            );
+        }
 
         let count = 0;
         let totalBodyLengthOfCount = 0;
@@ -34,14 +61,18 @@ const expectation = asyncHandler(async (req, res) => {
         let expectedTokens = Math.ceil(
             ((totalBodyLengthOfCount / count) * allLinks.length) / 3.8,
         );
+        let expectedCost = ((expectedTokens/1000000) * 0.02).toFixed(4);
 
         res.status(200).json(
             new ApiResponse(
                 200,
                 {
+                    alreadyIngested: false,
                     expectedTokens,
-                    pages: internalLinks.length + 1,
-                    pageLimitWarning: internalLinks.length > 300,
+                    expectedCost,
+                    totalPages: allLinks.length,
+                    pagesIndexed: 0,
+                    pageLimitWarning: allLinks.length > 300,
                 },
                 "Expectation calculated successfully",
             ),
