@@ -4,6 +4,7 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
 import crypto from "crypto";
 import { decryptApiKey } from "../utils/decrypt.js";
+import { LLM_MODELS } from "../utils/constants.js";
 
 function encryptApiKey(apikey) {
     const iv = crypto.randomBytes(12).toString("base64");
@@ -120,6 +121,7 @@ const listApiKeys = asyncHandler(async (req, res) => {
         let formattedKey = startingSection + "*****" + endingSection;
 
         key.formattedKey = formattedKey;
+        key.models = LLM_MODELS[key.provider] || [];
 
         delete key.encryptedKey;
         delete key.iv;

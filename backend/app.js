@@ -33,6 +33,9 @@ app.use("/api/v1/apikey", apikeyRouter);
 import chatRouter from "./routers/chat.route.js";
 app.use("/api/v1/chat", chatRouter);
 
+import chatMessageRouter from "./routers/chatMessage.route.js";
+app.use("/api/v1/message", chatMessageRouter);
+
 app.use(errorHandler);
 
 export { app };
