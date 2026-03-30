@@ -72,7 +72,7 @@ const sendMessage = asyncHandler(async (req, res) => {
     relevantSources.points.forEach((point, index) => {
         systemPrompt += `Source ${index + 1}: \nContent: ${point.payload.body}\n\n`;
     });
-    systemPrompt += "Answer the user's question based on the above sources. If you don't know the answer, say you don't know. Be concise and to the point.";
+    systemPrompt += "Answer the user's question based on the above sources. If you don't know the answer, say you don't know. Be concise and to the point. Use Markdown for formatting. Wrap all code snippets (if any) in triple backticks with the language identifier (e.g., ```javascript).";
     // console.log(systemPrompt);
 
     const openai = new OpenAI({
