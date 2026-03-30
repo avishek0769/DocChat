@@ -1,4 +1,21 @@
 import * as cheerio from "cheerio";
+import OpenAI from "openai";
+
+const openai = new OpenAI({
+    baseURL: "https://openrouter.ai/api/v1",
+    apiKey: process.env.OPENROUTER_API_KEY,
+});
+
+async function generateVectorEmbeddings(text) {
+    const response = await openai.embeddings.create({
+        model: "openai/text-embedding-3-small",
+        input: text,
+        encoding_format: "float",
+        dimensions: 1536,
+    });
+
+    return response.data[0].embedding;
+}
 
 async function scrapeTitle(url) {
     const data = await (await fetch(url)).text();
@@ -106,4 +123,4 @@ function extractHrefsFromScripts($, rootUrl, rootHostname) {
 }
 
 
-export { normalizeUrl, isValidDocUrl, scrapeWebpage, scrapeTitle };
+export { normalizeUrl, isValidDocUrl, scrapeWebpage, scrapeTitle, generateVectorEmbeddings };

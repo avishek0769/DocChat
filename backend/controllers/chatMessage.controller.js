@@ -2,8 +2,16 @@ import prisma from "../utils/prismaClient.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
-import { LLM_MODELS } from "../utils/constants.js";
+import { LLM_MODELS, PROVIDERS_BASE_URLS } from "../utils/constants.js";
+import OpenAI from "openai";
+import { QdrantClient } from "@qdrant/js-client-rest";
+import { decryptApiKey } from "../utils/decrypt.js";
+import { generateVectorEmbeddings } from "../utils/rag.js";
 
+const qdrant = new QdrantClient({
+    host: "localhost",
+    port: 6333,
+});
 
 const getAvailableModels = asyncHandler(async (req, res) => {
     const apikeys = await prisma.apiKey.findMany({
@@ -30,7 +38,118 @@ const getAvailableModels = asyncHandler(async (req, res) => {
 })
 
 const sendMessage = asyncHandler(async (req, res) => {
+    const { userPrompt, model, provider, chatId } = req.body;
+    const apiKey = await prisma.apiKey.findFirst({
+        where: {
+            userId: req.user.id,
+            provider
+        }
+    })
+    const chat = await prisma.chat.findUnique({
+        where: { id: chatId }
+    })
+
+    if (!chat) {
+        throw new ApiError(404, "Chat not found.");
+    }
+    if (!apiKey) {
+        throw new ApiError(400, "Invalid API key ID.");
+    }
+    if (apiKey.userId !== req.user.id) {
+        throw new ApiError(403, "You do not have access to this API key.");
+    }
+    if (!LLM_MODELS[apiKey.provider]?.includes(model)) {
+        throw new ApiError(400, "Invalid model for the selected API key.");
+    }
+
+    const userPromptEmbeddings = await generateVectorEmbeddings(userPrompt);
+    const relevantSources = await qdrant.query(chat.collectionName, {
+        query: userPromptEmbeddings,
+        limit: 3,
+        with_payload: true
+    });
+    let systemPrompt = "You are a helpful assistant for answering questions related to the following sources: \n\n";
+    relevantSources.points.forEach((point, index) => {
+        systemPrompt += `Source ${index + 1}: \nContent: ${point.payload.body}\n\n`;
+    });
+    systemPrompt += "Answer the user's question based on the above sources. If you don't know the answer, say you don't know. Be concise and to the point.";
+    // console.log(systemPrompt);
+
+    const openai = new OpenAI({
+        baseURL: PROVIDERS_BASE_URLS[apiKey.provider],
+        apiKey: decryptApiKey(apiKey.encryptedKey, apiKey.iv, apiKey.tag)
+    })
+
+    const stream = await openai.chat.completions.create({
+        model,
+        messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt }
+        ],
+        stream: true,
+        stream_options: { include_usage: true },
+        max_completion_tokens: 2000
+    })
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+
+    let llmResponse = "";
+    let inputTokens = 0;
+    let outputTokens = 0;
+
+    try {
+        for await (const chunk of stream) {
+            const content = chunk.choices[0]?.delta?.content || "";
     
+            if (chunk.usage) {
+                inputTokens = chunk.usage.prompt_tokens;
+                outputTokens = chunk.usage.completion_tokens;
+            }
+            if (content) {
+                llmResponse += content;
+                res.write(content);
+            }
+        }
+    }
+    catch (error) {
+        res.end("Stream ended with error.", error.message);
+    }
+    finally{
+        res.end()
+    }
+
+    if(llmResponse.trim()){
+        const chatMessage = await prisma.chatMessage.create({
+            data: {
+                chatId,
+                llmModel: model,
+                llmResponse,
+                userPrompt,
+            }
+        })
+
+        await prisma.chatMessageSource.createMany({
+            data: relevantSources.points.map(point => ({
+                chunkText: point.payload.body,
+                heading: point.payload.title,
+                pageUrl: point.payload.url,
+                chatMessageId: chatMessage.id
+            }))
+        })
+
+        await prisma.usageEvents.create({
+            data: {
+                userId: req.user.id,
+                messageId: chatMessage.id,
+                apikeyId: apiKey.id,
+                inputTokens,
+                outputTokens,
+            }
+        })
+    }
 })
 
 export { sendMessage, getAvailableModels }

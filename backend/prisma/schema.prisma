@@ -106,7 +106,6 @@ model UsageEvents {
     apikeyId     String      @map("apikey_id")
     inputTokens  Int         @map("input_tokens")
     outputTokens Int         @map("output_tokens")
-    eventType    String      @map("event_type")
     timestamp    DateTime    @default(now())
     apiKey       ApiKey      @relation(fields: [apikeyId], references: [id])
     message      ChatMessage @relation(fields: [messageId], references: [id])

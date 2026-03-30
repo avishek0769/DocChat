@@ -1,9 +1,8 @@
 import "dotenv/config";
 import { Worker } from "bullmq";
 import redis from "./utils/redis.js";
-import { normalizeUrl, isValidDocUrl, scrapeWebpage } from "./utils/rag.js";
+import { normalizeUrl, isValidDocUrl, scrapeWebpage, generateVectorEmbeddings } from "./utils/rag.js";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
-import OpenAI from "openai";
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { v4 as uuidv4 } from "uuid";
 import prisma from "./utils/prismaClient.js";
@@ -12,22 +11,6 @@ const client = new QdrantClient({
     host: "localhost",
     port: 6333,
 });
-
-const openai = new OpenAI({
-    baseURL: "https://openrouter.ai/api/v1",
-    apiKey: process.env.OPENROUTER_API_KEY,
-});
-
-async function generateVectorEmbeddings(text) {
-    const response = await openai.embeddings.create({
-        model: "openai/text-embedding-3-small",
-        input: text,
-        encoding_format: "float",
-        dimensions: 1536,
-    });
-
-    return response.data[0].embedding;
-}
 
 async function ingestAll(docsRootUrl, chatId, collectionName, chatSourceId) {
     const rootUrl = normalizeUrl(docsRootUrl);
