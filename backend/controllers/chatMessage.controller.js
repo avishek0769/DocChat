@@ -9,8 +9,8 @@ import { decryptApiKey } from "../utils/decrypt.js";
 import { generateVectorEmbeddings } from "../utils/rag.js";
 
 const qdrant = new QdrantClient({
-    host: "localhost",
-    port: 6333,
+    url: process.env.QDRANT_URL,
+    apiKey: process.env.QDRANT_API_KEY
 });
 
 const getAvailableModels = asyncHandler(async (req, res) => {
@@ -103,7 +103,7 @@ const sendMessage = asyncHandler(async (req, res) => {
     try {
         for await (const chunk of stream) {
             const content = chunk.choices[0]?.delta?.content || "";
-    
+
             if (chunk.usage) {
                 inputTokens = chunk.usage.prompt_tokens;
                 outputTokens = chunk.usage.completion_tokens;
@@ -117,11 +117,11 @@ const sendMessage = asyncHandler(async (req, res) => {
     catch (error) {
         res.end("Stream ended with error.", error.message);
     }
-    finally{
+    finally {
         res.end()
     }
 
-    if(llmResponse.trim()){
+    if (llmResponse.trim()) {
         const chatMessage = await prisma.chatMessage.create({
             data: {
                 chatId,
@@ -152,4 +152,53 @@ const sendMessage = asyncHandler(async (req, res) => {
     }
 })
 
-export { sendMessage, getAvailableModels }
+// NOTE: No relation between ChatMessage and Chat in the current schema
+const getChatMessages = asyncHandler(async (req, res) => {
+    const { chatId } = req.params;
+
+    const chat = await prisma.chat.findUnique({
+        where: { id: chatId }
+    })
+
+    if (!chat || chat.userId !== req.user.id) {
+        throw new ApiError(404, "Chat not found.");
+    }
+
+    const messages = await prisma.chatMessage.findMany({
+        where: { chatId }
+    })
+
+    if (!messages.length) {
+        return res.status(200).json(new ApiResponse(
+            200,
+            { messages: [] },
+            "No messages found for this chat."
+        ));
+    }
+
+    return res.status(200).json(new ApiResponse(
+        200,
+        { messages: messages },
+        "Chat messages retrieved successfully."
+    ));
+})
+
+const getChatMessageSources = asyncHandler(async (req, res) => {
+    const { messageId } = req.params;
+
+    const messageSources = await prisma.chatMessageSource.findMany({
+        where: { chatMessageId: messageId }
+    })
+
+    if (!messageSources.length) {
+        throw new ApiError(404, "No sources found for this message.");
+    }
+
+    return res.status(200).json(new ApiResponse(
+        200,
+        { messageSources },
+        "Chat message sources retrieved successfully."
+    ));
+})
+
+export { sendMessage, getAvailableModels, getChatMessages, getChatMessageSources }
