@@ -222,6 +222,28 @@ const chatDetails = asyncHandler(async (req, res) => {
     );
 })
 
+const listAllPagesIndexed = asyncHandler(async (req, res) => {
+    const { chatId } = req.params;
+
+    const chat = await prisma.chat.findUnique({
+        where: { id: chatId },
+        include: {
+            chatSources: {
+                include: {
+                    pagesIndexed: true
+                }
+            }
+        }
+    })
+
+    res.status(200).json(
+        new ApiResponse(200,
+            { pagesIndexed: chat.chatSources.flatMap(source => source.pagesIndexed) },
+            "Pages indexed fetched successfully"
+        )
+    );
+})
+
 const cancelProcessing = asyncHandler(async (req, res) => {
     const { chatId } = req.params;
 
@@ -279,4 +301,4 @@ const deleteChat = asyncHandler(async (req, res) => {
     );
 })
 
-export { expectation, createChat, progressStatus, listAllChats, chatDetails, cancelProcessing, deleteChat };
+export { expectation, createChat, progressStatus, listAllChats, chatDetails, cancelProcessing, deleteChat, listAllPagesIndexed };
