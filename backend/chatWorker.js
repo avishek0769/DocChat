@@ -8,8 +8,8 @@ import { v4 as uuidv4 } from "uuid";
 import prisma from "./utils/prismaClient.js";
 
 const client = new QdrantClient({
-    host: "localhost",
-    port: 6333,
+    url: process.env.QDRANT_URL,
+    apiKey: process.env.QDRANT_API_KEY
 });
 
 async function ingestAll(docsRootUrl, chatId, collectionName, chatSourceId) {

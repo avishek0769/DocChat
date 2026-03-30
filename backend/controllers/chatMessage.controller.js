@@ -7,6 +7,9 @@ import OpenAI from "openai";
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { decryptApiKey } from "../utils/decrypt.js";
 import { generateVectorEmbeddings } from "../utils/rag.js";
+import { MemoryClient } from 'mem0ai';
+
+const memory = new MemoryClient({ apiKey: process.env.MEM0_API_KEY });
 
 const qdrant = new QdrantClient({
     url: process.env.QDRANT_URL,
@@ -68,6 +71,7 @@ const sendMessage = asyncHandler(async (req, res) => {
         limit: 3,
         with_payload: true
     });
+
     let systemPrompt = "You are a helpful assistant for answering questions related to the following sources: \n\n";
     relevantSources.points.forEach((point, index) => {
         systemPrompt += `Source ${index + 1}: \nContent: ${point.payload.body}\n\n`;
@@ -79,6 +83,15 @@ const sendMessage = asyncHandler(async (req, res) => {
         baseURL: PROVIDERS_BASE_URLS[apiKey.provider],
         apiKey: decryptApiKey(apiKey.encryptedKey, apiKey.iv, apiKey.tag)
     })
+
+    const memoryFetched = await memory.search(userPrompt, { user_id: req.user.id, limit: 2 });
+    if (memoryFetched.length) {
+        systemPrompt += "\n\nAlso consider the following previous interactions with the user that are relevant to the current question:\n\n";
+        memoryFetched.forEach((item, index) => {
+            console.log("Memory", item)
+            systemPrompt += `Interaction ${index + 1}:\nUser: ${item.metadata.user_prompt}\nAssistant: ${item.metadata.assistant_response}\n\n`;
+        })
+    }
 
     const stream = await openai.chat.completions.create({
         model,
@@ -122,6 +135,14 @@ const sendMessage = asyncHandler(async (req, res) => {
     }
 
     if (llmResponse.trim()) {
+        await memory.add([
+            { role: "user", content: userPrompt },
+            { role: "assistant", content: llmResponse }
+        ], {
+            user_id: req.user.id,
+            custom_instructions: "Note: Store this interaction history for future reference."
+        });
+
         const chatMessage = await prisma.chatMessage.create({
             data: {
                 chatId,
