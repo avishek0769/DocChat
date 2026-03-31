@@ -93,15 +93,20 @@ const sendMessage = asyncHandler(async (req, res) => {
     const relevantSources = await qdrant.query(chat.collectionName, {
         query: userPromptEmbeddings,
         limit: 5,
-        with_payload: true
+        with_payload: true,
+        score_threshold: 0.5
     });
 
     let systemPrompt = "You are a helpful assistant for answering questions related to the following sources: \n\n";
-    relevantSources.points.forEach((point, index) => {
-        systemPrompt += `Source ${index + 1}: \nContent: ${point.payload.body}\n\n`;
-    });
-    systemPrompt += "Answer the user's question based on the above sources. If you don't know the answer, say you don't know. Be concise and to the point. Use Markdown for formatting. Wrap all code snippets (if any) in triple backticks with the language identifier (e.g., ```javascript).";
-    // console.log(systemPrompt);
+    if(relevantSources.points?.length) {
+        relevantSources.points.forEach((point, index) => {
+            systemPrompt += `Source ${index + 1}: \nContent: ${point.payload.body}\n\n`;
+        });
+        systemPrompt += "Answer the user's question based on the above sources. If you don't know the answer, say you don't know. Be concise and to the point. Use Markdown for formatting. Wrap all code snippets (if any) in triple backticks with the language identifier (e.g., ```javascript).";
+    }
+    else {
+        systemPrompt += " Answer the user's general question directly without specific documentation.";
+    }
 
     const memoryFetched = await memory.search(userPrompt, { user_id: req.user.id, limit: 5 });
     if (memoryFetched.length) {
@@ -170,14 +175,16 @@ const sendMessage = asyncHandler(async (req, res) => {
             }
         })
 
-        await prisma.chatMessageSource.createMany({
-            data: relevantSources.points.map(point => ({
-                chunkText: point.payload.body,
-                heading: point.payload.title,
-                pageUrl: point.payload.url,
-                chatMessageId: chatMessage.id
-            }))
-        })
+        if(relevantSources.points?.length) {
+            await prisma.chatMessageSource.createMany({
+                data: relevantSources.points.map(point => ({
+                    chunkText: point.payload.body,
+                    heading: point.payload.title,
+                    pageUrl: point.payload.url,
+                    chatMessageId: chatMessage.id
+                }))
+            })
+        }
 
         let usageEventData = {
             userId: req.user.id,
@@ -236,7 +243,11 @@ const getChatMessageSources = asyncHandler(async (req, res) => {
     })
 
     if (!messageSources.length) {
-        throw new ApiError(404, "No sources found for this message.");
+        return res.status(200).json(new ApiResponse(
+            200,
+            { messageSources: [] },
+            "No sources found for this chat message."
+        ));
     }
 
     return res.status(200).json(new ApiResponse(
