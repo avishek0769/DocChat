@@ -84,6 +84,7 @@ model ChatMessageSource {
     pageUrl       String      @map("page_url")
     chatMessageId String      @map("chat_message_id")
     chatMessage   ChatMessage @relation(fields: [chatMessageId], references: [id])
+    score         Int         @map("score") @default(0)
 }
 
 model ApiKey {

@@ -208,7 +208,8 @@ const sendMessage = asyncHandler(async (req, res) => {
                     chunkText: point.payload.body,
                     heading: point.payload.title,
                     pageUrl: point.payload.url,
-                    chatMessageId: chatMessage.id
+                    chatMessageId: chatMessage.id,
+                    score: Math.round(point.score * 100)
                 }))
             })
         }
