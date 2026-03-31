@@ -1,6 +1,6 @@
 import * as cheerio from "cheerio";
 import OpenAI from "openai";
-console.log(process.env.OPENROUTER_EMBEDDING_API_KEY)
+
 const openai = new OpenAI({
     baseURL: "https://openrouter.ai/api/v1",
     apiKey: process.env.OPENROUTER_EMBEDDING_API_KEY,
