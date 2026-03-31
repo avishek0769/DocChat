@@ -72,6 +72,15 @@ type ModelOption = {
     label: string;
 };
 
+const toModelDisplayName = (model?: string) => {
+    if (!model) return "Default Hosted Model";
+
+    if (model === "default-1") return "Qwen 3.6 plus";
+    if (model === "default-2") return "Nemotron 3 Super";
+
+    return model;
+};
+
 export const ChatPage = () => {
     const navigate = useNavigate();
     const { id: chatId = "" } = useParams();
@@ -155,12 +164,12 @@ export const ChatPage = () => {
                 {
                     provider: "DEFAULT",
                     model: "default-1",
-                    label: `Default (Fast) - Qwen 3.6 Plus`,
+                    label: `Default (Fast) - Qwen 3.6 plus`,
                 },
                 {
                     provider: "DEFAULT",
                     model: "default-2",
-                    label: `Default (Best) - Nemotron 120B`,
+                    label: `Default (Best) - Nemotron 3 Super`,
                 },
             ];
 
@@ -191,7 +200,7 @@ export const ChatPage = () => {
                     messageId: msg.id,
                     role: "ai",
                     content: msg.llmResponse,
-                    model: msg.llmModel,
+                    model: toModelDisplayName(msg.llmModel),
                     sources: [],
                     sourcesLoaded: false,
                     timestamp: new Date(msg.createdAt),
@@ -215,9 +224,18 @@ export const ChatPage = () => {
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
-    const chunkBufferRef = useRef("");
-    const chunkFlushIntervalRef = useRef<number | null>(null);
+    const pendingChunkRef = useRef("");
+    const chunkRafRef = useRef<number | null>(null);
     const firstChunkReceivedRef = useRef(false);
+
+    useEffect(() => {
+        return () => {
+            if (chunkRafRef.current !== null) {
+                window.cancelAnimationFrame(chunkRafRef.current);
+                chunkRafRef.current = null;
+            }
+        };
+    }, []);
 
     const handleViewSources = async (message: Message) => {
         setRightPanelOpen(true);
@@ -289,7 +307,7 @@ export const ChatPage = () => {
             modelOptions[0] || {
                 provider: "DEFAULT",
                 model: "default-1",
-                label: `Default (Fast) - Qwen 3.6 Plus`,
+                label: `Default (Fast) - Qwen 3.6 plus`,
             };
 
         const newUserMessage: Message = {
@@ -304,7 +322,7 @@ export const ChatPage = () => {
         setIsTyping(true);
         setIsAwaitingFirstChunk(true);
         firstChunkReceivedRef.current = false;
-        chunkBufferRef.current = "";
+        pendingChunkRef.current = "";
         setRightPanelOpen(false); // Close sources initially
 
         // Reset textarea height
@@ -327,10 +345,10 @@ export const ChatPage = () => {
         ]);
 
         try {
-            const flushBufferedChunks = () => {
-                if (!chunkBufferRef.current) return;
-                const buffered = chunkBufferRef.current;
-                chunkBufferRef.current = "";
+            const flushPendingChunks = () => {
+                const buffered = pendingChunkRef.current;
+                if (!buffered) return;
+                pendingChunkRef.current = "";
                 setMessages((prev) =>
                     prev.map((m) =>
                         m.id === aiId
@@ -340,7 +358,18 @@ export const ChatPage = () => {
                 );
             };
 
-            const text = await sendMessageStream({
+            const scheduleChunkFlush = () => {
+                if (chunkRafRef.current !== null) return;
+                chunkRafRef.current = window.requestAnimationFrame(() => {
+                    chunkRafRef.current = null;
+                    flushPendingChunks();
+                    if (pendingChunkRef.current) {
+                        scheduleChunkFlush();
+                    }
+                });
+            };
+
+            await sendMessageStream({
                 userPrompt: newUserMessage.content,
                 model: selectedOption.model,
                 provider: selectedOption.provider,
@@ -351,31 +380,22 @@ export const ChatPage = () => {
                         setIsAwaitingFirstChunk(false);
                     }
 
-                    chunkBufferRef.current += chunk;
-
-                    if (chunkFlushIntervalRef.current === null) {
-                        chunkFlushIntervalRef.current = window.setInterval(
-                            flushBufferedChunks,
-                            33,
-                        );
-                    }
+                    pendingChunkRef.current += chunk;
+                    scheduleChunkFlush();
                 },
             });
 
-            if (chunkFlushIntervalRef.current !== null) {
-                window.clearInterval(chunkFlushIntervalRef.current);
-                chunkFlushIntervalRef.current = null;
+            if (chunkRafRef.current !== null) {
+                window.cancelAnimationFrame(chunkRafRef.current);
+                chunkRafRef.current = null;
             }
-
-            if (chunkBufferRef.current) {
-                flushBufferedChunks();
-            }
+            flushPendingChunks();
 
             setIsAwaitingFirstChunk(false);
 
             setMessages((prev) =>
                 prev.map((m) =>
-                    m.id === aiId ? { ...m, content: text, isStreaming: false } : m,
+                    m.id === aiId ? { ...m, isStreaming: false } : m,
                 ),
             );
 
@@ -388,7 +408,8 @@ export const ChatPage = () => {
                             ? {
                                   ...m,
                                   messageId: latestAi.id,
-                                  model: latestAi.llmModel,
+                                  // Keep the exact model selected in UI for message badge text.
+                                  model: selectedOption.label,
                                   sources: [],
                                   sourcesLoaded: false,
                               }
@@ -397,11 +418,11 @@ export const ChatPage = () => {
                 );
             }
         } catch (err) {
-            if (chunkFlushIntervalRef.current !== null) {
-                window.clearInterval(chunkFlushIntervalRef.current);
-                chunkFlushIntervalRef.current = null;
+            if (chunkRafRef.current !== null) {
+                window.cancelAnimationFrame(chunkRafRef.current);
+                chunkRafRef.current = null;
             }
-            chunkBufferRef.current = "";
+            pendingChunkRef.current = "";
             setIsAwaitingFirstChunk(false);
             setError(
                 err instanceof Error
