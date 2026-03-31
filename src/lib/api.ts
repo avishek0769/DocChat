@@ -148,6 +148,7 @@ export const sendMessageStream = async (payload: {
     model: string;
     provider: string;
     chatId: string;
+    onChunk?: (chunk: string) => void;
 }) => {
     const token = getAccessToken();
     const headers = new Headers({ "Content-Type": "application/json" });
@@ -174,10 +175,17 @@ export const sendMessageStream = async (payload: {
     while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        text += decoder.decode(value, { stream: true });
+        const chunk = decoder.decode(value, { stream: true });
+        if (!chunk) continue;
+        text += chunk;
+        payload.onChunk?.(chunk);
     }
 
-    text += decoder.decode();
+    const tail = decoder.decode();
+    if (tail) {
+        text += tail;
+        payload.onChunk?.(tail);
+    }
     return text;
 };
 

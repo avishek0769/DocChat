@@ -19,6 +19,7 @@ export interface Message {
     messageId?: string;
     model?: string;
     sources?: Source[];
+    sourcesLoaded?: boolean;
     isStreaming?: boolean;
 }
 
@@ -45,7 +46,6 @@ import hljs from "highlight.js";
 import "highlight.js/styles/atom-one-dark.css";
 import {
     getApiKeys,
-    getAvailableModels,
     getChatDetails,
     getChatMessages,
     getMessageSources,
@@ -61,7 +61,7 @@ type CurrentLink = {
 
 type IndexedPage = {
     pageUrl: string;
-    title?: string | null;
+    heading?: string | null;
 };
 
 type ModelOption = {
@@ -104,6 +104,7 @@ export const ChatPage = () => {
     const [isTyping, setIsTyping] = useState(false);
     const [selectedSources, setSelectedSources] = useState<Source[]>([]);
     const [isSourcesLoading, setIsSourcesLoading] = useState(false);
+    const [sourceFetchAttempted, setSourceFetchAttempted] = useState(false);
 
     const [isIndexedModalOpen, setIsIndexedModalOpen] = useState(false);
     const [currentLinks, setCurrentLinks] = useState<CurrentLink[]>([]);
@@ -120,7 +121,6 @@ export const ChatPage = () => {
                 getPagesIndexed(chatId),
                 getApiKeys(),
                 getChatMessages(chatId),
-                getAvailableModels().catch(() => ({ models: [] })),
             ]);
 
             const chat = chatDetails.chat;
@@ -150,12 +150,12 @@ export const ChatPage = () => {
 
             const defaultOptions: ModelOption[] = [
                 {
-                    provider: "OPENAI",
+                    provider: "DEFAULT",
                     model: "default-1",
                     label: `Default (Fast) - Qwen 3.6 Plus`,
                 },
                 {
-                    provider: "OPENAI",
+                    provider: "DEFAULT",
                     model: "default-2",
                     label: `Default (Best) - Nemotron 120B`,
                 },
@@ -183,27 +183,14 @@ export const ChatPage = () => {
                     timestamp: new Date(msg.createdAt),
                 });
 
-                let sources: Source[] = [];
-                try {
-                    const srcData = await getMessageSources(msg.id);
-                    sources = (srcData.messageSources || []).map((src) => ({
-                        id: src.id,
-                        title: src.heading,
-                        url: src.pageUrl,
-                        snippet: src.chunkText,
-                        relevance: src.score,
-                    }));
-                } catch {
-                    sources = [];
-                }
-
                 messagePairs.push({
                     id: `${msg.id}-ai`,
                     messageId: msg.id,
                     role: "ai",
                     content: msg.llmResponse,
                     model: msg.llmModel,
-                    sources,
+                    sources: [],
+                    sourcesLoaded: false,
                     timestamp: new Date(msg.createdAt),
                 });
             }
@@ -226,13 +213,52 @@ export const ChatPage = () => {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-    const handleViewSources = (sources: Source[]) => {
+    const handleViewSources = async (message: Message) => {
         setRightPanelOpen(true);
+        setSourceFetchAttempted(true);
+
+        if (message.sourcesLoaded) {
+            setSelectedSources(message.sources || []);
+            return;
+        }
+
+        if (!message.messageId) {
+            setSelectedSources([]);
+            return;
+        }
+
         setIsSourcesLoading(true);
-        setTimeout(() => {
+
+        try {
+            const srcData = await getMessageSources(message.messageId);
+            const sources = (srcData.messageSources || []).map((src) => ({
+                id: src.id,
+                title: src.heading,
+                url: src.pageUrl,
+                snippet: src.chunkText,
+                relevance: src.score,
+            }));
+
             setSelectedSources(sources);
+            setMessages((prev) =>
+                prev.map((m) =>
+                    m.id === message.id
+                        ? { ...m, sources, sourcesLoaded: true }
+                        : m,
+                ),
+            );
+        } catch {
+            setSelectedSources([]);
+            setMessages((prev) =>
+                prev.map((m) =>
+                    m.id === message.id
+                        ? { ...m, sources: [], sourcesLoaded: true }
+                        : m,
+                ),
+            );
+        } finally {
             setIsSourcesLoading(false);
-        }, 1000);
+        }
     };
 
     // Auto-resize textarea
@@ -297,6 +323,15 @@ export const ChatPage = () => {
                 model: selectedOption.model,
                 provider: selectedOption.provider,
                 chatId,
+                onChunk: (chunk) => {
+                    setMessages((prev) =>
+                        prev.map((m) =>
+                            m.id === aiId
+                                ? { ...m, content: `${m.content}${chunk}` }
+                                : m,
+                        ),
+                    );
+                },
             });
 
             setMessages((prev) =>
@@ -308,20 +343,6 @@ export const ChatPage = () => {
             const latestMessages = await getChatMessages(chatId);
             const latestAi = (latestMessages.messages || []).at(-1);
             if (latestAi) {
-                let sources: Source[] = [];
-                try {
-                    const srcData = await getMessageSources(latestAi.id);
-                    sources = (srcData.messageSources || []).map((src) => ({
-                        id: src.id,
-                        title: src.heading,
-                        url: src.pageUrl,
-                        snippet: src.chunkText,
-                        relevance: src.score,
-                    }));
-                } catch {
-                    sources = [];
-                }
-
                 setMessages((prev) =>
                     prev.map((m) =>
                         m.id === aiId
@@ -329,13 +350,12 @@ export const ChatPage = () => {
                                   ...m,
                                   messageId: latestAi.id,
                                   model: latestAi.llmModel,
-                                  sources,
+                                  sources: [],
+                                  sourcesLoaded: false,
                               }
                             : m,
                     ),
                 );
-                setSelectedSources(sources);
-                setRightPanelOpen(true);
             }
         } catch (err) {
             setError(
@@ -576,13 +596,6 @@ export const ChatPage = () => {
                                                 key={suggestion}
                                                 onClick={() => {
                                                     setInput(suggestion);
-                                                    setTimeout(
-                                                        () =>
-                                                            setInput(
-                                                                suggestion,
-                                                            ),
-                                                        0,
-                                                    ); // Focus input trick could go here
                                                 }}
                                                 className="px-4 py-2 rounded-full border border-white/10 bg-white/5 text-sm text-gray-300 hover:bg-white/10 hover:border-white/20 transition-all font-medium"
                                             >
@@ -702,8 +715,9 @@ export const ChatPage = () => {
                                     </div>
                                 ) : selectedSources.length === 0 ? (
                                     <div className="text-center text-gray-500 text-sm py-10">
-                                        No sources fetched yet. Ask a question
-                                        to see references.
+                                        {sourceFetchAttempted
+                                            ? "No source found for this message."
+                                            : "No sources fetched yet. Ask a question to see references."}
                                     </div>
                                 ) : (
                                     selectedSources.map((source, idx) => (
@@ -818,7 +832,7 @@ export const ChatPage = () => {
                                     >
                                         <h3 className="font-semibold text-gray-200 flex items-center gap-2 mb-1">
                                             <FileText className="w-4 h-4 text-accent-blue" />
-                                            {page.title || `Indexed Page ${idx + 1}`}
+                                            {page.heading || `Indexed Page ${idx + 1}`}
                                         </h3>
                                         <a
                                             href={page.pageUrl}
@@ -935,7 +949,7 @@ const parseCustomMarkdown = (content: string) => {
 };
 
 const formatInline = (text: string) => {
-    // Rudimentary inline parsing for `code`
+    // Inline parsing for code, bold, italic, and markdown links.
     const segments = text.split(/(`[^`]+`)/);
     return segments.map((seg, i) => {
         if (seg.startsWith("`") && seg.endsWith("`")) {
@@ -948,7 +962,44 @@ const formatInline = (text: string) => {
                 </code>
             );
         }
-        return <span key={i}>{seg}</span>;
+        const nodes: React.ReactNode[] = [];
+        let cursor = 0;
+        const tokenRegex = /(\*\*([^*]+)\*\*)|(\*([^*]+)\*)|(\[([^\]]+)\]\(([^)]+)\))/g;
+        let match: RegExpExecArray | null;
+
+        while ((match = tokenRegex.exec(seg)) !== null) {
+            if (match.index > cursor) {
+                nodes.push(seg.slice(cursor, match.index));
+            }
+
+            if (match[2]) {
+                nodes.push(
+                    <strong key={`b-${i}-${match.index}`}>{match[2]}</strong>,
+                );
+            } else if (match[4]) {
+                nodes.push(<em key={`e-${i}-${match.index}`}>{match[4]}</em>);
+            } else if (match[6] && match[7]) {
+                nodes.push(
+                    <a
+                        key={`a-${i}-${match.index}`}
+                        href={match[7]}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-accent-blue hover:underline"
+                    >
+                        {match[6]}
+                    </a>,
+                );
+            }
+
+            cursor = match.index + match[0].length;
+        }
+
+        if (cursor < seg.length) {
+            nodes.push(seg.slice(cursor));
+        }
+
+        return <span key={i}>{nodes}</span>;
     });
 };
 
@@ -957,10 +1008,9 @@ const ChatMessage = ({
     onViewSources,
 }: {
     message: Message;
-    onViewSources: (sources: Source[]) => void;
+    onViewSources: (message: Message) => void;
 }) => {
     const isAi = message.role === "ai";
-    const messageSources = message.sources ?? [];
     const [copied, setCopied] = useState(false);
 
     const handleCopy = () => {
@@ -1013,25 +1063,6 @@ const ChatMessage = ({
                             </div>
                             {parseCustomMarkdown(message.content)}
 
-                            {/* Mock Citations */}
-                            {!message.isStreaming && message.sources && (
-                                <div className="mt-4 pt-4 border-t border-white/5 flex flex-wrap gap-2">
-                                    {message.sources.map(
-                                        (src: Source, idx: number) => (
-                                            <button
-                                                key={src.id}
-                                                onClick={() =>
-                                                    onViewSources([src])
-                                                }
-                                                className="inline-flex items-center gap-1.5 px-2 py-1 bg-[#1a1a24] border border-white/10 rounded-md text-sm font-medium text-gray-400 hover:text-white hover:border-white/20 transition-colors"
-                                            >
-                                                <div className="w-1.5 h-1.5 rounded-full bg-accent-blue"></div>
-                                                [{idx + 1}] {src.title}
-                                            </button>
-                                        ),
-                                    )}
-                                </div>
-                            )}
                         </div>
                     ) : (
                         <p className="whitespace-pre-wrap">{message.content}</p>
@@ -1057,20 +1088,16 @@ const ChatMessage = ({
                             )}
                         </button>
 
-                        {messageSources.length > 0 && (
-                            <>
-                                <div className="w-px h-3 bg-white/10" />
-                                <button
-                                    onClick={() =>
-                                        onViewSources(messageSources)
-                                    }
-                                    className="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-1.5 text-sm font-medium"
-                                >
-                                    <Search className="w-3.5 h-3.5 text-accent-blue" />
-                                    View Sources
-                                </button>
-                            </>
-                        )}
+                        <>
+                            <div className="w-px h-3 bg-white/10" />
+                            <button
+                                onClick={() => onViewSources(message)}
+                                className="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-1.5 text-sm font-medium"
+                            >
+                                <Search className="w-3.5 h-3.5 text-accent-blue" />
+                                View Sources
+                            </button>
+                        </>
                     </div>
                 )}
             </div>
