@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sidebar } from "../components/Sidebar";
 
@@ -16,6 +16,7 @@ export interface Message {
     role: "user" | "ai";
     content: string;
     timestamp: Date;
+    messageId?: string;
     model?: string;
     sources?: Source[];
     isStreaming?: boolean;
@@ -43,6 +44,14 @@ import {
 import clsx from "clsx";
 import hljs from "highlight.js";
 import "highlight.js/styles/atom-one-dark.css";
+import {
+    getApiKeys,
+    getChatDetails,
+    getChatMessages,
+    getMessageSources,
+    getPagesIndexed,
+    sendMessageStream,
+} from "../lib/api";
 
 const MOCK_DOCS = {
     title: "React Docs Assist",
@@ -95,26 +104,21 @@ const MOCK_SOURCES = [
     },
 ];
 
-const PROVIDER_MODELS: Record<string, string[]> = {
-    OpenAI: ["GPT-4o", "GPT-4o Mini"],
-    Anthropic: ["Claude 3.5 Sonnet", "Claude 3 Haiku"],
-    xAI: ["Grok-2", "Grok-1.5"],
-    Google: ["Gemini 1.5 Pro", "Gemini 1.5 Flash"],
+type ModelOption = {
+    provider: string;
+    model: string;
+    label: string;
 };
 
 export const ChatPage = () => {
     const navigate = useNavigate();
+    const { id: chatId = "" } = useParams();
 
-    // MOCK: In a real app this would come from global state/context
-    const [apiKeys] = useState([
-        { id: "1", provider: "OpenAI" },
-        { id: "2", provider: "Anthropic" }
-    ]);
-    const availableModels = apiKeys.length > 0 
-        ? apiKeys.flatMap(key => PROVIDER_MODELS[key.provider] || [])
-        : ["Default Hosted Model"];
-        
-    const [selectedModel, setSelectedModel] = useState(availableModels[0]);
+    const [docInfo, setDocInfo] = useState(MOCK_DOCS);
+    const [modelOptions, setModelOptions] = useState<ModelOption[]>([]);
+    const [selectedModel, setSelectedModel] = useState("");
+    const [isPageLoading, setIsPageLoading] = useState(true);
+    const [error, setError] = useState("");
 
     const formatTokens = (tokens: number) => {
         if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(1)}M`;
@@ -134,50 +138,120 @@ export const ChatPage = () => {
     const [isSourcesLoading, setIsSourcesLoading] = useState(false);
 
     const [isIndexedModalOpen, setIsIndexedModalOpen] = useState(false);
-    const [links, setLinks] = useState([
-        { title: MOCK_DOCS.title, url: MOCK_DOCS.url, isHighlight: false },
-    ]);
+    const [links, setLinks] = useState<Array<{ title: string; url: string; isHighlight: boolean }>>([]);
     const [isAddingLink, setIsAddingLink] = useState(false);
     const [newLinkUrl, setNewLinkUrl] = useState("");
     const [linkProgress, setLinkProgress] = useState(0);
     const [scrapeStats, setScrapeStats] = useState({ done: 0, total: 0 });
 
+    const loadChatPage = async () => {
+        if (!chatId) return;
+        setIsPageLoading(true);
+        setError("");
+        try {
+            const [chatDetails, indexedPages, apiKeyData, messageData] = await Promise.all([
+                getChatDetails(chatId),
+                getPagesIndexed(chatId),
+                getApiKeys(),
+                getChatMessages(chatId),
+            ]);
+
+            const chat = chatDetails.chat;
+            const primarySource = chat?.chatSources?.[0];
+            setDocInfo((prev) => ({
+                ...prev,
+                title: chat?.name || prev.title,
+                url: primarySource?.documentationUrl || prev.url,
+                pages: primarySource?._count?.pagesIndexed || indexedPages.pagesIndexed.length || prev.pages,
+                lastUpdated: new Date(chat?.updatedAt || Date.now()).toLocaleString(),
+            }));
+
+            const pageLinks = (indexedPages.pagesIndexed || []).map((p, idx) => ({
+                title: p.title || `Indexed Page ${idx + 1}`,
+                url: p.pageUrl,
+                isHighlight: false,
+            }));
+            setLinks(
+                pageLinks.length
+                    ? pageLinks
+                    : [
+                          {
+                              title: chat?.name || "Documentation",
+                              url: primarySource?.documentationUrl || "",
+                              isHighlight: false,
+                          },
+                      ],
+            );
+
+            const dynamicModels = (apiKeyData.apiKeys || []).flatMap((key) =>
+                (key.models || []).map((model) => ({
+                    provider: key.provider,
+                    model,
+                    label: `${model} (${key.provider})`,
+                })),
+            );
+
+            const defaults: ModelOption[] = [
+                { provider: "DEFAULT", model: "default-1", label: "Default Model 1" },
+                { provider: "DEFAULT", model: "default-2", label: "Default Model 2" },
+            ];
+            const options = dynamicModels.length ? dynamicModels : defaults;
+            setModelOptions(options);
+            setSelectedModel((prev) => prev || options[0]?.model || "default-1");
+
+            const messageList = messageData.messages || [];
+            const messagePairs: Message[] = [];
+            for (const msg of messageList) {
+                messagePairs.push({
+                    id: `${msg.id}-user`,
+                    role: "user",
+                    content: msg.userPrompt,
+                    timestamp: new Date(msg.createdAt),
+                });
+
+                let sources: Source[] = [];
+                try {
+                    const srcData = await getMessageSources(msg.id);
+                    sources = (srcData.messageSources || []).map((src) => ({
+                        id: src.id,
+                        title: src.heading,
+                        url: src.pageUrl,
+                        snippet: src.chunkText,
+                        relevance: src.score,
+                    }));
+                } catch {
+                    sources = [];
+                }
+
+                messagePairs.push({
+                    id: `${msg.id}-ai`,
+                    messageId: msg.id,
+                    role: "ai",
+                    content: msg.llmResponse,
+                    model: msg.llmModel,
+                    sources,
+                    timestamp: new Date(msg.createdAt),
+                });
+            }
+            setMessages(messagePairs);
+        } catch (err) {
+            setError(
+                err instanceof Error ? err.message : "Failed to load chat data.",
+            );
+        } finally {
+            setIsPageLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        loadChatPage();
+    }, [chatId]);
+
     const handleAddLink = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newLinkUrl.trim()) return;
-        setIsAddingLink(true);
-        setLinkProgress(0);
-        const total = Math.floor(Math.random() * 30) + 10;
-        setScrapeStats({ done: 0, total });
-
-        let progress = 0;
-        let currentDone = 0;
-        const interval = setInterval(() => {
-            progress += Math.floor(Math.random() * 10) + 5;
-            currentDone = Math.floor((progress / 100) * total);
-
-            if (progress >= 100) {
-                progress = 100;
-                setLinkProgress(progress);
-                setScrapeStats({ done: total, total });
-                clearInterval(interval);
-                setTimeout(() => {
-                    setIsAddingLink(false);
-                    setLinks((prev) => [
-                        ...prev,
-                        {
-                            title: "Added Document",
-                            url: newLinkUrl,
-                            isHighlight: false,
-                        },
-                    ]);
-                    setNewLinkUrl("");
-                }, 400);
-            } else {
-                setLinkProgress(progress);
-                setScrapeStats({ done: currentDone, total });
-            }
-        }, 300);
+        if (!newLinkUrl.trim() || !chatId) return;
+        setError("Adding links from this screen is not supported yet. Create a new chat with the URL.");
+        setNewLinkUrl("");
     };
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -205,10 +279,17 @@ export const ChatPage = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages, isTyping]);
 
-    const handleSend = (e?: React.FormEvent) => {
+    const handleSend = async (e?: React.FormEvent) => {
         e?.preventDefault();
         if (!input.trim() || isTyping) return;
-        const modelForResponse = selectedModel;
+
+        const selectedOption =
+            modelOptions.find((opt) => opt.model === selectedModel) ||
+            modelOptions[0] || {
+                provider: "DEFAULT",
+                model: "default-1",
+                label: "Default Model 1",
+            };
 
         const newUserMessage: Message = {
             id: Date.now().toString(),
@@ -227,62 +308,76 @@ export const ChatPage = () => {
             textareaRef.current.style.height = "auto";
         }
 
-        // Simulate AI thinking and streaming response
-        setTimeout(() => {
-            setIsTyping(false);
-            const aiId = (Date.now() + 1).toString();
+        const aiId = (Date.now() + 1).toString();
+        setMessages((prev) => [
+            ...prev,
+            {
+                id: aiId,
+                role: "ai",
+                content: "",
+                model: selectedOption.model,
+                sources: [],
+                isStreaming: true,
+                timestamp: new Date(),
+            },
+        ]);
 
-            // Initial empty AI message
-            setMessages((prev) => [
-                ...prev,
-                {
-                    id: aiId,
-                    role: "ai",
-                    content: "",
-                    model: modelForResponse,
-                    sources: MOCK_SOURCES,
-                    isStreaming: true,
-                    timestamp: new Date(),
-                },
-            ]);
-            setSelectedSources(MOCK_SOURCES);
-            setRightPanelOpen(true); // Open sources to show what it looked at
+        try {
+            const text = await sendMessageStream({
+                userPrompt: newUserMessage.content,
+                model: selectedOption.model,
+                provider: selectedOption.provider,
+                chatId,
+            });
 
-            // Simulate streaming
-            const fullResponse =
-                "To add state to your React component, you should use the `useState` hook. \n\n### Usage\nCall `useState` at the top level of your component:\n\n```jsx\nimport { useState } from 'react';\n\nfunction MyComponent() {\n  const [count, setCount] = useState(0);\n  \n  return (\n    <button onClick={() => setCount(count + 1)}>\n      Count: {count}\n    </button>\n  );\n}\n```\n\nUnlike regular variables, state variables trigger React to re-render the component when they change.";
-            let currentText = "";
-            let i = 0;
+            setMessages((prev) =>
+                prev.map((m) =>
+                    m.id === aiId ? { ...m, content: text, isStreaming: false } : m,
+                ),
+            );
 
-            const interval = setInterval(() => {
-                if (i < fullResponse.length) {
-                    currentText += fullResponse.charAt(i);
-                    // Add random chunk of characters to seem like tokens
-                    const chunkSize = Math.floor(Math.random() * 3) + 1;
-                    for (
-                        let j = 1;
-                        j < chunkSize && i + j < fullResponse.length;
-                        j++
-                    ) {
-                        currentText += fullResponse.charAt(i + j);
-                    }
-                    i += chunkSize;
-
-                    setMessages((prev) =>
-                        prev.map((m) =>
-                            m.id === aiId ? { ...m, content: currentText } : m,
-                        ),
-                    );
-                } else {
-                    clearInterval(interval);
-                    setMessages((prev) =>
-                        prev.map((m) =>
-                            m.id === aiId ? { ...m, isStreaming: false } : m,
-                        ),
-                    );
+            const latestMessages = await getChatMessages(chatId);
+            const latestAi = (latestMessages.messages || []).at(-1);
+            if (latestAi) {
+                let sources: Source[] = [];
+                try {
+                    const srcData = await getMessageSources(latestAi.id);
+                    sources = (srcData.messageSources || []).map((src) => ({
+                        id: src.id,
+                        title: src.heading,
+                        url: src.pageUrl,
+                        snippet: src.chunkText,
+                        relevance: src.score,
+                    }));
+                } catch {
+                    sources = [];
                 }
-            }, 30);
-        }, 1200);
+
+                setMessages((prev) =>
+                    prev.map((m) =>
+                        m.id === aiId
+                            ? {
+                                  ...m,
+                                  messageId: latestAi.id,
+                                  model: latestAi.llmModel,
+                                  sources,
+                              }
+                            : m,
+                    ),
+                );
+                setSelectedSources(sources);
+                setRightPanelOpen(true);
+            }
+        } catch (err) {
+            setError(
+                err instanceof Error
+                    ? err.message
+                    : "Failed to send message.",
+            );
+            setMessages((prev) => prev.filter((m) => m.id !== aiId));
+        } finally {
+            setIsTyping(false);
+        }
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -309,7 +404,7 @@ export const ChatPage = () => {
                             exit={{ width: 0, opacity: 0 }}
                             className="h-full border-r border-white/5 bg-[#0b0b0f]/80 backdrop-blur-md shrink-0 flex flex-col z-20 overflow-hidden"
                         >
-                            <div className="p-4 border-b border-white/5 flex flex-col gap-4 w-[280px]">
+                            <div className="p-4 border-b border-white/5 flex flex-col gap-4 w-70">
                                 <div className="space-y-3">
                                     <h3 className="text-sm font-medium text-white truncate">
                                         Chat information
@@ -324,7 +419,7 @@ export const ChatPage = () => {
                                             Indexed
                                         </div>
                                         <div className="font-medium text-sm text-gray-200">
-                                            {MOCK_DOCS.pages} pages
+                                            {docInfo.pages} pages
                                         </div>
                                     </div>
                                     <div className="bg-white/5 border border-white/10 rounded-lg p-3">
@@ -333,7 +428,7 @@ export const ChatPage = () => {
                                             Updated
                                         </div>
                                         <div className="font-medium text-sm text-gray-200 truncate">
-                                            {MOCK_DOCS.lastUpdated}
+                                            {docInfo.lastUpdated}
                                         </div>
                                     </div>
                                     <div className="col-span-2 bg-white/5 border border-white/10 rounded-lg p-3 flex items-center justify-between">
@@ -342,7 +437,7 @@ export const ChatPage = () => {
                                             Total Tokens Used
                                         </div>
                                         <div className="font-medium text-sm text-gray-200 bg-white/5 px-2 py-0.5 rounded border border-white/5 font-mono">
-                                            {formatTokens(MOCK_DOCS.tokensUsed)}
+                                            {formatTokens(docInfo.tokensUsed)}
                                         </div>
                                     </div>
                                 </div>
@@ -356,7 +451,7 @@ export const ChatPage = () => {
                             </div>
 
                             {/* Scraped Pages List */}
-                            <div className="flex-1 overflow-y-auto p-4 w-[280px]">
+                            <div className="flex-1 overflow-y-auto p-4 w-70">
                                 <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">
                                     Current Links
                                 </h4>
@@ -468,13 +563,13 @@ export const ChatPage = () => {
                             </button>
                             <div>
                                 <h1 className="text-lg font-semibold text-white flex items-center gap-2">
-                                    {MOCK_DOCS.title}
+                                    {docInfo.title}
                                 </h1>
                             </div>
                         </div>
                         <div className="flex items-center gap-3">
                             <div className="hidden sm:flex items-center mr-2">
-                                <div className="relative inline-flex items-center gap-2 rounded-xl border border-white/15 bg-linear-to-r from-white/5 to-white/[0.02] px-2.5 py-1.5 shadow-inner shadow-black/30">
+                                <div className="relative inline-flex items-center gap-2 rounded-xl border border-white/15 bg-linear-to-r from-white/5 to-white/2 px-2.5 py-1.5 shadow-inner shadow-black/30">
                                     <span className="text-[11px] tracking-wide uppercase text-gray-500 font-semibold">
                                         Model
                                     </span>
@@ -485,9 +580,9 @@ export const ChatPage = () => {
                                         }
                                         className="appearance-none bg-[#12121a] border border-white/10 rounded-lg pl-2.5 pr-7 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-accent-blue/60 focus:ring-2 focus:ring-accent-blue/25 transition-all"
                                     >
-                                        {availableModels.map((m) => (
-                                            <option key={m} value={m}>
-                                                {m}
+                                        {modelOptions.map((m) => (
+                                            <option key={`${m.provider}-${m.model}`} value={m.model}>
+                                                {m.label}
                                             </option>
                                         ))}
                                     </select>
@@ -513,6 +608,18 @@ export const ChatPage = () => {
                         </div>
                     </header>
 
+                    {error && (
+                        <div className="mx-4 mt-3 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+                            {error}
+                        </div>
+                    )}
+
+                    {isPageLoading && (
+                        <div className="mx-4 mt-3 p-3 rounded-lg bg-white/5 border border-white/10 text-gray-300 text-sm">
+                            Loading chat data...
+                        </div>
+                    )}
+
                     {/* Chat Messages */}
                     <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8 custom-scrollbar scroll-smooth">
                         <div className="max-w-3xl mx-auto space-y-8 pb-10">
@@ -527,7 +634,7 @@ export const ChatPage = () => {
                                         </h2>
                                         <p className="text-gray-400 text-sm max-w-md mx-auto leading-relaxed">
                                             Ask me anything about the{" "}
-                                            {MOCK_DOCS.title}. I can provide
+                                            {docInfo.title}. I can provide
                                             code examples, explain concepts, and
                                             point you to the right pages.
                                         </p>
@@ -777,23 +884,22 @@ export const ChatPage = () => {
                                 </button>
                             </div>
                             <div className="flex-1 overflow-y-auto p-6 space-y-3 custom-scrollbar">
-                                {Array.from({ length: 142 }).map((_, idx) => (
+                                {links.map((link, idx) => (
                                     <div
-                                        key={idx}
+                                        key={`${link.url}-${idx}`}
                                         className="p-4 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 transition-colors"
                                     >
                                         <h3 className="font-semibold text-gray-200 flex items-center gap-2 mb-1">
                                             <FileText className="w-4 h-4 text-accent-blue" />
-                                            Dummy Page {idx + 1}
+                                            {link.title || `Indexed Page ${idx + 1}`}
                                         </h3>
                                         <a
-                                            href={`https://react.dev/reference/page-${idx + 1}`}
+                                            href={link.url}
                                             target="_blank"
                                             rel="noreferrer"
                                             className="text-sm font-mono text-gray-400 hover:text-accent-blue block truncate ml-6"
                                         >
-                                            https://react.dev/reference/page-
-                                            {idx + 1}
+                                            {link.url}
                                         </a>
                                     </div>
                                 ))}

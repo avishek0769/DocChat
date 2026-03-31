@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Sidebar } from "../components/Sidebar";
 
@@ -16,6 +16,13 @@ import {
     RefreshCw,
     Zap,
 } from "lucide-react";
+import {
+    createChat,
+    deleteChat,
+    getApiKeys,
+    getChats,
+    type ChatItem,
+} from "../lib/api";
 
 interface Chat {
     id: string;
@@ -31,77 +38,52 @@ interface Chat {
 interface ApiKeyEntry {
     id: string;
     name: string;
-    keyMasked: string;
+    formattedKey: string;
     provider: string;
-    model: string;
+    models: string[];
 }
 
-// Mock Data
-const MOCK_CHATS: Chat[] = [
-    {
-        id: "1",
-        title: "React Documentation",
-        urls: [
-            "https://react.dev/reference",
-            "https://reactrouter.com/en/main",
-        ],
-        status: "ready",
-        pages: 142,
-        totalPages: 142,
-        tokens: 845000,
-        updatedAt: "2 hours ago",
-    },
-    {
-        id: "2",
-        title: "Stripe API Reference",
-        urls: ["https://docs.stripe.com/api"],
-        status: "processing",
-        pages: 45,
-        totalPages: 128,
-        tokens: 0,
-        updatedAt: "Just now",
-    },
-    {
-        id: "3",
-        title: "Legacy Internal Docs",
-        urls: ["https://wiki.internal.dev/v1"],
-        status: "failed",
-        pages: 0,
-        totalPages: 0,
-        tokens: 0,
-        updatedAt: "2 days ago",
-    },
-];
-
-const PROVIDER_MODELS: Record<string, string[]> = {
-    OpenAI: ["GPT-4o", "GPT-4o Mini"],
-    Anthropic: ["Claude 3.5 Sonnet", "Claude 3 Haiku"],
-    xAI: ["Grok-2", "Grok-1.5"],
-    Google: ["Gemini 1.5 Pro", "Gemini 1.5 Flash"],
+const fromNow = (iso: string) => {
+    const diff = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return "Just now";
+    if (mins < 60) return `${mins} min ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours} hour${hours > 1 ? "s" : ""} ago`;
+    const days = Math.floor(hours / 24);
+    return `${days} day${days > 1 ? "s" : ""} ago`;
 };
 
-const getRandom = () => Math.random();
+const mapBackendChat = (chat: ChatItem): Chat => {
+    const source = chat.chatSources?.[0];
+    const pagesIndexed = source?._count?.pagesIndexed ?? source?.pagesIndexed?.length ?? 0;
+    return {
+        id: chat.id,
+        title: chat.name,
+        urls: (chat.chatSources || []).map((s) => s.documentationUrl),
+        status: String(chat.status || "QUEUED").toLowerCase(),
+        pages: pagesIndexed,
+        totalPages: source?.totalPages || pagesIndexed || 0,
+        tokens: chat.totalUsage?.total || 0,
+        updatedAt: fromNow(chat.updatedAt),
+    };
+};
 
 const Dashboard = () => {
     const navigate = useNavigate();
-    const [chats, setChats] = useState<Chat[]>(MOCK_CHATS);
+    const [chats, setChats] = useState<Chat[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isDocsListOpen, setIsDocsListOpen] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState("");
+    const [isCreating, setIsCreating] = useState(false);
 
     // New Chat Form State
     const [chatName, setChatName] = useState("");
     const [chatUrl, setChatUrl] = useState("");
 
     // API Keys State
-    const [apiKeys] = useState<ApiKeyEntry[]>([
-        {
-            id: "default-1",
-            name: "My Sandbox Key",
-            keyMasked: "sk-...89ab",
-            provider: "OpenAI",
-            model: "GPT-4o",
-        },
-    ]);
+    const [apiKeys, setApiKeys] = useState<ApiKeyEntry[]>([]);
     const [selectedModel, setSelectedModel] = useState("");
 
     // Delete Confirmation
@@ -115,113 +97,89 @@ const Dashboard = () => {
         setTimeout(() => setToast(null), 2500);
     }, []);
 
-    const handleCreateChat = () => {
-        if (!chatUrl) return;
-
-        const randomTotalPages = Math.floor(getRandom() * 200) + 30;
-        const newChat: Chat = {
-            id: getRandom().toString(36).substring(2),
-            title:
-                chatName ||
-                (() => {
-                    try {
-                        return new URL(chatUrl).hostname;
-                    } catch {
-                        return "New Documentation";
-                    }
-                })(),
-            urls: [chatUrl],
-            status: "processing",
-            pages: 0,
-            totalPages: randomTotalPages,
-            tokens: 0,
-            updatedAt: "Just now",
-        };
-        setChats((prev) => [newChat, ...prev]);
-        setIsModalOpen(false);
-        setChatName("");
-        setChatUrl("");
-        setSelectedModel("");
-        showToast(`Chat "${newChat.title}" created and processing started!`);
-
-        // Simulate processing progress
-        simulateProcessing(newChat.id, randomTotalPages);
-    };
-
-    const simulateProcessing = (chatId: string, totalPages: number) => {
-        let currentPage = 0;
-        const interval = setInterval(() => {
-            currentPage += Math.floor(getRandom() * 8) + 2;
-            if (currentPage >= totalPages) {
-                currentPage = totalPages;
-                clearInterval(interval);
-                setChats((prev) =>
-                    prev.map((c) =>
-                        c.id === chatId
-                            ? {
-                                  ...c,
-                                  pages: totalPages,
-                                  status: "ready",
-                                  tokens:
-                                      totalPages * 5000 +
-                                      Math.floor(getRandom() * 10000),
-                                  updatedAt: "Just now",
-                              }
-                            : c,
-                    ),
-                );
-                showToast("Processing complete! Chat is ready.");
-                return;
-            }
-            setChats((prev) =>
-                prev.map((c) =>
-                    c.id === chatId
-                        ? {
-                              ...c,
-                              pages: currentPage,
-                              tokens: Math.floor(currentPage * 5000),
-                          }
-                        : c,
-                ),
+    const loadDashboardData = useCallback(async () => {
+        setError("");
+        try {
+            const [chatData, keyData] = await Promise.all([getChats(), getApiKeys()]);
+            setChats((chatData || []).map(mapBackendChat));
+            setApiKeys(keyData.apiKeys || []);
+        } catch (err) {
+            setError(
+                err instanceof Error
+                    ? err.message
+                    : "Failed to load dashboard data.",
             );
-        }, 1200);
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        loadDashboardData();
+    }, [loadDashboardData]);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            loadDashboardData();
+        }, 6000);
+        return () => clearInterval(interval);
+    }, [loadDashboardData]);
+
+    const handleCreateChat = async () => {
+        if (!chatUrl) return;
+        setIsCreating(true);
+        setError("");
+        try {
+            await createChat({ name: chatName || undefined, docsUrl: chatUrl });
+            setIsModalOpen(false);
+            setChatName("");
+            setChatUrl("");
+            setSelectedModel("");
+            showToast("Chat created and processing started.");
+            await loadDashboardData();
+        } catch (err) {
+            setError(
+                err instanceof Error ? err.message : "Failed to create chat.",
+            );
+        } finally {
+            setIsCreating(false);
+        }
     };
 
-    const handleDeleteChat = () => {
+    const handleDeleteChat = async () => {
         if (!deleteTarget) return;
         const title = deleteTarget.title;
-        setChats((prev) => prev.filter((c) => c.id !== deleteTarget.id));
-        setDeleteTarget(null);
-        showToast(`"${title}" deleted successfully.`);
+        try {
+            await deleteChat(deleteTarget.id);
+            setChats((prev) => prev.filter((c) => c.id !== deleteTarget.id));
+            setDeleteTarget(null);
+            showToast(`"${title}" deleted successfully.`);
+        } catch (err) {
+            setError(
+                err instanceof Error ? err.message : "Failed to delete chat.",
+            );
+        }
     };
 
-    const handleRetryFailed = (chatId: string) => {
+    const handleRetryFailed = async (chatId: string) => {
         const chat = chats.find((c) => c.id === chatId);
         if (!chat) return;
-        const totalPages = Math.floor(getRandom() * 150) + 30;
-        setChats((prev) =>
-            prev.map((c) =>
-                c.id === chatId
-                    ? {
-                          ...c,
-                          status: "processing",
-                          pages: 0,
-                          totalPages,
-                          tokens: 0,
-                          updatedAt: "Just now",
-                      }
-                    : c,
-            ),
-        );
-        showToast(`Retrying "${chat.title}"...`);
-        simulateProcessing(chatId, totalPages);
+        try {
+            await createChat({ name: chat.title, docsUrl: chat.urls[0] || chatUrl });
+            showToast(`Retrying "${chat.title}"...`);
+            await loadDashboardData();
+        } catch (err) {
+            setError(
+                err instanceof Error ? err.message : "Failed to retry chat.",
+            );
+        }
     };
 
     // Disabled state for the Start Processing button
     const isStartDisabled = !chatUrl || (apiKeys.length > 0 && !selectedModel);
 
     const availableModels = Array.from(
-        new Set(apiKeys.flatMap((k) => PROVIDER_MODELS[k.provider] || [])),
+        new Set(apiKeys.flatMap((k) => k.models || [])),
     );
 
     const totalTokensUsed = chats
@@ -293,6 +251,12 @@ const Dashboard = () => {
                             </button>
                         </div>
                     </header>
+
+                    {error && (
+                        <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+                            {error}
+                        </div>
+                    )}
 
                     {/* Quick Insights */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -385,7 +349,11 @@ const Dashboard = () => {
                             </span>
                         </h2>
 
-                        {chats.length > 0 ? (
+                        {isLoading ? (
+                            <div className="p-8 text-center bg-white/1 border border-white/5 border-dashed rounded-xl text-sm text-gray-400">
+                                Loading chats...
+                            </div>
+                        ) : chats.length > 0 ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                 {chats.map((chat) => {
                                     const progressPercent =
@@ -758,10 +726,10 @@ const Dashboard = () => {
                             </button>
                             <button
                                 onClick={handleCreateChat}
-                                disabled={isStartDisabled}
+                                disabled={isStartDisabled || isCreating}
                                 className="px-5 py-2 rounded-lg bg-accent-blue hover:bg-accent-blue/90 disabled:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors shadow-lg shadow-accent-blue/20"
                             >
-                                Start Processing
+                                {isCreating ? "Starting..." : "Start Processing"}
                             </button>
                         </div>
                     </div>

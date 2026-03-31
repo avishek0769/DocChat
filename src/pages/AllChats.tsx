@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
     Search,
@@ -11,49 +11,44 @@ import {
     Loader2,
     CheckCircle2,
     ExternalLink,
-    Pencil,
 } from "lucide-react";
 import { Sidebar } from "../components/Sidebar";
+import { deleteChat, getChats, type ChatItem } from "../lib/api";
 
-// Mock Data
-const MOCK_CHATS = [
-    {
-        id: "1",
-        title: "React Documentation",
-        urls: ["https://react.dev/reference", "https://reactrouter.com/en/main"],
-        status: "ready",
-        pages: 142,
-        tokens: 845000,
-        updatedAt: "2 hours ago",
-    },
-    {
-        id: "2",
-        title: "Stripe API Reference",
-        urls: ["https://docs.stripe.com/api"],
-        status: "processing",
-        pages: 45,
-        tokens: 0,
-        updatedAt: "Just now",
-    },
-    {
-        id: "3",
-        title: "Legacy Internal Docs",
-        urls: ["https://wiki.internal.dev/v1"],
-        status: "failed",
-        pages: 0,
-        tokens: 0,
-        updatedAt: "2 days ago",
-    },
-    {
-        id: "4",
-        title: "Tailwind CSS v4",
-        urls: ["https://tailwindcss.com/docs"],
-        status: "ready",
-        pages: 89,
-        tokens: 420000,
-        updatedAt: "1 week ago",
-    },
-];
+type ChatRow = {
+    id: string;
+    title: string;
+    urls: string[];
+    status: string;
+    pages: number;
+    tokens: number;
+    updatedAt: string;
+};
+
+const fromNow = (iso: string) => {
+    const diff = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return "Just now";
+    if (mins < 60) return `${mins} min ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours} hour${hours > 1 ? "s" : ""} ago`;
+    const days = Math.floor(hours / 24);
+    return `${days} day${days > 1 ? "s" : ""} ago`;
+};
+
+const mapChat = (chat: ChatItem): ChatRow => {
+    const source = chat.chatSources?.[0];
+    const pages = source?._count?.pagesIndexed ?? source?.pagesIndexed?.length ?? 0;
+    return {
+        id: chat.id,
+        title: chat.name,
+        urls: (chat.chatSources || []).map((s) => s.documentationUrl),
+        status: String(chat.status || "QUEUED").toLowerCase(),
+        pages,
+        tokens: chat.totalUsage?.total || 0,
+        updatedAt: fromNow(chat.updatedAt),
+    };
+};
 
 const formatTokens = (tokens: number) => {
     if (tokens >= 1000000) return (tokens / 1000000).toFixed(1) + "M";
@@ -63,23 +58,43 @@ const formatTokens = (tokens: number) => {
 
 const AllChats = () => {
     const navigate = useNavigate();
-    const [chats, setChats] = useState(MOCK_CHATS);
+    const [chats, setChats] = useState<ChatRow[]>([]);
     const [search, setSearch] = useState("");
     const [filter, setFilter] = useState("all");
-    
-    // Edit state
-    const [editingId, setEditingId] = useState<string | null>(null);
-    const [editTitle, setEditTitle] = useState("");
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState("");
 
-    const handleSaveTitle = (id: string) => {
-        if (!editTitle.trim()) return;
-        setChats(prev => prev.map(c => c.id === id ? { ...c, title: editTitle } : c));
-        setEditingId(null);
+    const loadChats = async () => {
+        setIsLoading(true);
+        setError("");
+        try {
+            const data = await getChats();
+            setChats((data || []).map(mapChat));
+        } catch (err) {
+            setError(
+                err instanceof Error ? err.message : "Failed to load chats.",
+            );
+        } finally {
+            setIsLoading(false);
+        }
     };
 
-    const handleDelete = (id: string) => {
+    useEffect(() => {
+        loadChats();
+    }, []);
+
+    const handleDelete = async (id: string) => {
         if (confirm("Are you sure you want to delete this chat?")) {
-            setChats(prev => prev.filter(c => c.id !== id));
+            try {
+                await deleteChat(id);
+                setChats((prev) => prev.filter((c) => c.id !== id));
+            } catch (err) {
+                setError(
+                    err instanceof Error
+                        ? err.message
+                        : "Failed to delete chat.",
+                );
+            }
         }
     };
 
@@ -138,6 +153,12 @@ const AllChats = () => {
                         </p>
                     </header>
 
+                    {error && (
+                        <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+                            {error}
+                        </div>
+                    )}
+
                     <div className="flex flex-col sm:flex-row gap-4 mb-8">
                         <div className="relative flex-1">
                             <Search className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -165,7 +186,11 @@ const AllChats = () => {
                     </div>
 
                     <div className="space-y-3">
-                        {filteredChats.length > 0 ? (
+                        {isLoading ? (
+                            <div className="text-center py-20 bg-white/1 rounded-xl border border-white/5 border-dashed">
+                                <p className="text-gray-400">Loading chats...</p>
+                            </div>
+                        ) : filteredChats.length > 0 ? (
                             filteredChats.map((chat) => (
                                 <div
                                     key={chat.id}
@@ -174,27 +199,9 @@ const AllChats = () => {
                                     <div className="flex items-center gap-4 min-w-0">
                                         {getStatusBadge(chat.status)}
                                         <div className="min-w-0">
-                                            {editingId === chat.id ? (
-                                                <div className="flex items-center gap-2">
-                                                    <input
-                                                        type="text"
-                                                        value={editTitle}
-                                                        onChange={(e) => setEditTitle(e.target.value)}
-                                                        onKeyDown={(e) => {
-                                                            if (e.key === "Enter") handleSaveTitle(chat.id);
-                                                            if (e.key === "Escape") setEditingId(null);
-                                                        }}
-                                                        autoFocus
-                                                        className="bg-[#1a1a24] text-gray-200 text-sm border border-accent-blue/50 rounded px-2 py-0.5 focus:outline-none"
-                                                    />
-                                                    <button onClick={() => handleSaveTitle(chat.id)} className="text-xs text-accent-blue hover:text-accent-blue/80">Save</button>
-                                                    <button onClick={() => setEditingId(null)} className="text-xs text-gray-500 hover:text-gray-400">Cancel</button>
-                                                </div>
-                                            ) : (
                                                 <h3 className="font-medium text-gray-200 truncate">
                                                     {chat.title}
                                                 </h3>
-                                            )}
                                             <div className="flex flex-wrap gap-1.5 mt-1.5">
                                                 {chat.urls.map((u, i) => (
                                                     <a
@@ -244,16 +251,6 @@ const AllChats = () => {
                                                 }
                                             >
                                                 Open
-                                            </button>
-                                            <button
-                                                onClick={() => {
-                                                    setEditingId(chat.id);
-                                                    setEditTitle(chat.title);
-                                                }}
-                                                className="p-1.5 rounded-md text-gray-500 hover:text-accent-blue hover:bg-accent-blue/10 transition-colors"
-                                                title="Edit chat name"
-                                            >
-                                                <Pencil className="w-4 h-4" />
                                             </button>
                                             <button 
                                                 onClick={() => handleDelete(chat.id)}

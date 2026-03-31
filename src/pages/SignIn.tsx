@@ -2,29 +2,95 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Terminal, Eye, EyeOff, ArrowRight, GitBranch } from "lucide-react";
+import { resetPassword, sendPasswordResetCode, signIn } from "../lib/auth";
 
 const SignIn = () => {
     const navigate = useNavigate();
-    const [email, setEmail] = useState("");
+    const [identifier, setIdentifier] = useState("");
     const [password, setPassword] = useState("");
     const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState("");
+    const [showResetPanel, setShowResetPanel] = useState(false);
+    const [resetEmail, setResetEmail] = useState("");
+    const [resetCode, setResetCode] = useState("");
+    const [newPassword, setNewPassword] = useState("");
+    const [resetMessage, setResetMessage] = useState("");
+    const [isSendingResetCode, setIsSendingResetCode] = useState(false);
+    const [isResettingPassword, setIsResettingPassword] = useState(false);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!email || !password) {
+        if (!identifier || !password) {
             setError("Please fill in all fields.");
             return;
         }
+
         setError("");
         setIsLoading(true);
 
-        // Simulate sign in
-        setTimeout(() => {
-            setIsLoading(false);
+        try {
+            await signIn(identifier, password);
             navigate("/dashboard");
-        }, 1200);
+        } catch (err) {
+            setError(
+                err instanceof Error
+                    ? err.message
+                    : "Unable to sign in. Please try again.",
+            );
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleSendResetCode = async () => {
+        if (!resetEmail) {
+            setError("Enter your email for password reset.");
+            return;
+        }
+
+        setError("");
+        setResetMessage("");
+        setIsSendingResetCode(true);
+
+        try {
+            await sendPasswordResetCode(resetEmail);
+            setResetMessage("Reset code sent to your email.");
+        } catch (err) {
+            setError(
+                err instanceof Error
+                    ? err.message
+                    : "Could not send reset code.",
+            );
+        } finally {
+            setIsSendingResetCode(false);
+        }
+    };
+
+    const handleResetPassword = async () => {
+        if (!resetEmail || !resetCode || !newPassword) {
+            setError("Email, reset code and new password are required.");
+            return;
+        }
+
+        setError("");
+        setResetMessage("");
+        setIsResettingPassword(true);
+
+        try {
+            await resetPassword(resetEmail, resetCode, newPassword);
+            setResetMessage("Password reset successful. You can sign in now.");
+            setResetCode("");
+            setNewPassword("");
+        } catch (err) {
+            setError(
+                err instanceof Error
+                    ? err.message
+                    : "Could not reset password.",
+            );
+        } finally {
+            setIsResettingPassword(false);
+        }
     };
 
     return (
@@ -53,7 +119,7 @@ const SignIn = () => {
                 </div>
 
                 {/* Card */}
-                <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-8 backdrop-blur-sm shadow-2xl">
+                <div className="bg-white/3 border border-white/10 rounded-2xl p-8 backdrop-blur-sm shadow-2xl">
                     <div className="text-center mb-8">
                         <h1 className="text-2xl font-bold mb-2">
                             Welcome back
@@ -76,15 +142,15 @@ const SignIn = () => {
                     <form onSubmit={handleSubmit} className="space-y-5">
                         <div className="space-y-1.5">
                             <label className="text-sm font-medium text-gray-300">
-                                Email
+                                Username or Email
                             </label>
                             <input
-                                type="email"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                placeholder="you@example.com"
+                                type="text"
+                                value={identifier}
+                                onChange={(e) => setIdentifier(e.target.value)}
+                                placeholder="johndoe or you@example.com"
                                 className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-blue/50 focus:ring-1 focus:ring-accent-blue/50 transition-all"
-                                autoComplete="email"
+                                autoComplete="username"
                             />
                         </div>
 
@@ -95,6 +161,13 @@ const SignIn = () => {
                                 </label>
                                 <button
                                     type="button"
+                                    onClick={() => {
+                                        setShowResetPanel((prev) => !prev);
+                                        setResetEmail(
+                                            identifier.includes("@") ? identifier : "",
+                                        );
+                                        setResetMessage("");
+                                    }}
                                     className="text-xs text-accent-blue hover:text-accent-blue/80 transition-colors"
                                 >
                                     Forgot password?
@@ -142,6 +215,56 @@ const SignIn = () => {
                             )}
                         </button>
                     </form>
+
+                    {showResetPanel && (
+                        <div className="mt-6 p-4 rounded-xl border border-white/10 bg-white/5 space-y-3">
+                            <p className="text-xs text-gray-400">
+                                Reset password using email verification code.
+                            </p>
+                            <input
+                                type="email"
+                                value={resetEmail}
+                                onChange={(e) => setResetEmail(e.target.value)}
+                                placeholder="Email"
+                                className="w-full bg-[#111] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-blue/50"
+                            />
+                            <div className="flex gap-2">
+                                <input
+                                    type="text"
+                                    value={resetCode}
+                                    onChange={(e) => setResetCode(e.target.value)}
+                                    placeholder="Reset code"
+                                    className="flex-1 bg-[#111] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-blue/50"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={handleSendResetCode}
+                                    disabled={isSendingResetCode}
+                                    className="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/15 disabled:opacity-50 text-xs font-medium"
+                                >
+                                    {isSendingResetCode ? "Sending..." : "Send code"}
+                                </button>
+                            </div>
+                            <input
+                                type="password"
+                                value={newPassword}
+                                onChange={(e) => setNewPassword(e.target.value)}
+                                placeholder="New password"
+                                className="w-full bg-[#111] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-blue/50"
+                            />
+                            <button
+                                type="button"
+                                onClick={handleResetPassword}
+                                disabled={isResettingPassword}
+                                className="w-full py-2 rounded-lg bg-accent-blue hover:bg-blue-600 disabled:opacity-50 text-sm font-medium"
+                            >
+                                {isResettingPassword ? "Resetting..." : "Reset Password"}
+                            </button>
+                            {resetMessage && (
+                                <p className="text-xs text-green-400">{resetMessage}</p>
+                            )}
+                        </div>
+                    )}
 
                     {/* Divider */}
                     <div className="flex items-center gap-4 my-6">

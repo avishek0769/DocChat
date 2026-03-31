@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Sidebar } from "../components/Sidebar";
 import {
@@ -9,14 +9,34 @@ import {
     Key,
     CheckCircle2,
 } from "lucide-react";
+import { logoutUser } from "../lib/auth";
+import { getUserProfile } from "../lib/api";
 
 const Profile = () => {
     const navigate = useNavigate();
     const [name, setName] = useState("Developer");
-    const [email] = useState("developer@example.com");
+    const [email, setEmail] = useState("developer@example.com");
     const [isSaving, setIsSaving] = useState(false);
     const [saved, setSaved] = useState(false);
     const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+    const [error, setError] = useState("");
+
+    useEffect(() => {
+        const loadProfile = async () => {
+            try {
+                const profile = await getUserProfile();
+                setName(profile.fullname || profile.username || "Developer");
+                setEmail(profile.email || "developer@example.com");
+            } catch (err) {
+                setError(
+                    err instanceof Error
+                        ? err.message
+                        : "Failed to load profile.",
+                );
+            }
+        };
+        loadProfile();
+    }, []);
 
     const handleSave = () => {
         setIsSaving(true);
@@ -27,9 +47,10 @@ const Profile = () => {
         }, 800);
     };
 
-    const handleLogout = () => {
+    const handleLogout = async () => {
         setShowLogoutConfirm(false);
-        navigate("/");
+        await logoutUser();
+        navigate("/signin");
     };
 
     return (
@@ -44,6 +65,12 @@ const Profile = () => {
                             Manage your account and preferences.
                         </p>
                     </header>
+
+                    {error && (
+                        <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+                            {error}
+                        </div>
+                    )}
 
                     {/* Profile Card */}
                     <section className="bg-white/3 border border-white/10 rounded-2xl p-6 md:p-8">

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Sidebar } from "../components/Sidebar";
 import {
     Key,
@@ -9,30 +9,85 @@ import {
     Plus,
     Network,
 } from "lucide-react";
+import {
+    createApiKey,
+    deleteApiKey,
+    getApiKeyCount,
+    getApiKeys,
+    type ApiKeyItem,
+    type Provider,
+} from "../lib/api";
 
 interface ApiKey {
     id: string;
     name: string;
     keyMasked: string;
     provider: string;
+    createdAt?: string;
+    models?: string[];
 }
 
-const PROVIDERS = ["OpenAI", "Anthropic", "xAI", "Google"];
+const PROVIDERS: Array<{ label: string; value: Provider }> = [
+    { label: "OpenAI", value: "OPENAI" },
+    { label: "Anthropic", value: "ANTHROPIC" },
+    { label: "xAI", value: "XAI" },
+    { label: "Google", value: "GOOGLE" },
+    { label: "OpenRouter", value: "OPENROUTER" },
+];
+
+const PROVIDER_LABEL: Record<Provider, string> = {
+    OPENAI: "OpenAI",
+    ANTHROPIC: "Anthropic",
+    GOOGLE: "Google",
+    XAI: "xAI",
+    OPENROUTER: "OpenRouter",
+};
+
+const toUiApiKey = (key: ApiKeyItem): ApiKey => ({
+    id: key.id,
+    name: key.name,
+    keyMasked: key.formattedKey,
+    provider: PROVIDER_LABEL[key.provider] || key.provider,
+    createdAt: key.createdAt,
+    models: key.models,
+});
 
 const Settings = () => {
-    const [apiKeys, setApiKeys] = useState<ApiKey[]>([
-        {
-            id: "1",
-            name: "My Sandbox Key",
-            keyMasked: "sk-...89ab",
-            provider: "OpenAI",
-        },
-    ]);
+    const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
+    const [apiKeyCount, setApiKeyCount] = useState(0);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState("");
 
     const [newKeyName, setNewKeyName] = useState("");
     const [newKeyValue, setNewKeyValue] = useState("");
-    const [selectedProvider, setSelectedProvider] = useState("");
+    const [selectedProvider, setSelectedProvider] = useState<Provider | "">("");
     const [showKey, setShowKey] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+
+    const loadApiKeys = async () => {
+        setIsLoading(true);
+        setError("");
+        try {
+            const [listData, countData] = await Promise.all([
+                getApiKeys(),
+                getApiKeyCount(),
+            ]);
+            setApiKeys((listData.apiKeys || []).map(toUiApiKey));
+            setApiKeyCount(countData.count || 0);
+        } catch (err) {
+            setError(
+                err instanceof Error
+                    ? err.message
+                    : "Failed to load API keys.",
+            );
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        loadApiKeys();
+    }, []);
 
     // Auto-detect provider based on key prefix
     const handleKeyChange = (val: string) => {
@@ -40,47 +95,60 @@ const Settings = () => {
         if (!val) return;
 
         let detected = "";
-        if (val.startsWith("sk-ant")) detected = "Anthropic";
+        if (val.startsWith("sk-ant")) detected = "ANTHROPIC";
         else if (val.startsWith("sk-proj-") || val.startsWith("sk-"))
-            detected = "OpenAI";
-        else if (val.startsWith("xai-")) detected = "xAI";
-        else if (val.startsWith("AIza")) detected = "Google";
+            detected = "OPENAI";
+        else if (val.startsWith("xai-")) detected = "XAI";
+        else if (val.startsWith("AIza")) detected = "GOOGLE";
 
-        if (detected && detected !== selectedProvider) {
-            setSelectedProvider(detected);
+        if (detected && detected !== selectedProvider && detected in PROVIDER_LABEL) {
+            setSelectedProvider(detected as Provider);
         }
     };
 
     const handleProviderChange = (val: string) => {
-        setSelectedProvider(val);
+        setSelectedProvider((val as Provider) || "");
     };
 
-    const handleSaveKey = () => {
+    const handleSaveKey = async () => {
         if (!newKeyName || !newKeyValue || !selectedProvider) return;
 
-        const keyMasked =
-            newKeyValue.length > 10
-                ? newKeyValue.substring(0, 4) + "..." + newKeyValue.slice(-4)
-                : "sk-...";
-
-        setApiKeys([
-            ...apiKeys.filter((k) => k.provider !== selectedProvider),
-            {
-                id: Math.random().toString(),
+        setIsSaving(true);
+        setError("");
+        try {
+            await createApiKey({
+                key: newKeyValue,
                 name: newKeyName,
-                keyMasked,
                 provider: selectedProvider,
-            },
-        ]);
-
-        setNewKeyName("");
-        setNewKeyValue("");
-        setSelectedProvider("");
-        setShowKey(false);
+            });
+            setNewKeyName("");
+            setNewKeyValue("");
+            setSelectedProvider("");
+            setShowKey(false);
+            await loadApiKeys();
+        } catch (err) {
+            setError(
+                err instanceof Error
+                    ? err.message
+                    : "Failed to save API key.",
+            );
+        } finally {
+            setIsSaving(false);
+        }
     };
 
-    const handleDeleteKey = (id: string) => {
-        setApiKeys(apiKeys.filter((k) => k.id !== id));
+    const handleDeleteKey = async (id: string) => {
+        setError("");
+        try {
+            await deleteApiKey(id);
+            await loadApiKeys();
+        } catch (err) {
+            setError(
+                err instanceof Error
+                    ? err.message
+                    : "Failed to delete API key.",
+            );
+        }
     };
 
     return (
@@ -95,6 +163,12 @@ const Settings = () => {
                             Configure your AI preferences and API access.
                         </p>
                     </header>
+
+                    {error && (
+                        <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+                            {error}
+                        </div>
+                    )}
 
                     <div>
                         <div className="flex items-start gap-3 text-sm text-gray-400 bg-accent-blue/5 p-4 rounded-xl border border-accent-blue/10">
@@ -195,8 +269,8 @@ const Settings = () => {
                                             Select a provider...
                                         </option>
                                         {PROVIDERS.map((p) => (
-                                            <option key={p} value={p}>
-                                                {p}
+                                            <option key={p.value} value={p.value}>
+                                                {p.label}
                                             </option>
                                         ))}
                                     </select>
@@ -207,14 +281,17 @@ const Settings = () => {
                                 <button
                                     onClick={handleSaveKey}
                                     disabled={
+                                        isSaving ||
                                         !newKeyName ||
                                         !newKeyValue ||
                                         !selectedProvider
                                     }
                                     className="bg-accent-blue hover:bg-blue-600 disabled:opacity-50 disabled:bg-gray-700 disabled:cursor-not-allowed text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 justify-center shrink-0 w-full sm:w-auto"
                                 >
-                                    <Plus className="w-4 h-4" /> Save Key
-                                    Configuration
+                                    <Plus className="w-4 h-4" />
+                                    {isSaving
+                                        ? "Saving..."
+                                        : "Save Key Configuration"}
                                 </button>
                             </div>
                         </div>
@@ -224,11 +301,15 @@ const Settings = () => {
                             <h3 className="text-md font-medium text-gray-300 flex items-center gap-2 mb-4">
                                 Saved Keys
                                 <span className="px-2 py-0.5 rounded-full bg-white/10 text-xs font-mono">
-                                    {apiKeys.length}
+                                    {apiKeyCount}
                                 </span>
                             </h3>
 
-                            {apiKeys.length > 0 ? (
+                            {isLoading ? (
+                                <div className="p-8 text-center bg-white/1 border border-white/5 border-dashed rounded-xl text-sm text-gray-400">
+                                    Loading API keys...
+                                </div>
+                            ) : apiKeys.length > 0 ? (
                                 apiKeys.map((key) => (
                                     <div
                                         key={key.id}

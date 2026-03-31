@@ -9,15 +9,27 @@ import {
     GitBranch,
     Check,
 } from "lucide-react";
+import {
+    registerUser,
+    sendVerificationCode,
+    verifyEmailCode,
+} from "../lib/auth";
 
 const SignUp = () => {
     const navigate = useNavigate();
     const [name, setName] = useState("");
+    const [username, setUsername] = useState("");
     const [email, setEmail] = useState("");
+    const [verificationCode, setVerificationCode] = useState("");
     const [password, setPassword] = useState("");
     const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState("");
+    const [message, setMessage] = useState("");
+    const [isCodeSent, setIsCodeSent] = useState(false);
+    const [isEmailVerified, setIsEmailVerified] = useState(false);
+    const [isSendingCode, setIsSendingCode] = useState(false);
+    const [isVerifyingCode, setIsVerifyingCode] = useState(false);
 
     const passwordChecks = [
         { label: "At least 8 characters", met: password.length >= 8 },
@@ -27,24 +39,93 @@ const SignUp = () => {
 
     const allChecksMet = passwordChecks.every((c) => c.met);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!name || !email || !password) {
+        if (!name || !username || !email || !password) {
             setError("Please fill in all fields.");
+            return;
+        }
+        if (!isEmailVerified) {
+            setError("Verify your email before creating an account.");
             return;
         }
         if (!allChecksMet) {
             setError("Password does not meet all requirements.");
             return;
         }
+
         setError("");
+        setMessage("");
         setIsLoading(true);
 
-        // Simulate sign up
-        setTimeout(() => {
+        try {
+            await registerUser({
+                fullname: name,
+                username,
+                email,
+                password,
+            });
+
+            navigate("/signin");
+        } catch (err) {
+            setError(
+                err instanceof Error
+                    ? err.message
+                    : "Unable to register. Please try again.",
+            );
+        } finally {
             setIsLoading(false);
-            navigate("/dashboard");
-        }, 1500);
+        }
+    };
+
+    const handleSendCode = async () => {
+        if (!email) {
+            setError("Please enter your email first.");
+            return;
+        }
+
+        setError("");
+        setMessage("");
+        setIsSendingCode(true);
+
+        try {
+            await sendVerificationCode(email);
+            setIsCodeSent(true);
+            setMessage("Verification code sent to your email.");
+        } catch (err) {
+            setError(
+                err instanceof Error
+                    ? err.message
+                    : "Could not send verification code.",
+            );
+        } finally {
+            setIsSendingCode(false);
+        }
+    };
+
+    const handleVerifyCode = async () => {
+        if (!email || !verificationCode) {
+            setError("Enter email and verification code.");
+            return;
+        }
+
+        setError("");
+        setMessage("");
+        setIsVerifyingCode(true);
+
+        try {
+            await verifyEmailCode(email, verificationCode);
+            setIsEmailVerified(true);
+            setMessage("Email verified successfully.");
+        } catch (err) {
+            setError(
+                err instanceof Error
+                    ? err.message
+                    : "Verification failed.",
+            );
+        } finally {
+            setIsVerifyingCode(false);
+        }
     };
 
     return (
@@ -93,6 +174,16 @@ const SignUp = () => {
                         </motion.div>
                     )}
 
+                    {message && (
+                        <motion.div
+                            initial={{ opacity: 0, y: -8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="mb-6 p-3 rounded-lg bg-green-500/10 border border-green-500/20 text-green-400 text-sm text-center"
+                        >
+                            {message}
+                        </motion.div>
+                    )}
+
                     <form onSubmit={handleSubmit} className="space-y-5">
                         <div className="space-y-1.5">
                             <label className="text-sm font-medium text-gray-300">
@@ -110,6 +201,20 @@ const SignUp = () => {
 
                         <div className="space-y-1.5">
                             <label className="text-sm font-medium text-gray-300">
+                                Username
+                            </label>
+                            <input
+                                type="text"
+                                value={username}
+                                onChange={(e) => setUsername(e.target.value)}
+                                placeholder="johndoe"
+                                className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-blue/50 focus:ring-1 focus:ring-accent-blue/50 transition-all"
+                                autoComplete="username"
+                            />
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <label className="text-sm font-medium text-gray-300">
                                 Email
                             </label>
                             <input
@@ -120,6 +225,41 @@ const SignUp = () => {
                                 className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-blue/50 focus:ring-1 focus:ring-accent-blue/50 transition-all"
                                 autoComplete="email"
                             />
+                            <div className="flex gap-2">
+                                <input
+                                    type="text"
+                                    value={verificationCode}
+                                    onChange={(e) =>
+                                        setVerificationCode(e.target.value)
+                                    }
+                                    placeholder="Verification code"
+                                    className="flex-1 bg-[#111] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-blue/50"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={handleSendCode}
+                                    disabled={isSendingCode || isCodeSent}
+                                    className="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/15 disabled:opacity-50 text-xs font-medium"
+                                >
+                                    {isSendingCode
+                                        ? "Sending..."
+                                        : isCodeSent
+                                          ? "Sent"
+                                          : "Send Code"}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleVerifyCode}
+                                    disabled={isVerifyingCode || isEmailVerified}
+                                    className="px-3 py-2 rounded-lg bg-accent-blue hover:bg-blue-600 disabled:opacity-50 text-xs font-medium"
+                                >
+                                    {isVerifyingCode
+                                        ? "Verifying..."
+                                        : isEmailVerified
+                                          ? "Verified"
+                                          : "Verify"}
+                                </button>
+                            </div>
                         </div>
 
                         <div className="space-y-1.5">

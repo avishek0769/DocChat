@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Sidebar } from "../components/Sidebar";
 import { Zap, TrendingUp, Key, Calendar, ArrowUpRight, DollarSign, MessageSquare, Info } from "lucide-react";
 import {
@@ -12,6 +12,12 @@ import {
 } from 'chart.js';
 import type { TooltipItem } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
+import {
+    getApiKeyCount,
+    getChats,
+    getLifetimeTokens,
+    getTokensByGroup,
+} from "../lib/api";
 
 ChartJS.register(
   CategoryScale,
@@ -22,71 +28,90 @@ ChartJS.register(
   Legend
 );
 
-// Mock Data for Usage
-const USAGE_DATA = {
-  day: [
-    { label: "Mon", openai: 45000, anthropic: 20000, google: 5000 },
-    { label: "Tue", openai: 55000, anthropic: 25000, google: 10000 },
-    { label: "Wed", openai: 80000, anthropic: 40000, google: 15000 },
-    { label: "Thu", openai: 60000, anthropic: 30000, google: 10000 },
-    { label: "Fri", openai: 90000, anthropic: 45000, google: 20000 },
-    { label: "Sat", openai: 30000, anthropic: 10000, google: 5000 },
-    { label: "Sun", openai: 25000, anthropic: 15000, google: 5000 },
-  ],
-  week: [
-    { label: "Week 1", openai: 300000, anthropic: 150000, google: 50000 },
-    { label: "Week 2", openai: 250000, anthropic: 120000, google: 40000 },
-    { label: "Week 3", openai: 450000, anthropic: 200000, google: 60000 },
-    { label: "Week 4", openai: 200000, anthropic: 180000, google: 50000 },
-  ],
-  month: [
-    { label: "Sep", openai: 450000, anthropic: 200000, google: 50000 },
-    { label: "Oct", openai: 600000, anthropic: 350000, google: 100000 },
-    { label: "Nov", openai: 850000, anthropic: 400000, google: 150000 },
-    { label: "Dec", openai: 900000, anthropic: 250000, google: 50000 },
-    { label: "Jan", openai: 750000, anthropic: 500000, google: 150000 },
-    { label: "Feb", openai: 1200000, anthropic: 650000, google: 200000 },
-  ]
+type UsagePoint = {
+    period: string;
+    totalInput: number;
+    totalOutput: number;
 };
 
-const TOP_CHATS_USAGE = [
-  { name: "React Documentation", tokens: 845000, cost: "$8.45", color: "bg-accent-blue" },
-  { name: "Tailwind CSS v4", tokens: 420000, cost: "$4.20", color: "bg-purple-500" },
-  { name: "Stripe API Reference", tokens: 125000, cost: "$1.25", color: "bg-green-500" },
-];
+const formatTokens = (tokens: number) => {
+    if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(1)}M`;
+    if (tokens >= 1000) return `${(tokens / 1000).toFixed(1)}k`;
+    return `${tokens}`;
+};
 
 export const Usage = () => {
     const [timeframe, setTimeframe] = useState<"day" | "week" | "month">("month");
+    const [usagePoints, setUsagePoints] = useState<UsagePoint[]>([]);
+    const [lifetimeTotal, setLifetimeTotal] = useState(0);
+    const [apiKeyCount, setApiKeyCount] = useState(0);
+    const [topChats, setTopChats] = useState<Array<{ name: string; tokens: number; cost: string; color: string }>>([]);
+    const [error, setError] = useState("");
 
-    const currentData = USAGE_DATA[timeframe];
+    useEffect(() => {
+        const loadUsage = async () => {
+            setError("");
+            try {
+                const [grouped, lifetime, keys, chats] = await Promise.all([
+                    getTokensByGroup(timeframe),
+                    getLifetimeTokens(),
+                    getApiKeyCount(),
+                    getChats(),
+                ]);
+                setUsagePoints(grouped || []);
+                const input = lifetime?._sum?.inputTokens || 0;
+                const output = lifetime?._sum?.outputTokens || 0;
+                setLifetimeTotal(input + output);
+                setApiKeyCount(keys.count || 0);
+
+                const ranked = [...(chats || [])]
+                    .map((chat) => ({
+                        name: chat.name,
+                        tokens: chat.totalUsage?.total || 0,
+                    }))
+                    .sort((a, b) => b.tokens - a.tokens)
+                    .slice(0, 3)
+                    .map((item, idx) => ({
+                        ...item,
+                        cost: `$${(item.tokens / 100000).toFixed(2)}`,
+                        color:
+                            idx === 0
+                                ? "bg-accent-blue"
+                                : idx === 1
+                                  ? "bg-purple-500"
+                                  : "bg-green-500",
+                    }));
+                setTopChats(ranked);
+            } catch (err) {
+                setError(
+                    err instanceof Error ? err.message : "Failed to load usage data.",
+                );
+            }
+        };
+
+        loadUsage();
+    }, [timeframe]);
     
     // Chart.js Data & Options configurations
     const chartData = useMemo(() => ({
-        labels: currentData.map((d) => d.label),
+        labels: usagePoints.map((d) => new Date(d.period).toLocaleDateString()),
         datasets: [
             {
-                label: "OpenAI",
-                data: currentData.map((d) => d.openai),
+                label: "Input Tokens",
+                data: usagePoints.map((d) => d.totalInput),
                 backgroundColor: "rgba(34, 197, 94, 0.9)", // green-500
                 borderRadius: 4,
                 barThickness: 32,
             },
             {
-                label: "Anthropic",
-                data: currentData.map((d) => d.anthropic),
+                label: "Output Tokens",
+                data: usagePoints.map((d) => d.totalOutput),
                 backgroundColor: "rgba(168, 85, 247, 0.9)", // purple-500
                 borderRadius: 4,
                 barThickness: 32,
             },
-            {
-                label: "Google",
-                data: currentData.map((d) => d.google),
-                backgroundColor: "rgba(59, 130, 246, 0.9)", // blue-500
-                borderRadius: 4,
-                barThickness: 32,
-            },
         ],
-    }), [currentData]);
+    }), [usagePoints]);
 
     const chartOptions = useMemo(() => ({
         responsive: true,
@@ -195,6 +220,12 @@ export const Usage = () => {
                         </div>
                     </header>
 
+                    {error && (
+                        <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+                            {error}
+                        </div>
+                    )}
+
                     {/* Quick Stats */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                         <div className="p-6 rounded-xl bg-white/2 border border-white/5 relative overflow-hidden group hover:border-white/10 transition-colors">
@@ -205,10 +236,8 @@ export const Usage = () => {
                                 </div>
                             </div>
                             <div>
-                                <h3 className="text-3xl font-bold text-white mb-2">2.05M</h3>
-                                <p className="text-xs text-green-400 flex items-center gap-1.5 font-medium">
-                                    <TrendingUp className="w-3.5 h-3.5" /> +15.5% from last month
-                                </p>
+                                <h3 className="text-3xl font-bold text-white mb-2">{formatTokens(lifetimeTotal)}</h3>
+                                <p className="text-xs text-gray-500 font-medium">Lifetime token usage</p>
                             </div>
                         </div>
 
@@ -220,9 +249,9 @@ export const Usage = () => {
                                 </div>
                             </div>
                             <div>
-                                <h3 className="text-3xl font-bold text-white mb-2">3</h3>
+                                <h3 className="text-3xl font-bold text-white mb-2">{apiKeyCount}</h3>
                                 <p className="text-xs text-gray-500 font-medium">
-                                    Across 3 different providers
+                                    Active keys in your account
                                 </p>
                             </div>
                         </div>
@@ -235,9 +264,9 @@ export const Usage = () => {
                                 </div>
                             </div>
                             <div>
-                                <h3 className="text-3xl font-bold text-white mb-2">$18.75</h3>
+                                <h3 className="text-3xl font-bold text-white mb-2">${(lifetimeTotal / 100000).toFixed(2)}</h3>
                                 <p className="text-xs text-gray-500 flex items-center gap-1.5 hover:text-accent-blue cursor-pointer transition-colors w-max font-medium">
-                                    View provider dashboards <ArrowUpRight className="w-3.5 h-3.5" />
+                                    Estimated by token usage <ArrowUpRight className="w-3.5 h-3.5" />
                                 </p>
                             </div>
                         </div>
@@ -269,7 +298,7 @@ export const Usage = () => {
                                 </div>
                             </div>
                             
-                            <div className="flex-1 w-full min-h-[300px]">
+                            <div className="flex-1 w-full min-h-75">
                                 <Bar data={chartData} options={chartOptions} />
                             </div>
                             
@@ -289,7 +318,7 @@ export const Usage = () => {
                             </h3>
 
                             <div className="space-y-6 flex-1">
-                                {TOP_CHATS_USAGE.map((chat, i) => (
+                                {topChats.map((chat, i) => (
                                     <div key={i} className="space-y-2.5">
                                         <div className="flex justify-between items-center text-sm">
                                             <span className="font-medium text-gray-200 truncate pr-2" title={chat.name}>{chat.name}</span>
@@ -298,7 +327,7 @@ export const Usage = () => {
                                         <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden border border-white/5">
                                             <div 
                                                 className={`h-full ${chat.color} rounded-full`} 
-                                                style={{ width: `${(chat.tokens / 850000) * 100}%` }}
+                                                style={{ width: `${Math.min(100, (chat.tokens / Math.max(1, topChats[0]?.tokens || 1)) * 100)}%` }}
                                             />
                                         </div>
                                         <div className="flex justify-between items-center text-xs">
