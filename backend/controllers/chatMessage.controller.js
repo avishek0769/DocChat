@@ -42,33 +42,57 @@ const getAvailableModels = asyncHandler(async (req, res) => {
 
 const sendMessage = asyncHandler(async (req, res) => {
     const { userPrompt, model, provider, chatId } = req.body;
-    const apiKey = await prisma.apiKey.findFirst({
-        where: {
-            userId: req.user.id,
-            provider
-        }
-    })
+
     const chat = await prisma.chat.findUnique({
         where: { id: chatId }
     })
-
     if (!chat) {
         throw new ApiError(404, "Chat not found.");
     }
-    if (!apiKey) {
-        throw new ApiError(400, "Invalid API key ID.");
+
+    let openai;
+    let modelId = model;
+    let apiKeyId = null;
+
+    if (provider == "DEFAULT") {
+        if(model === "default-1") modelId = "qwen/qwen3.6-plus-preview:free";
+        else if (model === "default-2") modelId = "nvidia/nemotron-3-super-120b-a12b:free";
+        else throw new ApiError(400, "Invalid model selection for default provider.");
+
+        openai = new OpenAI({
+            baseURL: "https://openrouter.ai/api/v1",
+            apiKey: process.env.OPENROUTER_LLM_API_KEY
+        })
     }
-    if (apiKey.userId !== req.user.id) {
-        throw new ApiError(403, "You do not have access to this API key.");
-    }
-    if (!LLM_MODELS[apiKey.provider]?.includes(model)) {
-        throw new ApiError(400, "Invalid model for the selected API key.");
+    else {
+        const apiKey = await prisma.apiKey.findFirst({
+            where: {
+                userId: req.user.id,
+                provider
+            }
+        })
+        apiKeyId = apiKey.id;
+
+        if (!apiKey) {
+            throw new ApiError(400, "Invalid API key ID.");
+        }
+        if (apiKey.userId !== req.user.id) {
+            throw new ApiError(403, "You do not have access to this API key.");
+        }
+        if (!LLM_MODELS[apiKey.provider]?.includes(model)) {
+            throw new ApiError(400, "Invalid model for the selected API key.");
+        }
+
+        openai = new OpenAI({
+            baseURL: PROVIDERS_BASE_URLS[apiKey.provider],
+            apiKey: decryptApiKey(apiKey.encryptedKey, apiKey.iv, apiKey.tag)
+        })
     }
 
     const userPromptEmbeddings = await generateVectorEmbeddings(userPrompt);
     const relevantSources = await qdrant.query(chat.collectionName, {
         query: userPromptEmbeddings,
-        limit: 3,
+        limit: 5,
         with_payload: true
     });
 
@@ -79,22 +103,16 @@ const sendMessage = asyncHandler(async (req, res) => {
     systemPrompt += "Answer the user's question based on the above sources. If you don't know the answer, say you don't know. Be concise and to the point. Use Markdown for formatting. Wrap all code snippets (if any) in triple backticks with the language identifier (e.g., ```javascript).";
     // console.log(systemPrompt);
 
-    const openai = new OpenAI({
-        baseURL: PROVIDERS_BASE_URLS[apiKey.provider],
-        apiKey: decryptApiKey(apiKey.encryptedKey, apiKey.iv, apiKey.tag)
-    })
-
-    const memoryFetched = await memory.search(userPrompt, { user_id: req.user.id, limit: 2 });
+    const memoryFetched = await memory.search(userPrompt, { user_id: req.user.id, limit: 5 });
     if (memoryFetched.length) {
         systemPrompt += "\n\nAlso consider the following previous interactions with the user that are relevant to the current question:\n\n";
         memoryFetched.forEach((item, index) => {
-            console.log("Memory", item)
-            systemPrompt += `Interaction ${index + 1}:\nUser: ${item.metadata.user_prompt}\nAssistant: ${item.metadata.assistant_response}\n\n`;
+            systemPrompt += `User Context: ${item.memory} \n\n`;
         })
     }
 
     const stream = await openai.chat.completions.create({
-        model,
+        model: modelId,
         messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt }
@@ -161,14 +179,20 @@ const sendMessage = asyncHandler(async (req, res) => {
             }))
         })
 
-        await prisma.usageEvents.create({
-            data: {
-                userId: req.user.id,
-                messageId: chatMessage.id,
-                apikeyId: apiKey.id,
-                inputTokens,
-                outputTokens,
+        let usageEventData = {
+            userId: req.user.id,
+            messageId: chatMessage.id,
+            inputTokens,
+            outputTokens,
+        }
+        if (model != "default" && provider != "DEFAULT" && apiKeyId) {
+            usageEventData = {
+                ...usageEventData,
+                apikeyId: apiKeyId
             }
+        }
+        await prisma.usageEvents.create({
+            data: usageEventData
         })
     }
 })

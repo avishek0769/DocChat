@@ -54,7 +54,7 @@ model ChatSource {
     totalPages       Int?           @map("total_pages")
     pagesIndexed     DocumentPage[]
     chats            Chat[]         @relation("ChatToChatSource")
-    collectionName   String         @map("collection_name") @default("")
+    collectionName   String         @default("") @map("collection_name")
     createdAt        DateTime       @default(now()) @map("created_at")
 }
 
@@ -103,11 +103,11 @@ model UsageEvents {
     id           String      @id @unique @default(uuid())
     userId       String      @map("user_id")
     messageId    String      @map("message_id")
-    apikeyId     String      @map("apikey_id")
+    apikeyId     String?     @map("apikey_id")
     inputTokens  Int         @map("input_tokens")
     outputTokens Int         @map("output_tokens")
     timestamp    DateTime    @default(now())
-    apiKey       ApiKey      @relation(fields: [apikeyId], references: [id])
+    apiKey       ApiKey?     @relation(fields: [apikeyId], references: [id])
     message      ChatMessage @relation(fields: [messageId], references: [id])
     user         User        @relation(fields: [userId], references: [id])
 }
