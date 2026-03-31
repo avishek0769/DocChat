@@ -219,6 +219,7 @@ const sendMessage = asyncHandler(async (req, res) => {
             messageId: chatMessage.id,
             inputTokens,
             outputTokens,
+            chatId: chat.id
         }
         if (model != "default" && provider != "DEFAULT" && apiKeyId) {
             usageEventData = {

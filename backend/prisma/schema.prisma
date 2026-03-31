@@ -37,14 +37,16 @@ model User {
 }
 
 model Chat {
-    id             String       @id @unique @default(uuid())
+    id             String        @id @unique @default(uuid())
     name           String
-    userId         String       @map("user_id")
-    status         ChatStatus   @default(QUEUED)
-    createdAt      DateTime     @default(now()) @map("created_at")
-    collectionName String       @map("collection_name")
-    createdBy      User         @relation(fields: [userId], references: [id])
-    chatSources    ChatSource[] @relation("ChatToChatSource")
+    userId         String        @map("user_id")
+    status         ChatStatus    @default(QUEUED)
+    createdAt      DateTime      @default(now()) @map("created_at")
+    collectionName String        @map("collection_name")
+    createdBy      User          @relation(fields: [userId], references: [id])
+    chatSources    ChatSource[]  @relation("ChatToChatSource")
+    messages       ChatMessage[]
+    usageEvents    UsageEvents[]
 }
 
 model ChatSource {
@@ -75,6 +77,7 @@ model ChatMessage {
     createdAt    DateTime            @default(now()) @map("created_at")
     sourceChunks ChatMessageSource[]
     usageEvents  UsageEvents[]
+    chat         Chat                @relation(fields: [chatId], references: [id])
 }
 
 model ChatMessageSource {
@@ -84,7 +87,7 @@ model ChatMessageSource {
     pageUrl       String      @map("page_url")
     chatMessageId String      @map("chat_message_id")
     chatMessage   ChatMessage @relation(fields: [chatMessageId], references: [id])
-    score         Int         @map("score") @default(0)
+    score         Int         @default(0) @map("score")
 }
 
 model ApiKey {
@@ -105,10 +108,12 @@ model UsageEvents {
     userId       String      @map("user_id")
     messageId    String      @map("message_id")
     apikeyId     String?     @map("apikey_id")
+    chatId       String     @map("chat_id")
     inputTokens  Int         @map("input_tokens")
     outputTokens Int         @map("output_tokens")
     timestamp    DateTime    @default(now())
     apiKey       ApiKey?     @relation(fields: [apikeyId], references: [id])
     message      ChatMessage @relation(fields: [messageId], references: [id])
     user         User        @relation(fields: [userId], references: [id])
+    chat         Chat        @relation(fields: [chatId], references: [id])
 }
