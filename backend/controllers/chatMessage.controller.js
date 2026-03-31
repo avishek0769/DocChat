@@ -55,7 +55,7 @@ const sendMessage = asyncHandler(async (req, res) => {
     let apiKeyId = null;
 
     if (provider == "DEFAULT") {
-        if(model === "default-1") modelId = "qwen/qwen3.6-plus-preview:free";
+        if (model === "default-1") modelId = "qwen/qwen3.6-plus-preview:free";
         else if (model === "default-2") modelId = "nvidia/nemotron-3-super-120b-a12b:free";
         else throw new ApiError(400, "Invalid model selection for default provider.");
 
@@ -97,31 +97,58 @@ const sendMessage = asyncHandler(async (req, res) => {
         score_threshold: 0.5
     });
 
-    let systemPrompt = "You are a helpful assistant for answering questions related to the following sources: \n\n";
-    if(relevantSources.points?.length) {
-        relevantSources.points.forEach((point, index) => {
-            systemPrompt += `Source ${index + 1}: \nContent: ${point.payload.body}\n\n`;
-        });
-        systemPrompt += "Answer the user's question based on the above sources. If you don't know the answer, say you don't know. Be concise and to the point. Use Markdown for formatting. Wrap all code snippets (if any) in triple backticks with the language identifier (e.g., ```javascript).";
+    // Dynamic System Instructions
+    let systemInstructions = "You are a helpful assistant for answering questions. \n";
+    if (relevantSources.points?.length) {
+        systemInstructions += "Use the provided documentation sources to answer. If the answer isn't in the sources, say you don't know. Be concise, use Markdown, and wrap code in triple backticks.";
     }
     else {
-        systemPrompt += " Answer the user's general question directly without specific documentation.";
+        systemInstructions += "Answer the user's greeting or general question directly.";
     }
 
+    // Source Data (if any)
+    let sourceContext = "";
+    if (relevantSources.points?.length) {
+        sourceContext = "\n--- DOCUMENTATION SOURCES ---\n";
+        relevantSources.points.forEach((point, index) => {
+            sourceContext += `Source ${index + 1}:\n${point.payload.body}\n\n`;
+        });
+    }
+
+    // Long-term Memory (Mem0)
+    let memoryContext = "";
     const memoryFetched = await memory.search(userPrompt, { user_id: req.user.id, limit: 5 });
     if (memoryFetched.length) {
-        systemPrompt += "\n\nAlso consider the following previous interactions with the user that are relevant to the current question:\n\n";
-        memoryFetched.forEach((item, index) => {
-            systemPrompt += `User Context: ${item.memory} \n\n`;
-        })
+        memoryContext = "\n--- RELEVANT PAST USER FACTS ---\n";
+        memoryFetched.forEach((item) => {
+            memoryContext += `- ${item.memory}\n`;
+        });
     }
 
+    // Messages Array for the LLM
+    const messagesForLLM = [
+        {
+            role: "system",
+            content: `${systemInstructions}\n${sourceContext}\n${memoryContext}`
+        }
+    ];
+
+    // Past messages in the chat to maintain context
+    const messages = await prisma.chatMessage.findMany({
+        where: { chatId },
+        take: -10,
+        orderBy: { createdAt: "asc" }
+    })
+    messages.forEach(msg => {
+        if (msg.userPrompt) messagesForLLM.push({ role: "user", content: msg.userPrompt });
+        if (msg.llmResponse) messagesForLLM.push({ role: "assistant", content: msg.llmResponse });
+    })
+    messagesForLLM.push({ role: "user", content: userPrompt });
+
+    // Stream response from the LLM
     const stream = await openai.chat.completions.create({
         model: modelId,
-        messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userPrompt }
-        ],
+        messages: messagesForLLM,
         stream: true,
         stream_options: { include_usage: true },
         max_completion_tokens: 2000
@@ -175,7 +202,7 @@ const sendMessage = asyncHandler(async (req, res) => {
             }
         })
 
-        if(relevantSources.points?.length) {
+        if (relevantSources.points?.length) {
             await prisma.chatMessageSource.createMany({
                 data: relevantSources.points.map(point => ({
                     chunkText: point.payload.body,
