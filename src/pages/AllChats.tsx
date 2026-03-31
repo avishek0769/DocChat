@@ -22,11 +22,13 @@ type ChatRow = {
     status: string;
     pages: number;
     tokens: number;
-    updatedAt: string;
+    createdAt: string;
 };
 
 const fromNow = (iso: string) => {
-    const diff = Date.now() - new Date(iso).getTime();
+    const ts = new Date(iso).getTime();
+    if (!Number.isFinite(ts)) return "Just now";
+    const diff = Date.now() - ts;
     const mins = Math.floor(diff / 60000);
     if (mins < 1) return "Just now";
     if (mins < 60) return `${mins} min ago`;
@@ -46,7 +48,7 @@ const mapChat = (chat: ChatItem): ChatRow => {
         status: String(chat.status || "QUEUED").toLowerCase(),
         pages,
         tokens: chat.totalUsage?.total || 0,
-        updatedAt: fromNow(chat.updatedAt),
+        createdAt: fromNow(chat.createdAt),
     };
 };
 
@@ -234,7 +236,7 @@ const AllChats = () => {
                                             </div>
                                             <div className="flex items-center gap-1.5 text-xs text-gray-400 w-24">
                                                 <Clock className="w-3.5 h-3.5" />{" "}
-                                                {chat.updatedAt}
+                                                {chat.createdAt}
                                             </div>
                                         </div>
 

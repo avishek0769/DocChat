@@ -329,6 +329,22 @@ const Settings = () => {
                                                     {key.keyMasked}
                                                 </span>
                                             </div>
+                                            <div className="flex flex-wrap gap-1.5 pt-1">
+                                                {(key.models || []).length > 0 ? (
+                                                    key.models?.map((model) => (
+                                                        <span
+                                                            key={model}
+                                                            className="px-2 py-0.5 rounded text-xs bg-white/5 border border-white/10 text-gray-300"
+                                                        >
+                                                            {model}
+                                                        </span>
+                                                    ))
+                                                ) : (
+                                                    <span className="text-xs text-gray-500">
+                                                        No models configured for this key.
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
 
                                         <button

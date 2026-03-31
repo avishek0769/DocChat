@@ -14,7 +14,6 @@ import {
     CheckCircle2,
     X,
     RefreshCw,
-    Zap,
 } from "lucide-react";
 import {
     createChat,
@@ -32,7 +31,7 @@ interface Chat {
     pages: number;
     totalPages: number;
     tokens: number;
-    updatedAt: string;
+    createdAt: string;
 }
 
 interface ApiKeyEntry {
@@ -44,7 +43,9 @@ interface ApiKeyEntry {
 }
 
 const fromNow = (iso: string) => {
-    const diff = Date.now() - new Date(iso).getTime();
+    const ts = new Date(iso).getTime();
+    if (!Number.isFinite(ts)) return "Just now";
+    const diff = Date.now() - ts;
     const mins = Math.floor(diff / 60000);
     if (mins < 1) return "Just now";
     if (mins < 60) return `${mins} min ago`;
@@ -65,7 +66,7 @@ const mapBackendChat = (chat: ChatItem): Chat => {
         pages: pagesIndexed,
         totalPages: source?.totalPages || pagesIndexed || 0,
         tokens: chat.totalUsage?.total || 0,
-        updatedAt: fromNow(chat.updatedAt),
+        createdAt: fromNow(chat.createdAt),
     };
 };
 
@@ -241,7 +242,7 @@ const Dashboard = () => {
                                 <span className="text-white">
                                     {chats.length}
                                 </span>{" "}
-                                / 5 chats used
+                                chats
                             </div>
                             <button
                                 onClick={() => setIsModalOpen(true)}
@@ -259,7 +260,7 @@ const Dashboard = () => {
                     )}
 
                     {/* Quick Insights */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {[
                             {
                                 label: "Total Chats",
@@ -287,21 +288,6 @@ const Dashboard = () => {
                                 ),
                             },
                             {
-                                label: "Tokens Used (Month)",
-                                value: "1.2M",
-                                icon: (
-                                    <Zap className="w-5 h-5 text-indigo-400" />
-                                ),
-                                action: (
-                                    <button
-                                        onClick={() => navigate("/usage")}
-                                        className="text-xs text-accent-blue hover:text-accent-blue/80 hover:underline mt-1 block"
-                                    >
-                                        View Details
-                                    </button>
-                                ),
-                            },
-                            {
                                 label: (
                                     <span className="flex items-center gap-1.5 relative group/tooltip w-fit">
                                         Total Tokens
@@ -317,6 +303,14 @@ const Dashboard = () => {
                                 value: formatTokens(totalTokensUsed),
                                 icon: (
                                     <Database className="w-5 h-5 text-purple-400" />
+                                ),
+                                action: (
+                                    <button
+                                        onClick={() => navigate("/usage")}
+                                        className="text-xs text-accent-blue hover:text-accent-blue/80 hover:underline mt-1 block"
+                                    >
+                                        View Details
+                                    </button>
                                 ),
                             },
                         ].map((stat, i) => (
@@ -463,7 +457,7 @@ const Dashboard = () => {
                                                     <div className="bg-white/5 rounded-lg p-2 flex flex-col items-center justify-center border border-white/5">
                                                         <Clock className="w-3 h-3 text-gray-400 mb-1" />
                                                         <span className="text-xs font-medium text-gray-300 truncate w-full text-center">
-                                                            {chat.updatedAt}
+                                                            {chat.createdAt}
                                                         </span>
                                                     </div>
                                                 </div>

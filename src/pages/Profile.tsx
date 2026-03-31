@@ -14,8 +14,9 @@ import { getUserProfile } from "../lib/api";
 
 const Profile = () => {
     const navigate = useNavigate();
-    const [name, setName] = useState("Developer");
-    const [email, setEmail] = useState("developer@example.com");
+    const [name, setName] = useState("");
+    const [email, setEmail] = useState("");
+    const [isProfileLoading, setIsProfileLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [saved, setSaved] = useState(false);
     const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -23,16 +24,19 @@ const Profile = () => {
 
     useEffect(() => {
         const loadProfile = async () => {
+            setIsProfileLoading(true);
             try {
                 const profile = await getUserProfile();
-                setName(profile.fullname || profile.username || "Developer");
-                setEmail(profile.email || "developer@example.com");
+                setName(profile.fullname || profile.username || "");
+                setEmail(profile.email || "");
             } catch (err) {
                 setError(
                     err instanceof Error
                         ? err.message
                         : "Failed to load profile.",
                 );
+            } finally {
+                setIsProfileLoading(false);
             }
         };
         loadProfile();
@@ -77,7 +81,9 @@ const Profile = () => {
                         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 mb-8 pb-8 border-b border-white/5">
                             <div className="flex-1">
                                 <h2 className="text-xl font-semibold">{name}</h2>
-                                <p className="text-sm text-gray-400">{email}</p>
+                                <p className="text-sm text-gray-400">
+                                    {isProfileLoading ? "Loading profile..." : email || "-"}
+                                </p>
                             </div>
                         </div>
 

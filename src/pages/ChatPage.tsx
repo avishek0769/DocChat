@@ -36,7 +36,6 @@ import {
     Check,
     Code,
     X,
-    Plus,
     Loader2,
     Database,
     Link as LinkIcon,
@@ -46,6 +45,7 @@ import hljs from "highlight.js";
 import "highlight.js/styles/atom-one-dark.css";
 import {
     getApiKeys,
+    getAvailableModels,
     getChatDetails,
     getChatMessages,
     getMessageSources,
@@ -53,56 +53,16 @@ import {
     sendMessageStream,
 } from "../lib/api";
 
-const MOCK_DOCS = {
-    title: "React Docs Assist",
-    url: "https://react.dev/reference",
-    pages: 142,
-    tokensUsed: 845000,
-    lastUpdated: "2 hours ago",
-    status: "ready",
-    tree: [
-        { title: "Getting Started", url: "/learn", isHighlight: false },
-        {
-            title: "Describing the UI",
-            url: "/learn/describing-the-ui",
-            isHighlight: true,
-        },
-        {
-            title: "Adding Interactivity",
-            url: "/learn/adding-interactivity",
-            isHighlight: true,
-        },
-        {
-            title: "Managing State",
-            url: "/learn/managing-state",
-            isHighlight: false,
-        },
-        {
-            title: "Escape Hatches",
-            url: "/learn/escape-hatches",
-            isHighlight: false,
-        },
-    ],
+type CurrentLink = {
+    title: string;
+    url: string;
+    isHighlight: boolean;
 };
 
-const MOCK_SOURCES = [
-    {
-        id: "src_1",
-        title: "useState",
-        url: "https://react.dev/reference/react/useState",
-        snippet:
-            "Call useState at the top level of your component to declare a state variable.\n\n```js\nconst [state, setState] = useState(initialState);\n```\n\nThe `useState` Hook provides those two things: A state variable to retain the data between renders, and a state setter function to update the variable and trigger React to render the component again.",
-        relevance: 98,
-    },
-    {
-        id: "src_2",
-        title: "Adding Interactivity",
-        url: "https://react.dev/learn/adding-interactivity",
-        snippet:
-            "Components often need to change what's on the screen as a result of an interaction. Typing into the form should update the input field, clicking 'next' on an image carousel should change which image is displayed... Components use `state` to remember things.",
-        relevance: 85,
-    },
-];
+type IndexedPage = {
+    pageUrl: string;
+    title?: string | null;
+};
 
 type ModelOption = {
     provider: string;
@@ -114,10 +74,18 @@ export const ChatPage = () => {
     const navigate = useNavigate();
     const { id: chatId = "" } = useParams();
 
-    const [docInfo, setDocInfo] = useState(MOCK_DOCS);
+    const [docInfo, setDocInfo] = useState({
+        title: "Documentation Chat",
+        url: "",
+        pages: 0,
+        tokensUsed: 0,
+        lastUpdated: "-",
+        status: "ready",
+    });
     const [modelOptions, setModelOptions] = useState<ModelOption[]>([]);
     const [selectedModel, setSelectedModel] = useState("");
     const [isPageLoading, setIsPageLoading] = useState(true);
+    const [isMessagesLoading, setIsMessagesLoading] = useState(true);
     const [error, setError] = useState("");
 
     const formatTokens = (tokens: number) => {
@@ -138,22 +106,21 @@ export const ChatPage = () => {
     const [isSourcesLoading, setIsSourcesLoading] = useState(false);
 
     const [isIndexedModalOpen, setIsIndexedModalOpen] = useState(false);
-    const [links, setLinks] = useState<Array<{ title: string; url: string; isHighlight: boolean }>>([]);
-    const [isAddingLink, setIsAddingLink] = useState(false);
-    const [newLinkUrl, setNewLinkUrl] = useState("");
-    const [linkProgress, setLinkProgress] = useState(0);
-    const [scrapeStats, setScrapeStats] = useState({ done: 0, total: 0 });
+    const [currentLinks, setCurrentLinks] = useState<CurrentLink[]>([]);
+    const [indexedPages, setIndexedPages] = useState<IndexedPage[]>([]);
 
     const loadChatPage = async () => {
         if (!chatId) return;
         setIsPageLoading(true);
+        setIsMessagesLoading(true);
         setError("");
         try {
-            const [chatDetails, indexedPages, apiKeyData, messageData] = await Promise.all([
+            const [chatDetails, indexedPageData, apiKeyData, messageData] = await Promise.all([
                 getChatDetails(chatId),
                 getPagesIndexed(chatId),
                 getApiKeys(),
                 getChatMessages(chatId),
+                getAvailableModels().catch(() => ({ models: [] })),
             ]);
 
             const chat = chatDetails.chat;
@@ -162,26 +129,37 @@ export const ChatPage = () => {
                 ...prev,
                 title: chat?.name || prev.title,
                 url: primarySource?.documentationUrl || prev.url,
-                pages: primarySource?._count?.pagesIndexed || indexedPages.pagesIndexed.length || prev.pages,
+                pages:
+                    primarySource?._count?.pagesIndexed ||
+                    indexedPageData.pagesIndexed.length ||
+                    prev.pages,
+                tokensUsed: chat?.totalUsage?.total || 0,
                 lastUpdated: new Date(chat?.updatedAt || Date.now()).toLocaleString(),
             }));
 
-            const pageLinks = (indexedPages.pagesIndexed || []).map((p, idx) => ({
-                title: p.title || `Indexed Page ${idx + 1}`,
-                url: p.pageUrl,
-                isHighlight: false,
-            }));
-            setLinks(
-                pageLinks.length
-                    ? pageLinks
-                    : [
-                          {
-                              title: chat?.name || "Documentation",
-                              url: primarySource?.documentationUrl || "",
-                              isHighlight: false,
-                          },
-                      ],
+            setCurrentLinks(
+                (chat?.chatSources || [])
+                    .map((source) => ({
+                        title: source.documentationUrl,
+                        url: source.documentationUrl,
+                        isHighlight: false,
+                    }))
+                    .filter((link) => Boolean(link.url)),
             );
+            setIndexedPages(indexedPageData.pagesIndexed || []);
+
+            const defaultOptions: ModelOption[] = [
+                {
+                    provider: "OPENAI",
+                    model: "default-1",
+                    label: `Default (Fast) - Qwen 3.6 Plus`,
+                },
+                {
+                    provider: "OPENAI",
+                    model: "default-2",
+                    label: `Default (Best) - Nemotron 120B`,
+                },
+            ];
 
             const dynamicModels = (apiKeyData.apiKeys || []).flatMap((key) =>
                 (key.models || []).map((model) => ({
@@ -191,11 +169,7 @@ export const ChatPage = () => {
                 })),
             );
 
-            const defaults: ModelOption[] = [
-                { provider: "DEFAULT", model: "default-1", label: "Default Model 1" },
-                { provider: "DEFAULT", model: "default-2", label: "Default Model 2" },
-            ];
-            const options = dynamicModels.length ? dynamicModels : defaults;
+            const options = [...defaultOptions, ...dynamicModels];
             setModelOptions(options);
             setSelectedModel((prev) => prev || options[0]?.model || "default-1");
 
@@ -234,10 +208,12 @@ export const ChatPage = () => {
                 });
             }
             setMessages(messagePairs);
+            setIsMessagesLoading(false);
         } catch (err) {
             setError(
                 err instanceof Error ? err.message : "Failed to load chat data.",
             );
+            setIsMessagesLoading(false);
         } finally {
             setIsPageLoading(false);
         }
@@ -246,13 +222,6 @@ export const ChatPage = () => {
     useEffect(() => {
         loadChatPage();
     }, [chatId]);
-
-    const handleAddLink = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!newLinkUrl.trim() || !chatId) return;
-        setError("Adding links from this screen is not supported yet. Create a new chat with the URL.");
-        setNewLinkUrl("");
-    };
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -288,7 +257,7 @@ export const ChatPage = () => {
             modelOptions[0] || {
                 provider: "DEFAULT",
                 model: "default-1",
-                label: "Default Model 1",
+                label: `Default (Fast) - Qwen 3.6 Plus`,
             };
 
         const newUserMessage: Message = {
@@ -456,79 +425,32 @@ export const ChatPage = () => {
                                     Current Links
                                 </h4>
                                 <div className="space-y-1 mb-4">
-                                    {links.map((page, i) => (
+                                    {currentLinks.length > 0 ? (
+                                        currentLinks.map((page, i) => (
+                                            <div
+                                                key={i}
+                                                className="px-3 py-2 rounded-lg text-sm transition-colors border border-transparent text-gray-400"
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <span className="truncate pr-2 text-gray-300">
+                                                        {page.title}
+                                                    </span>
+                                                </div>
+                                                <a
+                                                    href={page.url}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    className="text-sm opacity-60 truncate mt-0.5 font-mono hover:text-accent-blue hover:underline block"
+                                                >
+                                                    {page.url}
+                                                </a>
+                                            </div>
+                                        ))
+                                    ) : (
                                         <div
-                                            key={i}
                                             className="px-3 py-2 rounded-lg text-sm transition-colors border border-transparent text-gray-400"
                                         >
-                                            <div className="flex items-center justify-between">
-                                                <span className="truncate pr-2 text-gray-300">
-                                                    {page.title}
-                                                </span>
-                                            </div>
-                                            <a
-                                                href={page.url}
-                                                target="_blank"
-                                                rel="noreferrer"
-                                                className="text-sm opacity-60 truncate mt-0.5 font-mono hover:text-accent-blue hover:underline block"
-                                            >
-                                                {page.url}
-                                            </a>
-                                        </div>
-                                    ))}
-                                </div>
-
-                                {/* Add Link Section */}
-                                <div className="border-t border-white/5 pt-4">
-                                    <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">
-                                        Add More Links
-                                    </h4>
-                                    <form
-                                        onSubmit={handleAddLink}
-                                        className="flex gap-2"
-                                    >
-                                        <input
-                                            type="url"
-                                            value={newLinkUrl}
-                                            onChange={(e) =>
-                                                setNewLinkUrl(e.target.value)
-                                            }
-                                            placeholder="https://..."
-                                            className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-accent-blue/50"
-                                            disabled={isAddingLink}
-                                            required
-                                        />
-                                        <button
-                                            type="submit"
-                                            disabled={
-                                                isAddingLink ||
-                                                !newLinkUrl.trim()
-                                            }
-                                            className="w-8 h-8 rounded-lg bg-accent-blue text-white flex items-center justify-center hover:bg-blue-600 disabled:opacity-50 transition-colors shrink-0"
-                                        >
-                                            <Plus className="w-4 h-4" />
-                                        </button>
-                                    </form>
-
-                                    {isAddingLink && (
-                                        <div className="mt-4 p-3 bg-white/5 border border-white/10 rounded-lg">
-                                            <div className="flex items-center justify-between text-sm mb-2">
-                                                <span className="text-gray-400 truncate pr-2">
-                                                    Scraping...
-                                                </span>
-                                                <span className="text-accent-blue font-medium">
-                                                    {scrapeStats.done}/
-                                                    {scrapeStats.total} pages
-                                                </span>
-                                            </div>
-                                            <div className="h-1.5 w-full bg-[#0b0b0f] rounded-full overflow-hidden">
-                                                <div
-                                                    className="h-full bg-linear-to-r from-accent-blue to-accent-purple rounded-full transition-all duration-200 ease-out"
-                                                    style={{
-                                                        width: `${linkProgress}%`,
-                                                    }}
-                                                />
-                                            </div>
+                                            No documentation source links found.
                                         </div>
                                     )}
                                 </div>
@@ -623,7 +545,12 @@ export const ChatPage = () => {
                     {/* Chat Messages */}
                     <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8 custom-scrollbar scroll-smooth">
                         <div className="max-w-3xl mx-auto space-y-8 pb-10">
-                            {messages.length === 0 ? (
+                            {isMessagesLoading ? (
+                                <div className="flex flex-col items-center justify-center h-full min-h-[50vh] text-center space-y-3 text-gray-400">
+                                    <Loader2 className="w-6 h-6 animate-spin text-accent-blue" />
+                                    <p className="text-sm">Fetching messages...</p>
+                                </div>
+                            ) : messages.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center h-full min-h-[50vh] text-center space-y-6">
                                     <div className="w-16 h-16 rounded-2xl bg-linear-to-br from-accent-blue/20 to-accent-purple/20 flex items-center justify-center border border-white/10 shadow-2xl shadow-accent-blue/10">
                                         <Bot className="w-8 h-8 text-accent-blue" />
@@ -884,22 +811,22 @@ export const ChatPage = () => {
                                 </button>
                             </div>
                             <div className="flex-1 overflow-y-auto p-6 space-y-3 custom-scrollbar">
-                                {links.map((link, idx) => (
+                                {indexedPages.map((page, idx) => (
                                     <div
-                                        key={`${link.url}-${idx}`}
+                                        key={`${page.pageUrl}-${idx}`}
                                         className="p-4 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 transition-colors"
                                     >
                                         <h3 className="font-semibold text-gray-200 flex items-center gap-2 mb-1">
                                             <FileText className="w-4 h-4 text-accent-blue" />
-                                            {link.title || `Indexed Page ${idx + 1}`}
+                                            {page.title || `Indexed Page ${idx + 1}`}
                                         </h3>
                                         <a
-                                            href={link.url}
+                                            href={page.pageUrl}
                                             target="_blank"
                                             rel="noreferrer"
                                             className="text-sm font-mono text-gray-400 hover:text-accent-blue block truncate ml-6"
                                         >
-                                            {link.url}
+                                            {page.pageUrl}
                                         </a>
                                     </div>
                                 ))}

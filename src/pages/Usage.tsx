@@ -48,6 +48,15 @@ export const Usage = () => {
     const [topChats, setTopChats] = useState<Array<{ name: string; tokens: number; cost: string; color: string }>>([]);
     const [error, setError] = useState("");
 
+    const cycleLabel = useMemo(() => {
+        const now = new Date();
+        const first = new Date(now.getFullYear(), now.getMonth(), 1);
+        const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        const fmt = (d: Date) =>
+            d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+        return `${fmt(first)} - ${fmt(last)}`;
+    }, []);
+
     useEffect(() => {
         const loadUsage = async () => {
             setError("");
@@ -216,7 +225,7 @@ export const Usage = () => {
                         </div>
                         <div className="flex items-center gap-3 bg-white/5 border border-white/10 px-4 py-2 rounded-lg">
                             <Calendar className="w-4 h-4 text-gray-400" />
-                            <span className="text-sm font-medium text-gray-200">Current Cycle: <strong className="text-white">Feb 1 - Feb 28</strong></span>
+                            <span className="text-sm font-medium text-gray-200">Current Cycle: <strong className="text-white">{cycleLabel}</strong></span>
                         </div>
                     </header>
 
@@ -264,9 +273,9 @@ export const Usage = () => {
                                 </div>
                             </div>
                             <div>
-                                <h3 className="text-3xl font-bold text-white mb-2">${(lifetimeTotal / 100000).toFixed(2)}</h3>
-                                <p className="text-xs text-gray-500 flex items-center gap-1.5 hover:text-accent-blue cursor-pointer transition-colors w-max font-medium">
-                                    Estimated by token usage <ArrowUpRight className="w-3.5 h-3.5" />
+                                <h3 className="text-2xl font-bold text-white mb-2">Coming Soon</h3>
+                                <p className="text-xs text-gray-500 font-medium">
+                                    Cost forecasting will be available in an upcoming release.
                                 </p>
                             </div>
                         </div>
