@@ -193,4 +193,18 @@ const getApiKey = asyncHandler(async (req, res) => {
     );
 });
 
-export { addApiKey, listApiKeys, removeApiKey, getApiKey };
+const totalNumberOfApiKeys = asyncHandler(async (req, res) => {
+    const count = await prisma.apiKey.count({
+        where: { userId: req.user.id }
+    });
+
+    res.status(200).json(
+        new ApiResponse(
+            200,
+            { count },
+            "Total number of API keys retrieved successfully",
+        ),
+    );
+});
+
+export { addApiKey, listApiKeys, removeApiKey, getApiKey, totalNumberOfApiKeys };
