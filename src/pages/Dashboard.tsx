@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Sidebar } from "../components/Sidebar";
 
@@ -18,7 +18,7 @@ import {
 import {
     createChat,
     deleteChat,
-    getApiKeys,
+    getChatStatus,
     getChats,
     type ChatItem,
 } from "../lib/api";
@@ -70,6 +70,20 @@ const mapBackendChat = (chat: ChatItem): Chat => {
     };
 };
 
+const normalizeStatus = (status?: string) => {
+    const value = String(status || "QUEUED").toLowerCase();
+    if (value === "queued") return "queued";
+    if (value === "processing") return "processing";
+    if (value === "ready") return "ready";
+    if (value === "failed") return "failed";
+    return "queued";
+};
+
+const clampProgress = (progress?: number) => {
+    if (!Number.isFinite(progress)) return 0;
+    return Math.max(0, Math.min(100, Number(progress)));
+};
+
 const Dashboard = () => {
     const navigate = useNavigate();
     const [chats, setChats] = useState<Chat[]>([]);
@@ -78,14 +92,16 @@ const Dashboard = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState("");
     const [isCreating, setIsCreating] = useState(false);
+    const [chatProgress, setChatProgress] = useState<
+        Record<string, { status: string; progress: number }>
+    >({});
+    const chatsRef = useRef<Chat[]>([]);
+    const chatProgressRef = useRef<Record<string, { status: string; progress: number }>>({});
+    const pollIntervalRef = useRef<number | null>(null);
 
     // New Chat Form State
     const [chatName, setChatName] = useState("");
     const [chatUrl, setChatUrl] = useState("");
-
-    // API Keys State
-    const [apiKeys, setApiKeys] = useState<ApiKeyEntry[]>([]);
-    const [selectedModel, setSelectedModel] = useState("");
 
     // Delete Confirmation
     const [deleteTarget, setDeleteTarget] = useState<Chat | null>(null);
@@ -101,9 +117,8 @@ const Dashboard = () => {
     const loadDashboardData = useCallback(async () => {
         setError("");
         try {
-            const [chatData, keyData] = await Promise.all([getChats(), getApiKeys()]);
+            const chatData = await getChats();
             setChats((chatData || []).map(mapBackendChat));
-            setApiKeys(keyData.apiKeys || []);
         } catch (err) {
             setError(
                 err instanceof Error
@@ -120,11 +135,114 @@ const Dashboard = () => {
     }, [loadDashboardData]);
 
     useEffect(() => {
-        const interval = setInterval(() => {
-            loadDashboardData();
-        }, 6000);
-        return () => clearInterval(interval);
-    }, [loadDashboardData]);
+        chatsRef.current = chats;
+    }, [chats]);
+
+    useEffect(() => {
+        chatProgressRef.current = chatProgress;
+    }, [chatProgress]);
+
+    const pollStatuses = useCallback(async () => {
+            const inFlightChats = chatsRef.current.filter(
+                (chat) =>
+                    normalizeStatus(chatProgressRef.current[chat.id]?.status || chat.status) !==
+                        "ready" &&
+                    normalizeStatus(chatProgressRef.current[chat.id]?.status || chat.status) !==
+                        "failed",
+            );
+
+            if (!inFlightChats.length) {
+                if (pollIntervalRef.current !== null) {
+                    clearInterval(pollIntervalRef.current);
+                    pollIntervalRef.current = null;
+                }
+                return;
+            }
+
+            const statusResults = await Promise.all(
+                inFlightChats.map(async (chat) => {
+                    try {
+                        const statusData = await getChatStatus(chat.id);
+                        return {
+                            id: chat.id,
+                            status: normalizeStatus(statusData.progress?.status),
+                            progress: clampProgress(statusData.progress?.progress),
+                        };
+                    } catch {
+                        return null;
+                    }
+                }),
+            );
+
+            const updates = statusResults.filter(
+                (item): item is { id: string; status: string; progress: number } =>
+                    Boolean(item),
+            );
+
+            if (!updates.length) {
+                return;
+            }
+
+            setChatProgress((prev) => {
+                const next = { ...prev };
+                for (const update of updates) {
+                    next[update.id] = {
+                        status: update.status,
+                        progress: update.progress,
+                    };
+                }
+                return next;
+            });
+
+            setChats((prev) =>
+                prev.map((chat) => {
+                    const update = updates.find((item) => item.id === chat.id);
+                    if (!update) return chat;
+
+                    const estimatedPages =
+                        chat.totalPages > 0
+                            ? Math.round((update.progress / 100) * chat.totalPages)
+                            : chat.pages;
+
+                    const nextPages =
+                        update.status === "ready"
+                            ? chat.totalPages || chat.pages
+                            : Math.max(chat.pages, estimatedPages);
+
+                    return {
+                        ...chat,
+                        status: update.status,
+                        pages: nextPages,
+                    };
+                }),
+            );
+    }, []);
+
+    useEffect(() => {
+        const hasInFlightChats = chats.some(
+            (chat) =>
+                normalizeStatus(chatProgress[chat.id]?.status || chat.status) !== "ready" &&
+                normalizeStatus(chatProgress[chat.id]?.status || chat.status) !== "failed",
+        );
+
+        if (hasInFlightChats && pollIntervalRef.current === null) {
+            pollStatuses();
+            pollIntervalRef.current = window.setInterval(pollStatuses, 3000);
+        }
+
+        if (!hasInFlightChats && pollIntervalRef.current !== null) {
+            clearInterval(pollIntervalRef.current);
+            pollIntervalRef.current = null;
+        }
+    }, [chats, chatProgress, pollStatuses]);
+
+    useEffect(() => {
+        return () => {
+            if (pollIntervalRef.current !== null) {
+                clearInterval(pollIntervalRef.current);
+            }
+        };
+    }, []);
 
     const handleCreateChat = async () => {
         if (!chatUrl) return;
@@ -135,7 +253,6 @@ const Dashboard = () => {
             setIsModalOpen(false);
             setChatName("");
             setChatUrl("");
-            setSelectedModel("");
             showToast("Chat created and processing started.");
             await loadDashboardData();
         } catch (err) {
@@ -177,11 +294,7 @@ const Dashboard = () => {
     };
 
     // Disabled state for the Start Processing button
-    const isStartDisabled = !chatUrl || (apiKeys.length > 0 && !selectedModel);
-
-    const availableModels = Array.from(
-        new Set(apiKeys.flatMap((k) => k.models || [])),
-    );
+    const isStartDisabled = !chatUrl;
 
     const totalTokensUsed = chats
         .filter((c) => c.status === "ready")
@@ -350,15 +463,18 @@ const Dashboard = () => {
                         ) : chats.length > 0 ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                 {chats.map((chat) => {
+                                    const liveStatus = normalizeStatus(
+                                        chatProgress[chat.id]?.status || chat.status,
+                                    );
                                     const progressPercent =
-                                        chat.status === "processing" &&
+                                        chatProgress[chat.id]?.progress ??
+                                        (liveStatus === "processing" &&
                                         chat.totalPages > 0
                                             ? Math.round(
-                                                  (chat.pages /
-                                                      chat.totalPages) *
+                                                  (chat.pages / chat.totalPages) *
                                                       100,
                                               )
-                                            : 0;
+                                            : 0);
 
                                     return (
                                         <div
@@ -400,14 +516,13 @@ const Dashboard = () => {
                                                     </div>
                                                 </div>
                                                 <div className="shrink-0">
-                                                    {getStatusBadge(
-                                                        chat.status,
-                                                    )}
+                                                    {getStatusBadge(liveStatus)}
                                                 </div>
                                             </div>
 
                                             {/* Processing Progress Bar */}
-                                            {chat.status === "processing" && (
+                                            {(liveStatus === "processing" ||
+                                                liveStatus === "queued") && (
                                                 <div className="mb-4">
                                                     <div className="flex items-center justify-between text-xs mb-2">
                                                         <span className="text-gray-400 flex items-center gap-1.5">
@@ -415,8 +530,13 @@ const Dashboard = () => {
                                                             Ingesting pages...
                                                         </span>
                                                         <span className="text-yellow-400 font-medium font-mono">
-                                                            {chat.pages}/
-                                                            {chat.totalPages}
+                                                            {Math.round(
+                                                                (progressPercent /
+                                                                    100) *
+                                                                    (chat.totalPages || 0),
+                                                            )}
+                                                            /
+                                                            {chat.totalPages || 0}
                                                         </span>
                                                     </div>
                                                     <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden border border-white/5">
@@ -435,7 +555,8 @@ const Dashboard = () => {
                                             )}
 
                                             {/* Stats for ready/failed */}
-                                            {chat.status !== "processing" && (
+                                            {liveStatus !== "processing" &&
+                                                liveStatus !== "queued" && (
                                                 <div className="grid grid-cols-3 gap-2 mt-2 mb-6">
                                                     <div className="bg-white/5 rounded-lg p-2 flex flex-col items-center justify-center border border-white/5">
                                                         <FileText className="w-3 h-3 text-gray-400 mb-1" />
@@ -464,7 +585,7 @@ const Dashboard = () => {
                                             )}
 
                                             <div className="mt-auto flex items-center gap-3 pt-4 border-t border-white/5">
-                                                {chat.status === "ready" && (
+                                                {liveStatus === "ready" && (
                                                     <button
                                                         onClick={() =>
                                                             navigate(
@@ -476,7 +597,7 @@ const Dashboard = () => {
                                                         Open Chat
                                                     </button>
                                                 )}
-                                                {chat.status ===
+                                                {liveStatus ===
                                                     "processing" && (
                                                     <button
                                                         disabled
@@ -485,7 +606,7 @@ const Dashboard = () => {
                                                         Open Chat
                                                     </button>
                                                 )}
-                                                {chat.status === "failed" && (
+                                                {liveStatus === "failed" && (
                                                     <button
                                                         onClick={() =>
                                                             handleRetryFailed(
@@ -671,43 +792,6 @@ const Dashboard = () => {
                                 </p>
                             </div>
 
-                            {/* Model Selection */}
-                            <div className="pt-2 border-t border-white/5 space-y-4">
-                                {apiKeys.length > 0 ? (
-                                    <div className="space-y-1.5">
-                                        <label className="text-sm font-medium text-gray-300">
-                                            Model <span className="text-red-400">*</span>
-                                        </label>
-                                        <select
-                                            value={selectedModel}
-                                            onChange={(e) =>
-                                                setSelectedModel(e.target.value)
-                                            }
-                                            className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-accent-blue/50"
-                                        >
-                                            <option value="" disabled>
-                                                Select a model...
-                                            </option>
-                                            {availableModels.map((model) => (
-                                                <option key={model} value={model}>
-                                                    {model}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                ) : (
-                                    <div className="p-3 bg-white/5 border border-white/10 rounded-xl">
-                                        <p className="text-sm text-gray-300 font-medium">
-                                            Default Hosted Model
-                                        </p>
-                                        <p className="text-xs text-gray-500 mt-1">
-                                            Note: You can add your own API key in
-                                            Settings to choose other models and waive
-                                            off usage limits.
-                                        </p>
-                                    </div>
-                                )}
-                            </div>
                         </div>
 
                         {/* Modal Footer */}

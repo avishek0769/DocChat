@@ -44,6 +44,8 @@ import {
 import clsx from "clsx";
 import hljs from "highlight.js";
 import "highlight.js/styles/atom-one-dark.css";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
     getApiKeys,
     getChatDetails,
@@ -102,6 +104,7 @@ export const ChatPage = () => {
     const [input, setInput] = useState("");
     const [messages, setMessages] = useState<Message[]>([]);
     const [isTyping, setIsTyping] = useState(false);
+    const [isAwaitingFirstChunk, setIsAwaitingFirstChunk] = useState(false);
     const [selectedSources, setSelectedSources] = useState<Source[]>([]);
     const [isSourcesLoading, setIsSourcesLoading] = useState(false);
     const [sourceFetchAttempted, setSourceFetchAttempted] = useState(false);
@@ -212,6 +215,9 @@ export const ChatPage = () => {
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const chunkBufferRef = useRef("");
+    const chunkFlushIntervalRef = useRef<number | null>(null);
+    const firstChunkReceivedRef = useRef(false);
 
     const handleViewSources = async (message: Message) => {
         setRightPanelOpen(true);
@@ -296,6 +302,9 @@ export const ChatPage = () => {
         setMessages((prev) => [...prev, newUserMessage]);
         setInput("");
         setIsTyping(true);
+        setIsAwaitingFirstChunk(true);
+        firstChunkReceivedRef.current = false;
+        chunkBufferRef.current = "";
         setRightPanelOpen(false); // Close sources initially
 
         // Reset textarea height
@@ -318,21 +327,51 @@ export const ChatPage = () => {
         ]);
 
         try {
+            const flushBufferedChunks = () => {
+                if (!chunkBufferRef.current) return;
+                const buffered = chunkBufferRef.current;
+                chunkBufferRef.current = "";
+                setMessages((prev) =>
+                    prev.map((m) =>
+                        m.id === aiId
+                            ? { ...m, content: `${m.content}${buffered}` }
+                            : m,
+                    ),
+                );
+            };
+
             const text = await sendMessageStream({
                 userPrompt: newUserMessage.content,
                 model: selectedOption.model,
                 provider: selectedOption.provider,
                 chatId,
                 onChunk: (chunk) => {
-                    setMessages((prev) =>
-                        prev.map((m) =>
-                            m.id === aiId
-                                ? { ...m, content: `${m.content}${chunk}` }
-                                : m,
-                        ),
-                    );
+                    if (!firstChunkReceivedRef.current) {
+                        firstChunkReceivedRef.current = true;
+                        setIsAwaitingFirstChunk(false);
+                    }
+
+                    chunkBufferRef.current += chunk;
+
+                    if (chunkFlushIntervalRef.current === null) {
+                        chunkFlushIntervalRef.current = window.setInterval(
+                            flushBufferedChunks,
+                            33,
+                        );
+                    }
                 },
             });
+
+            if (chunkFlushIntervalRef.current !== null) {
+                window.clearInterval(chunkFlushIntervalRef.current);
+                chunkFlushIntervalRef.current = null;
+            }
+
+            if (chunkBufferRef.current) {
+                flushBufferedChunks();
+            }
+
+            setIsAwaitingFirstChunk(false);
 
             setMessages((prev) =>
                 prev.map((m) =>
@@ -358,6 +397,12 @@ export const ChatPage = () => {
                 );
             }
         } catch (err) {
+            if (chunkFlushIntervalRef.current !== null) {
+                window.clearInterval(chunkFlushIntervalRef.current);
+                chunkFlushIntervalRef.current = null;
+            }
+            chunkBufferRef.current = "";
+            setIsAwaitingFirstChunk(false);
             setError(
                 err instanceof Error
                     ? err.message
@@ -614,8 +659,7 @@ export const ChatPage = () => {
                                 ))
                             )}
 
-                            {isTyping &&
-                                !messages.find((m) => m.isStreaming) && (
+                            {isTyping && isAwaitingFirstChunk && (
                                     <div className="flex gap-4">
                                         <div className="w-8 h-8 rounded-lg bg-linear-to-br from-accent-blue to-accent-purple flex items-center justify-center shrink-0 shadow-lg shadow-accent-blue/20">
                                             <Bot className="w-5 h-5 text-white" />
@@ -866,143 +910,6 @@ const highlightCode = (language: string, code: string) => {
     }
 };
 
-const parseCustomMarkdown = (content: string) => {
-    // A robust regex to find triple-backtick blocks
-    const parts = content.split(/(```[\s\S]*?```)/g);
-
-    return parts.map((part, index) => {
-        // Is this a code block?
-        if (part.startsWith("```") && part.endsWith("```")) {
-            const lines = part.slice(3, -3).split("\n");
-            const language = lines[0].trim();
-            const code = lines.slice(1).join("\n").trim();
-
-            return (
-                <div
-                    key={index}
-                    className="my-4 rounded-xl overflow-hidden bg-[#0a0a0e] border border-white/10 shadow-xl"
-                >
-                    <div className="flex items-center justify-between px-4 py-2 bg-white/5 border-b border-white/5">
-                        <div className="flex items-center gap-2 text-sm font-medium text-gray-400">
-                            <Code className="w-3.5 h-3.5" />
-                            {language || "code"}
-                        </div>
-                        <button
-                            onClick={() => navigator.clipboard.writeText(code)}
-                            className="text-sm uppercase font-bold tracking-wider text-gray-500 hover:text-white transition-colors cursor-pointer"
-                        >
-                            Copy
-                        </button>
-                    </div>
-                    <div className="p-4 overflow-x-auto text-sm font-mono leading-relaxed text-gray-300 custom-scrollbar w-full max-w-full">
-                        <pre>
-                            <code
-                                dangerouslySetInnerHTML={{
-                                    __html: highlightCode(language, code),
-                                }}
-                            />
-                        </pre>
-                    </div>
-                </div>
-            );
-        }
-
-        // It's normal text, run simple inline markdown
-        return part.split("\n").map((line, i) => {
-            if (!line)
-                return <div key={`empty-${index}-${i}`} className="h-2"></div>;
-
-            if (line.trim().startsWith("### ")) {
-                return (
-                    <h3
-                        key={`h3-${index}-${i}`}
-                        className="text-white font-semibold mt-4 mb-2 text-base"
-                    >
-                        {line.replace("### ", "")}
-                    </h3>
-                );
-            }
-            if (line.trim().startsWith("* ") || line.trim().startsWith("- ")) {
-                return (
-                    <div
-                        key={`li-${index}-${i}`}
-                        className="flex gap-2 mb-1.5 ml-1"
-                    >
-                        <div className="w-1.5 h-1.5 rounded-full bg-accent-blue/50 mt-1.5 shrink-0" />
-                        <span className="text-gray-300">
-                            {formatInline(line.replace(/^[-*]\s/, ""))}
-                        </span>
-                    </div>
-                );
-            }
-
-            return (
-                <p
-                    key={`p-${index}-${i}`}
-                    className="mb-2 text-gray-300 leading-relaxed"
-                >
-                    {formatInline(line)}
-                </p>
-            );
-        });
-    });
-};
-
-const formatInline = (text: string) => {
-    // Inline parsing for code, bold, italic, and markdown links.
-    const segments = text.split(/(`[^`]+`)/);
-    return segments.map((seg, i) => {
-        if (seg.startsWith("`") && seg.endsWith("`")) {
-            return (
-                <code
-                    key={i}
-                    className="bg-white/10 px-1.5 py-0.5 rounded-md font-mono text-sm text-accent-blue mx-0.5 border border-white/5 shadow-sm"
-                >
-                    {seg.slice(1, -1)}
-                </code>
-            );
-        }
-        const nodes: React.ReactNode[] = [];
-        let cursor = 0;
-        const tokenRegex = /(\*\*([^*]+)\*\*)|(\*([^*]+)\*)|(\[([^\]]+)\]\(([^)]+)\))/g;
-        let match: RegExpExecArray | null;
-
-        while ((match = tokenRegex.exec(seg)) !== null) {
-            if (match.index > cursor) {
-                nodes.push(seg.slice(cursor, match.index));
-            }
-
-            if (match[2]) {
-                nodes.push(
-                    <strong key={`b-${i}-${match.index}`}>{match[2]}</strong>,
-                );
-            } else if (match[4]) {
-                nodes.push(<em key={`e-${i}-${match.index}`}>{match[4]}</em>);
-            } else if (match[6] && match[7]) {
-                nodes.push(
-                    <a
-                        key={`a-${i}-${match.index}`}
-                        href={match[7]}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-accent-blue hover:underline"
-                    >
-                        {match[6]}
-                    </a>,
-                );
-            }
-
-            cursor = match.index + match[0].length;
-        }
-
-        if (cursor < seg.length) {
-            nodes.push(seg.slice(cursor));
-        }
-
-        return <span key={i}>{nodes}</span>;
-    });
-};
-
 const ChatMessage = ({
     message,
     onViewSources,
@@ -1012,6 +919,10 @@ const ChatMessage = ({
 }) => {
     const isAi = message.role === "ai";
     const [copied, setCopied] = useState(false);
+
+    if (isAi && message.isStreaming && !message.content.trim()) {
+        return null;
+    }
 
     const handleCopy = () => {
         navigator.clipboard.writeText(message.content);
@@ -1061,7 +972,108 @@ const ChatMessage = ({
                             <div className="mb-3 inline-flex items-center rounded-md border border-accent-blue/20 bg-accent-blue/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent-blue">
                                 {message.model || "Default Hosted Model"}
                             </div>
-                            {parseCustomMarkdown(message.content)}
+                            <ReactMarkdown
+                                remarkPlugins={[remarkGfm]}
+                                components={{
+                                    p: ({ children }) => (
+                                        <p className="mb-2 text-gray-300 leading-relaxed">
+                                            {children}
+                                        </p>
+                                    ),
+                                    h1: ({ children }) => (
+                                        <h1 className="text-white font-bold text-lg mt-4 mb-2">
+                                            {children}
+                                        </h1>
+                                    ),
+                                    h2: ({ children }) => (
+                                        <h2 className="text-white font-semibold text-base mt-4 mb-2">
+                                            {children}
+                                        </h2>
+                                    ),
+                                    h3: ({ children }) => (
+                                        <h3 className="text-white font-semibold mt-4 mb-2 text-base">
+                                            {children}
+                                        </h3>
+                                    ),
+                                    ul: ({ children }) => (
+                                        <ul className="list-disc pl-5 mb-2 space-y-1 text-gray-300">
+                                            {children}
+                                        </ul>
+                                    ),
+                                    ol: ({ children }) => (
+                                        <ol className="list-decimal pl-5 mb-2 space-y-1 text-gray-300">
+                                            {children}
+                                        </ol>
+                                    ),
+                                    li: ({ children }) => (
+                                        <li className="text-gray-300">{children}</li>
+                                    ),
+                                    a: ({ href, children }) => (
+                                        <a
+                                            href={href}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="text-accent-blue hover:underline"
+                                        >
+                                            {children}
+                                        </a>
+                                    ),
+                                    code: ({ className, children }) => {
+                                        const languageMatch = /language-(\w+)/.exec(
+                                            className || "",
+                                        );
+                                        const code = String(children || "").replace(
+                                            /\n$/,
+                                            "",
+                                        );
+                                        const language = languageMatch?.[1] || "";
+                                        const isBlock = Boolean(languageMatch);
+
+                                        if (!isBlock) {
+                                            return (
+                                                <code className="bg-white/10 px-1.5 py-0.5 rounded-md font-mono text-sm text-accent-blue mx-0.5 border border-white/5 shadow-sm">
+                                                    {code}
+                                                </code>
+                                            );
+                                        }
+
+                                        return (
+                                            <div className="my-4 rounded-xl overflow-hidden bg-[#0a0a0e] border border-white/10 shadow-xl">
+                                                <div className="flex items-center justify-between px-4 py-2 bg-white/5 border-b border-white/5">
+                                                    <div className="flex items-center gap-2 text-sm font-medium text-gray-400">
+                                                        <Code className="w-3.5 h-3.5" />
+                                                        {language || "code"}
+                                                    </div>
+                                                    <button
+                                                        onClick={() =>
+                                                            navigator.clipboard.writeText(
+                                                                code,
+                                                            )
+                                                        }
+                                                        className="text-sm uppercase font-bold tracking-wider text-gray-500 hover:text-white transition-colors cursor-pointer"
+                                                    >
+                                                        Copy
+                                                    </button>
+                                                </div>
+                                                <div className="p-4 overflow-x-auto text-sm font-mono leading-relaxed text-gray-300 custom-scrollbar w-full max-w-full">
+                                                    <pre>
+                                                        <code
+                                                            dangerouslySetInnerHTML={{
+                                                                __html: highlightCode(
+                                                                    language,
+                                                                    code,
+                                                                ),
+                                                            }}
+                                                        />
+                                                    </pre>
+                                                </div>
+                                            </div>
+                                        );
+                                    },
+                                }}
+                            >
+                                {message.content}
+                            </ReactMarkdown>
 
                         </div>
                     ) : (
