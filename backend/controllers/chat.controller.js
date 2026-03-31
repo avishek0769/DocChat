@@ -184,16 +184,41 @@ const listAllChats = asyncHandler(async (req, res) => {
                         select: { pagesIndexed: true }
                     }
                 }
+            },
+            usageEvents: {
+                select: {
+                    inputTokens: true,
+                    outputTokens: true
+                }
             }
         },
         orderBy: {
             createdAt: "desc"
         }
-    })
+    });
+
+    const chatsWithUsage = chats.map(chat => {
+        const totals = chat.usageEvents.reduce((acc, curr) => {
+            acc.inputTokens += curr.inputTokens;
+            acc.outputTokens += curr.outputTokens;
+            return acc;
+        }, { inputTokens: 0, outputTokens: 0 });
+
+        const { usageEvents, ...chatData } = chat;
+
+        return {
+            ...chatData,
+            totalUsage: {
+                input: totals.inputTokens,
+                output: totals.outputTokens,
+                total: totals.inputTokens + totals.outputTokens
+            }
+        };
+    });
 
     res.status(200).json(
         new ApiResponse(200,
-            { chats },
+            chatsWithUsage,
             "Chats fetched successfully"
         )
     );
@@ -266,9 +291,9 @@ const cancelProcessing = asyncHandler(async (req, res) => {
             where: { id: chatId },
             data: { status: "READY" }
         })
-        .catch(err => {
-            throw new ApiError(500, `Failed Update: ${err.message}`, err);
-        });
+            .catch(err => {
+                throw new ApiError(500, `Failed Update: ${err.message}`, err);
+            });
 
         res.status(200).json(
             new ApiResponse(200,
@@ -289,7 +314,7 @@ const deleteChat = asyncHandler(async (req, res) => {
         where: { id: chatId }
     })
 
-    if(!chat) {
+    if (!chat) {
         throw new ApiError(404, "Chat not found");
     }
 

@@ -53,25 +53,20 @@ const tokensUsedByGroup = asyncHandler(async (req, res) => {
 });
 
 const topChatsByTokensUsed = asyncHandler(async (req, res) => {
-    const topChats = await prisma.$queryRaw`
-        SELECT 
-            m."chat_id" AS "chatId",
-            SUM(u."input_tokens") AS "totalInput",
-            SUM(u."output_tokens") AS "totalOutput",
-            (SUM(u."input_tokens") + SUM(u."output_tokens")) AS "totalTokens"
-        FROM "UsageEvents" u
-        JOIN "ChatMessage" m ON u."message_id" = m."id"
-        WHERE u."user_id" = ${req.user.id}
-        GROUP BY m."chat_id"
-        ORDER BY "totalTokens" DESC
-        LIMIT 3;
-    `;
-
-    topChats.forEach(chat => {
-        chat.totalInput = Number(chat.totalInput);
-        chat.totalOutput = Number(chat.totalOutput);
-        chat.totalTokens = Number(chat.totalTokens);
-    });
+    const topChats = await prisma.usageEvents.groupBy({
+        where: { userId: req.user.id },
+        by: ['chatId'],
+        _sum: {
+            inputTokens: true,
+            outputTokens: true,
+        },
+        orderBy: {
+            _sum: {
+                inputTokens: 'desc'
+            }
+        },
+        take: 3
+    })
 
     return res.status(200).json(new ApiResponse(
         200,
