@@ -76,9 +76,7 @@ const Settings = () => {
             setApiKeyCount(countData.count || 0);
         } catch (err) {
             setError(
-                err instanceof Error
-                    ? err.message
-                    : "Failed to load API keys.",
+                err instanceof Error ? err.message : "Failed to load API keys.",
             );
         } finally {
             setIsLoading(false);
@@ -101,7 +99,11 @@ const Settings = () => {
         else if (val.startsWith("xai-")) detected = "XAI";
         else if (val.startsWith("AIza")) detected = "GOOGLE";
 
-        if (detected && detected !== selectedProvider && detected in PROVIDER_LABEL) {
+        if (
+            detected &&
+            detected !== selectedProvider &&
+            detected in PROVIDER_LABEL
+        ) {
             setSelectedProvider(detected as Provider);
         }
     };
@@ -128,9 +130,7 @@ const Settings = () => {
             await loadApiKeys();
         } catch (err) {
             setError(
-                err instanceof Error
-                    ? err.message
-                    : "Failed to save API key.",
+                err instanceof Error ? err.message : "Failed to save API key.",
             );
         } finally {
             setIsSaving(false);
@@ -178,15 +178,17 @@ const Settings = () => {
                                     Security & Transparency
                                 </p>
                                 <p className="leading-relaxed">
-                                    Your API keys are stored completely hashed
-                                    and encrypted using{" "}
+                                    Your API keys are stored using
+                                    industry-standard
                                     <strong className="text-gray-300">
-                                        bcrypt.js
-                                    </strong>
-                                    , meaning even the administrators cannot
-                                    access or see them. Furthermore, the entire
-                                    codebase is open-sourced so you can
-                                    independently verify our security practices.
+                                        {" "}
+                                        encryption
+                                    </strong>{" "}
+                                    to ensure they are protected within our
+                                    database. To maintain full transparency, our
+                                    entire codebase is open-sourced, allowing
+                                    you to independently verify our security
+                                    practices and how your data is handled.
                                 </p>
                             </div>
                         </div>
@@ -269,7 +271,10 @@ const Settings = () => {
                                             Select a provider...
                                         </option>
                                         {PROVIDERS.map((p) => (
-                                            <option key={p.value} value={p.value}>
+                                            <option
+                                                key={p.value}
+                                                value={p.value}
+                                            >
                                                 {p.label}
                                             </option>
                                         ))}
@@ -330,7 +335,8 @@ const Settings = () => {
                                                 </span>
                                             </div>
                                             <div className="flex flex-wrap gap-1.5 pt-1">
-                                                {(key.models || []).length > 0 ? (
+                                                {(key.models || []).length >
+                                                0 ? (
                                                     key.models?.map((model) => (
                                                         <span
                                                             key={model}
@@ -341,7 +347,8 @@ const Settings = () => {
                                                     ))
                                                 ) : (
                                                     <span className="text-xs text-gray-500">
-                                                        No models configured for this key.
+                                                        No models configured for
+                                                        this key.
                                                     </span>
                                                 )}
                                             </div>

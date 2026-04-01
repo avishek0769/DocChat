@@ -1,4 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
 import {
     Terminal,
     LayoutDashboard,
@@ -9,6 +10,7 @@ import {
     Activity
 } from "lucide-react";
 import clsx from "clsx";
+import { getApiKeyCount, getUserProfile } from "../lib/api";
 
 interface SidebarProps {
     isCollapsed?: boolean;
@@ -18,6 +20,46 @@ export const Sidebar = ({ isCollapsed = false }: SidebarProps) => {
     const location = useLocation();
     const navigate = useNavigate();
     const path = location.pathname;
+    const [profileName, setProfileName] = useState("User");
+    const [profileSubline, setProfileSubline] = useState("-");
+
+    useEffect(() => {
+        let mounted = true;
+
+        const loadSidebarProfile = async () => {
+            try {
+                const [profile, keyCount] = await Promise.all([
+                    getUserProfile(),
+                    getApiKeyCount(),
+                ]);
+
+                if (!mounted) return;
+
+                const displayName =
+                    profile.fullname?.trim() ||
+                    profile.username?.trim() ||
+                    profile.email?.trim() ||
+                    "User";
+
+                setProfileName(displayName);
+                setProfileSubline(`${keyCount.count || 0} API keys`);
+            } catch {
+                if (!mounted) return;
+                setProfileName("User");
+                setProfileSubline("-");
+            }
+        };
+
+        loadSidebarProfile();
+
+        return () => {
+            mounted = false;
+        };
+    }, []);
+
+    const profileInitial = useMemo(() => {
+        return (profileName?.trim()?.charAt(0) || "U").toUpperCase();
+    }, [profileName]);
 
     const navItems = [
         { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
@@ -82,15 +124,15 @@ export const Sidebar = ({ isCollapsed = false }: SidebarProps) => {
                 >
                     <div className={clsx("flex items-center gap-3", isCollapsed && "justify-center w-full")}>
                         <div className="w-8 h-8 rounded-full bg-linear-to-br from-accent-blue to-accent-purple flex items-center justify-center text-sm font-bold shadow-lg text-white shrink-0">
-                            D
+                            {profileInitial}
                         </div>
                         {!isCollapsed && (
                             <div className="text-left whitespace-nowrap overflow-hidden">
                                 <p className="text-sm font-medium text-gray-200">
-                                    Developer
+                                    {profileName}
                                 </p>
                                 <p className="text-xs text-gray-500 group-hover:text-gray-400">
-                                    Pro Plan
+                                    {profileSubline}
                                 </p>
                             </div>
                         )}

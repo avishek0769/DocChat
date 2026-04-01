@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { Sidebar } from "../components/Sidebar";
-import { Zap, TrendingUp, Key, Calendar, ArrowUpRight, DollarSign, MessageSquare, Info } from "lucide-react";
+import { Zap, TrendingUp, Key, Calendar, MessageSquare, Info } from "lucide-react";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -45,7 +45,7 @@ export const Usage = () => {
     const [usagePoints, setUsagePoints] = useState<UsagePoint[]>([]);
     const [lifetimeTotal, setLifetimeTotal] = useState(0);
     const [apiKeyCount, setApiKeyCount] = useState(0);
-    const [topChats, setTopChats] = useState<Array<{ name: string; tokens: number; cost: string; color: string }>>([]);
+    const [topChats, setTopChats] = useState<Array<{ name: string; tokens: number; color: string }>>([]);
     const [error, setError] = useState("");
 
     const cycleLabel = useMemo(() => {
@@ -82,7 +82,6 @@ export const Usage = () => {
                     .slice(0, 3)
                     .map((item, idx) => ({
                         ...item,
-                        cost: `$${(item.tokens / 100000).toFixed(2)}`,
                         color:
                             idx === 0
                                 ? "bg-accent-blue"
@@ -236,7 +235,7 @@ export const Usage = () => {
                     )}
 
                     {/* Quick Stats */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                         <div className="p-6 rounded-xl bg-white/2 border border-white/5 relative overflow-hidden group hover:border-white/10 transition-colors">
                             <div className="flex justify-between items-start mb-6">
                                 <p className="text-sm font-medium text-gray-400">Total Tokens (Current Month)</p>
@@ -265,20 +264,6 @@ export const Usage = () => {
                             </div>
                         </div>
 
-                        <div className="p-6 rounded-xl bg-white/2 border border-white/5 relative overflow-hidden group hover:border-white/10 transition-colors flex flex-col justify-between">
-                            <div className="flex justify-between items-start mb-6">
-                                <p className="text-sm font-medium text-gray-400">Estimated Cost</p>
-                                <div className="p-2.5 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-400">
-                                    <DollarSign className="w-5 h-5" />
-                                </div>
-                            </div>
-                            <div>
-                                <h3 className="text-2xl font-bold text-white mb-2">Coming Soon</h3>
-                                <p className="text-xs text-gray-500 font-medium">
-                                    Cost forecasting will be available in an upcoming release.
-                                </p>
-                            </div>
-                        </div>
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -314,7 +299,7 @@ export const Usage = () => {
                             <div className="mt-4 pt-4 border-t border-white/5 flex items-start gap-2 text-xs text-gray-500">
                                 <Info className="w-4 h-4 shrink-0 mt-0.5 text-gray-400" />
                                 <p>
-                                    <strong>Usage calculation:</strong> The token counts shown above represent the combined sum of both <em>embeddings tokens</em> (used when initially processing docs) and <em>retrieval tokens</em> (used during chat generation).
+                                    <strong>Usage calculation:</strong> We also add token usage from the free default models for your usage tracking.
                                 </p>
                             </div>
                         </div>
@@ -339,18 +324,8 @@ export const Usage = () => {
                                                 style={{ width: `${Math.min(100, (chat.tokens / Math.max(1, topChats[0]?.tokens || 1)) * 100)}%` }}
                                             />
                                         </div>
-                                        <div className="flex justify-between items-center text-xs">
-                                            <span className="text-gray-500 font-medium">Est. Cost</span>
-                                            <span className="text-gray-400">{chat.cost}</span>
-                                        </div>
                                     </div>
                                 ))}
-                            </div>
-                            
-                            <div className="mt-8 pt-5 border-t border-white/5 text-center">
-                                <p className="text-xs text-gray-500 leading-relaxed font-medium">
-                                    Values are estimates based on standard model pricing. Check your provider for exact billing.
-                                </p>
                             </div>
                         </div>
                     </div>
