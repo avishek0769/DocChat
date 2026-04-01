@@ -34,14 +34,6 @@ interface Chat {
     createdAt: string;
 }
 
-interface ApiKeyEntry {
-    id: string;
-    name: string;
-    formattedKey: string;
-    provider: string;
-    models: string[];
-}
-
 const fromNow = (iso: string) => {
     const ts = new Date(iso).getTime();
     if (!Number.isFinite(ts)) return "Just now";

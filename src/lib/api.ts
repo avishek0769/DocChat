@@ -196,7 +196,19 @@ export const getLifetimeTokens = () =>
     );
 
 export const getTokensByGroup = (groupBy: "day" | "week" | "month" | "year") =>
-    apiRequest<Array<{ period: string; totalInput: number; totalOutput: number }>>(
+    apiRequest<
+        Record<
+            string,
+            {
+                period: string;
+                usageByModels: Array<{
+                    model: string;
+                    totalInput: number;
+                    totalOutput: number;
+                }>;
+            }
+        >
+    >(
         `/usage/tokens/${groupBy}`,
         { method: "GET" },
     );

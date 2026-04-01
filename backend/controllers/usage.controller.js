@@ -29,26 +29,38 @@ const tokensUsedByGroup = asyncHandler(async (req, res) => {
 
     const usageByGroup = await prisma.$queryRaw`
         SELECT 
-            DATE_TRUNC(${Prisma.raw(`'${groupBy}'`)}, "timestamp") AS period,
-            SUM("input_tokens") AS "totalInput",
-            SUM("output_tokens") AS "totalOutput"
-        FROM "UsageEvents"
-        WHERE "user_id" = ${req.user.id}
-        GROUP BY period
-        ORDER BY period DESC;
+            DATE_TRUNC(${Prisma.raw(`'${groupBy}'`)}, u."timestamp") AS period,
+            m."llm_model" AS "model",
+            SUM(u."input_tokens") AS "totalInput",
+            SUM(u."output_tokens") AS "totalOutput"
+        FROM "UsageEvents" u
+        JOIN "ChatMessage" m ON u."message_id" = m."id"
+        WHERE u."user_id" = ${req.user.id}
+        GROUP BY period, "model"
+        ORDER BY period DESC, "totalInput" DESC;
     `;
 
     // Convert BigInt to Number. Cause JSON doesn't support BigInt, and Prisma returns BigInt for SUM aggregations.
-    const serializedUsage = usageByGroup.map(row => ({
-        ...row,
-        totalInput: Number(row.totalInput),
-        totalOutput: Number(row.totalOutput)
-    }));
+    const serializedUsage = usageByGroup.reduce((acc, curr) => {
+        const periodKey = new Date(curr.period).toISOString();
+        if (!acc[periodKey]) {
+            acc[periodKey] = {
+                period: periodKey,
+                usageByModels: []
+            };
+        }
+        acc[periodKey].usageByModels.push({
+            model: curr.model,
+            totalInput: Number(curr.totalInput || 0),
+            totalOutput: Number(curr.totalOutput || 0)
+        });
+        return acc;
+    }, {});
 
     return res.status(200).json(new ApiResponse(
         200,
         serializedUsage,
-        "Usage retrieved successfully"
+        `Usage grouped by ${groupBy} and model retrieved successfully`
     ));
 });
 

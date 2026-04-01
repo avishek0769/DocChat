@@ -1,6 +1,6 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Sidebar } from "../components/Sidebar";
-import { Zap, TrendingUp, Key, Calendar, MessageSquare, Info } from "lucide-react";
+import { Zap, TrendingUp, Key, Calendar, MessageSquare } from "lucide-react";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -30,8 +30,28 @@ ChartJS.register(
 
 type UsagePoint = {
     period: string;
-    totalInput: number;
-    totalOutput: number;
+    usageByModels: Array<{
+        model: string;
+        totalInput: number;
+        totalOutput: number;
+    }>;
+};
+
+type Timeframe = "day" | "week" | "month" | "year";
+
+const MODEL_COLOR_PALETTE = [
+    "rgba(59, 130, 246, 0.9)",
+    "rgba(168, 85, 247, 0.9)",
+    "rgba(34, 197, 94, 0.9)",
+    "rgba(245, 158, 11, 0.9)",
+    "rgba(236, 72, 153, 0.9)",
+    "rgba(14, 165, 233, 0.9)",
+];
+
+const modelDisplayName = (model: string) => {
+    if (model === "default-1") return "Qwen 3.6 plus";
+    if (model === "default-2") return "Nemotron 3 Super";
+    return model;
 };
 
 const formatTokens = (tokens: number) => {
@@ -40,13 +60,55 @@ const formatTokens = (tokens: number) => {
     return `${tokens}`;
 };
 
+const getPlaceholderUsagePoints = (timeframe: Timeframe): UsagePoint[] => {
+    const now = new Date();
+
+    const makePoint = (date: Date): UsagePoint => ({
+        period: date.toISOString(),
+        usageByModels: [],
+    });
+
+    if (timeframe === "day") {
+        return Array.from({ length: 24 }, (_, i) => {
+            const d = new Date(now);
+            d.setHours(now.getHours() - (23 - i), 0, 0, 0);
+            return makePoint(d);
+        });
+    }
+
+    if (timeframe === "week") {
+        return Array.from({ length: 7 }, (_, i) => {
+            const d = new Date(now);
+            d.setDate(now.getDate() - (6 - i));
+            d.setHours(0, 0, 0, 0);
+            return makePoint(d);
+        });
+    }
+
+    if (timeframe === "month") {
+        return Array.from({ length: 30 }, (_, i) => {
+            const d = new Date(now);
+            d.setDate(now.getDate() - (29 - i));
+            d.setHours(0, 0, 0, 0);
+            return makePoint(d);
+        });
+    }
+
+    return Array.from({ length: 12 }, (_, i) => {
+        const d = new Date(now.getFullYear(), now.getMonth() - (11 - i), 1);
+        d.setHours(0, 0, 0, 0);
+        return makePoint(d);
+    });
+};
+
 export const Usage = () => {
-    const [timeframe, setTimeframe] = useState<"day" | "week" | "month">("month");
+    const [timeframe, setTimeframe] = useState<Timeframe>("month");
     const [usagePoints, setUsagePoints] = useState<UsagePoint[]>([]);
     const [lifetimeTotal, setLifetimeTotal] = useState(0);
     const [apiKeyCount, setApiKeyCount] = useState(0);
     const [topChats, setTopChats] = useState<Array<{ name: string; tokens: number; color: string }>>([]);
     const [error, setError] = useState("");
+    const requestIdRef = useRef(0);
 
     const cycleLabel = useMemo(() => {
         const now = new Date();
@@ -59,7 +121,9 @@ export const Usage = () => {
 
     useEffect(() => {
         const loadUsage = async () => {
+            const requestId = ++requestIdRef.current;
             setError("");
+            setUsagePoints(getPlaceholderUsagePoints(timeframe));
             try {
                 const [grouped, lifetime, keys, topChatsByUsage] = await Promise.all([
                     getTokensByGroup(timeframe),
@@ -67,7 +131,15 @@ export const Usage = () => {
                     getApiKeyCount(),
                     getTopChatsByUsage(),
                 ]);
-                setUsagePoints(grouped || []);
+
+                if (requestId !== requestIdRef.current) return;
+
+                const normalizedUsage = Object.values(grouped || {}).sort(
+                    (a, b) =>
+                        new Date(a.period).getTime() -
+                        new Date(b.period).getTime(),
+                );
+                setUsagePoints(normalizedUsage);
                 const input = lifetime?._sum?.inputTokens || 0;
                 const output = lifetime?._sum?.outputTokens || 0;
                 setLifetimeTotal(input + output);
@@ -77,7 +149,7 @@ export const Usage = () => {
                     .map((chat) => ({
                         name:
                             chat.name?.trim() ||
-                            `Chat ${chat.chatId.slice(0, 8)}`,
+                            `Deleted Chat - ${chat.chatId.slice(0, 6)}`,
                         tokens:
                             Number(chat?._sum?.inputTokens || 0) +
                             Number(chat?._sum?.outputTokens || 0),
@@ -95,6 +167,7 @@ export const Usage = () => {
                     }));
                 setTopChats(ranked);
             } catch (err) {
+                if (requestId !== requestIdRef.current) return;
                 setError(
                     err instanceof Error ? err.message : "Failed to load usage data.",
                 );
@@ -105,25 +178,49 @@ export const Usage = () => {
     }, [timeframe]);
     
     // Chart.js Data & Options configurations
-    const chartData = useMemo(() => ({
-        labels: usagePoints.map((d) => new Date(d.period).toLocaleDateString()),
-        datasets: [
-            {
-                label: "Input Tokens",
-                data: usagePoints.map((d) => d.totalInput),
-                backgroundColor: "rgba(34, 197, 94, 0.9)", // green-500
+    const chartData = useMemo(() => {
+        const labels = usagePoints.map((d) =>
+            new Date(d.period).toLocaleDateString(),
+        );
+
+        const models = Array.from(
+            new Set(
+                usagePoints.flatMap((period) =>
+                    period.usageByModels.map((item) => item.model),
+                ),
+            ),
+        );
+
+        const datasets = models.map((model, idx) => ({
+            label: modelDisplayName(model),
+            data: usagePoints.map((period) => {
+                const modelUsage = period.usageByModels.find(
+                    (item) => item.model === model,
+                );
+                if (!modelUsage) return 0;
+                return (
+                    Number(modelUsage.totalInput || 0) +
+                    Number(modelUsage.totalOutput || 0)
+                );
+            }),
+            backgroundColor:
+                MODEL_COLOR_PALETTE[idx % MODEL_COLOR_PALETTE.length],
+            borderRadius: 4,
+            barThickness: 32,
+        }));
+
+        if (!datasets.length) {
+            datasets.push({
+                label: "Tokens",
+                data: labels.map(() => 0),
+                backgroundColor: "rgba(148, 163, 184, 0.35)",
                 borderRadius: 4,
                 barThickness: 32,
-            },
-            {
-                label: "Output Tokens",
-                data: usagePoints.map((d) => d.totalOutput),
-                backgroundColor: "rgba(168, 85, 247, 0.9)", // purple-500
-                borderRadius: 4,
-                barThickness: 32,
-            },
-        ],
-    }), [usagePoints]);
+            });
+        }
+
+        return { labels, datasets };
+    }, [usagePoints]);
 
     const chartOptions = useMemo(() => ({
         responsive: true,
@@ -132,7 +229,7 @@ export const Usage = () => {
             legend: {
                 position: "bottom" as const,
                 labels: {
-                    color: "#9ca3af", // gray-400
+                    color: "#9ca3af",
                     usePointStyle: true,
                     padding: 24,
                     font: {
@@ -171,11 +268,11 @@ export const Usage = () => {
             x: {
                 stacked: true,
                 grid: {
-                    color: "rgba(255, 255, 255, 0)", // Hide x-axis vertical lines
+                    color: "rgba(255, 255, 255, 0)",
                     drawBorder: false,
                 },
                 ticks: {
-                    color: "#6b7280", // gray-500
+                    color: "#6b7280",
                     font: {
                         family: "ui-sans-serif, system-ui, sans-serif",
                     }
@@ -225,6 +322,9 @@ export const Usage = () => {
                             <p className="text-gray-400 text-sm">
                                 Track your token consumption across different models and API keys.
                             </p>
+                            <p className="text-sm text-gray-400 mt-3">
+                                <strong>Usage calculation:</strong> We also add token usage from the free default models for your usage tracking.
+                            </p>
                         </div>
                         <div className="flex items-center gap-3 bg-white/5 border border-white/10 px-4 py-2 rounded-lg">
                             <Calendar className="w-4 h-4 text-gray-400" />
@@ -242,7 +342,7 @@ export const Usage = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                         <div className="p-6 rounded-xl bg-white/2 border border-white/5 relative overflow-hidden group hover:border-white/10 transition-colors">
                             <div className="flex justify-between items-start mb-6">
-                                <p className="text-sm font-medium text-gray-400">Total Tokens (Current Month)</p>
+                                <p className="text-sm font-medium text-gray-400">Total Tokens (Lifetime)</p>
                                 <div className="p-2.5 rounded-lg bg-green-500/10 border border-green-500/20 text-green-400">
                                     <Zap className="w-5 h-5" />
                                 </div>
@@ -280,7 +380,7 @@ export const Usage = () => {
                                 </h3>
                                 
                                 <div className="flex bg-[#111] border border-white/10 rounded-lg p-1">
-                                    {(["day", "week", "month"] as const).map((t) => (
+                                    {(["day", "week", "month", "year"] as const).map((t) => (
                                         <button
                                             key={t}
                                             onClick={() => setTimeframe(t)}
@@ -300,12 +400,6 @@ export const Usage = () => {
                                 <Bar data={chartData} options={chartOptions} />
                             </div>
                             
-                            <div className="mt-4 pt-4 border-t border-white/5 flex items-start gap-2 text-xs text-gray-500">
-                                <Info className="w-4 h-4 shrink-0 mt-0.5 text-gray-400" />
-                                <p>
-                                    <strong>Usage calculation:</strong> We also add token usage from the free default models for your usage tracking.
-                                </p>
-                            </div>
                         </div>
 
                         {/* Top Chats Breakdown */}
