@@ -14,8 +14,8 @@ import type { TooltipItem } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
 import {
     getApiKeyCount,
-    getChats,
     getLifetimeTokens,
+    getTopChatsByUsage,
     getTokensByGroup,
 } from "../lib/api";
 
@@ -61,11 +61,11 @@ export const Usage = () => {
         const loadUsage = async () => {
             setError("");
             try {
-                const [grouped, lifetime, keys, chats] = await Promise.all([
+                const [grouped, lifetime, keys, topChatsByUsage] = await Promise.all([
                     getTokensByGroup(timeframe),
                     getLifetimeTokens(),
                     getApiKeyCount(),
-                    getChats(),
+                    getTopChatsByUsage(),
                 ]);
                 setUsagePoints(grouped || []);
                 const input = lifetime?._sum?.inputTokens || 0;
@@ -73,10 +73,12 @@ export const Usage = () => {
                 setLifetimeTotal(input + output);
                 setApiKeyCount(keys.count || 0);
 
-                const ranked = [...(chats || [])]
+                const ranked = [...(topChatsByUsage || [])]
                     .map((chat) => ({
-                        name: chat.name,
-                        tokens: chat.totalUsage?.total || 0,
+                        name: `Chat ${chat.chatId.slice(0, 8)}`,
+                        tokens:
+                            Number(chat?._sum?.inputTokens || 0) +
+                            Number(chat?._sum?.outputTokens || 0),
                     }))
                     .sort((a, b) => b.tokens - a.tokens)
                     .slice(0, 3)

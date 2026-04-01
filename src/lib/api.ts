@@ -107,9 +107,6 @@ export const getApiKeyCount = () =>
 export const getChats = () =>
     apiRequest<ChatItem[]>("/chat/list", { method: "GET" });
 
-export const getRecentChats = () =>
-    apiRequest<ChatItem[]>("/chat/recent", { method: "GET" });
-
 export const createChat = (payload: { name?: string; docsUrl: string }) =>
     apiRequest<{ chatId?: string; id?: string }>("/chat/create", {
         method: "POST",
@@ -204,3 +201,14 @@ export const getTokensByGroup = (groupBy: "day" | "week" | "month" | "year") =>
         { method: "GET" },
     );
 
+export const getRecentChats = () =>
+    apiRequest<ChatItem[]>("/chat/recent", { method: "GET" });
+
+export const getTopChatsByUsage = () => 
+    apiRequest<
+        Array<{
+            chatId: string;
+            _sum: { inputTokens: number | null; outputTokens: number | null };
+        }>
+    >("/usage/top-chats", { method: "GET" });
+    
