@@ -224,6 +224,57 @@ const listAllChats = asyncHandler(async (req, res) => {
     );
 })
 
+const recentChats = asyncHandler(async (req, res) => {
+    const chats = await prisma.chat.findMany({
+        where: { userId: req.user.id },
+        include: {
+            chatSources: {
+                include: {
+                    _count: {
+                        select: { pagesIndexed: true }
+                    }
+                }
+            },
+            usageEvents: {
+                select: {
+                    inputTokens: true,
+                    outputTokens: true
+                }
+            }
+        },
+        orderBy: {
+            createdAt: "desc"
+        },
+        take: 6
+    });
+
+    const chatsWithUsage = chats.map(chat => {
+        const totals = chat.usageEvents.reduce((acc, curr) => {
+            acc.inputTokens += curr.inputTokens;
+            acc.outputTokens += curr.outputTokens;
+            return acc;
+        }, { inputTokens: 0, outputTokens: 0 });
+
+        const { usageEvents, ...chatData } = chat;
+
+        return {
+            ...chatData,
+            totalUsage: {
+                input: totals.inputTokens,
+                output: totals.outputTokens,
+                total: totals.inputTokens + totals.outputTokens
+            }
+        };
+    });
+
+    res.status(200).json(
+        new ApiResponse(200,
+            chatsWithUsage,
+            "Recent chats fetched successfully"
+        )
+    );
+})
+
 const chatDetails = asyncHandler(async (req, res) => {
     const { chatId } = req.params;
 
@@ -310,6 +361,17 @@ const cancelProcessing = asyncHandler(async (req, res) => {
 const deleteChat = asyncHandler(async (req, res) => {
     const { chatId } = req.params;
 
+    const chatMessages = await prisma.chatMessage.findMany({
+        where: { chatId }
+    })
+    for await (const message of chatMessages) {
+        await prisma.chatMessageSource.deleteMany({
+            where: { chatMessageId: message.id }
+        })
+    }
+    await prisma.chatMessage.deleteMany({
+        where: { chatId }
+    })
     const chat = await prisma.chat.delete({
         where: { id: chatId }
     })
@@ -326,4 +388,4 @@ const deleteChat = asyncHandler(async (req, res) => {
     );
 })
 
-export { expectation, createChat, progressStatus, listAllChats, chatDetails, cancelProcessing, deleteChat, listAllPagesIndexed };
+export { expectation, createChat, progressStatus, listAllChats, chatDetails, cancelProcessing, deleteChat, listAllPagesIndexed, recentChats };

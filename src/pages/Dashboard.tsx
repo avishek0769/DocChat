@@ -19,7 +19,7 @@ import {
     createChat,
     deleteChat,
     getChatStatus,
-    getChats,
+    getRecentChats,
     type ChatItem,
 } from "../lib/api";
 
@@ -117,7 +117,7 @@ const Dashboard = () => {
     const loadDashboardData = useCallback(async () => {
         setError("");
         try {
-            const chatData = await getChats();
+            const chatData = await getRecentChats();
             setChats((chatData || []).map(mapBackendChat));
         } catch (err) {
             setError(
