@@ -75,7 +75,9 @@ export const Usage = () => {
 
                 const ranked = [...(topChatsByUsage || [])]
                     .map((chat) => ({
-                        name: `Chat ${chat.chatId.slice(0, 8)}`,
+                        name:
+                            chat.name?.trim() ||
+                            `Chat ${chat.chatId.slice(0, 8)}`,
                         tokens:
                             Number(chat?._sum?.inputTokens || 0) +
                             Number(chat?._sum?.outputTokens || 0),

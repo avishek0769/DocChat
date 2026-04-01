@@ -68,9 +68,28 @@ const topChatsByTokensUsed = asyncHandler(async (req, res) => {
         take: 3
     })
 
+    const chatIds = topChats.map(u => u.chatId);
+
+    const chatDetails = await prisma.chat.findMany({
+        where: {
+            id: { in: chatIds }
+        },
+        select: {
+            id: true,
+            name: true
+        }
+    });
+
+    const result = topChats
+        .map(usage => {
+            const chat = chatDetails.find(c => c.id === usage.chatId);
+            return chat ? { ...usage, name: chat.name } : null;
+        })
+        .filter(Boolean);
+
     return res.status(200).json(new ApiResponse(
         200,
-        topChats,
+        result,
         "Top chats by tokens used retrieved successfully"
     ));
 })

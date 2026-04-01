@@ -209,6 +209,7 @@ export const getTopChatsByUsage = () =>
         Array<{
             chatId: string;
             _sum: { inputTokens: number | null; outputTokens: number | null };
+            name?: string | null
         }>
     >("/usage/top-chats", { method: "GET" });
     
