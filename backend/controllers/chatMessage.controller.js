@@ -55,7 +55,7 @@ const sendMessage = asyncHandler(async (req, res) => {
     let apiKeyId = null;
 
     if (provider == "DEFAULT") {
-        if (model === "default-1") modelId = "qwen/qwen3.6-plus-preview:free";
+        if (model === "default-1") modelId = "qwen/qwen3.6-plus:free";
         else if (model === "default-2") modelId = "nvidia/nemotron-3-super-120b-a12b:free";
         else throw new ApiError(400, "Invalid model selection for default provider.");
 
