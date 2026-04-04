@@ -94,7 +94,7 @@ const sendMessage = asyncHandler(async (req, res) => {
         query: userPromptEmbeddings,
         limit: 5,
         with_payload: true,
-        score_threshold: 0.5
+        score_threshold: 0.35
     });
 
     // Dynamic System Instructions
