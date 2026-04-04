@@ -1,4 +1,4 @@
-import { getAccessToken } from "./auth";
+import { forceSignOut, getAccessToken } from "./auth";
 
 const API_BASE_URL =
     import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api/v1";
@@ -77,6 +77,9 @@ const apiRequest = async <T>(path: string, init?: RequestInit): Promise<T> => {
     const payload = (await response.json().catch(() => ({}))) as ApiEnvelope<T>;
 
     if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+            forceSignOut();
+        }
         throw new Error(payload?.message || "Request failed");
     }
 
@@ -165,6 +168,9 @@ export const sendMessageStream = async (payload: {
 
     if (!response.ok || !response.body) {
         const payload = (await response.json().catch(() => ({}))) as ApiEnvelope<unknown>;
+        if (response.status === 401 || response.status === 403) {
+            forceSignOut();
+        }
         throw new Error(payload?.message || "Unable to send message");
     }
 

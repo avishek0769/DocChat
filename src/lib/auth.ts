@@ -36,6 +36,27 @@ const isUsableToken = (token: unknown): token is string => {
     return Boolean(normalized) && normalized !== "undefined" && normalized !== "null";
 };
 
+const isAccessTokenExpired = (token: string) => {
+    try {
+        const parts = token.split(".");
+        if (parts.length < 2) return true;
+
+        const payloadBase64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+        const padded = payloadBase64.padEnd(
+            payloadBase64.length + ((4 - (payloadBase64.length % 4)) % 4),
+            "=",
+        );
+
+        const payload = JSON.parse(atob(padded)) as { exp?: number };
+        if (typeof payload.exp !== "number") return true;
+
+        const nowInSeconds = Math.floor(Date.now() / 1000);
+        return payload.exp <= nowInSeconds;
+    } catch {
+        return true;
+    }
+};
+
 const getStoredSession = (): AuthSession | null => {
     const raw = localStorage.getItem(AUTH_STORAGE_KEY);
     if (!raw) return null;
@@ -65,15 +86,36 @@ export const clearAuthSession = () => {
     localStorage.removeItem(AUTH_STORAGE_KEY);
 };
 
+export const forceSignOut = (redirectTo = "/signin") => {
+    clearAuthSession();
+
+    if (window.location.pathname !== redirectTo) {
+        window.location.replace(redirectTo);
+    }
+};
+
 export const getAccessToken = () => {
     const token = getStoredSession()?.accessToken;
-    return isUsableToken(token) ? token : "";
+    if (!isUsableToken(token)) return "";
+    if (isAccessTokenExpired(token)) {
+        clearAuthSession();
+        return "";
+    }
+    return token;
 };
 
 export const isAuthenticated = () => {
     const session = getStoredSession();
     if (!session) return false;
-    return isUsableToken(session.accessToken);
+    if (!isUsableToken(session.accessToken)) return false;
+
+    const expired = isAccessTokenExpired(session.accessToken);
+    if (expired) {
+        clearAuthSession();
+        return false;
+    }
+
+    return true;
 };
 
 export const getAuthUser = () => getStoredSession()?.user || null;
@@ -185,6 +227,6 @@ export const logoutUser = async () => {
     try {
         await request("/user/logout", { method: "GET" });
     } finally {
-        clearAuthSession();
+        forceSignOut();
     }
 };
