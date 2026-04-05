@@ -104,16 +104,16 @@ model ApiKey {
 }
 
 model UsageEvents {
-    id           String      @id @unique @default(uuid())
-    userId       String      @map("user_id")
-    messageId    String      @map("message_id")
-    apikeyId     String?     @map("apikey_id")
-    chatId       String     @map("chat_id")
-    inputTokens  Int         @map("input_tokens")
-    outputTokens Int         @map("output_tokens")
-    timestamp    DateTime    @default(now())
-    apiKey       ApiKey?     @relation(fields: [apikeyId], references: [id])
-    message      ChatMessage @relation(fields: [messageId], references: [id])
-    user         User        @relation(fields: [userId], references: [id])
-    chat         Chat        @relation(fields: [chatId], references: [id])
+    id           String       @id @unique @default(uuid())
+    userId       String       @map("user_id")
+    messageId    String?      @map("message_id")
+    apikeyId     String?      @map("apikey_id")
+    chatId       String?      @map("chat_id")
+    inputTokens  Int          @map("input_tokens")
+    outputTokens Int          @map("output_tokens")
+    timestamp    DateTime     @default(now())
+    apiKey       ApiKey?      @relation(fields: [apikeyId], references: [id])
+    message      ChatMessage? @relation(fields: [messageId], references: [id], onDelete: SetNull)
+    user         User         @relation(fields: [userId], references: [id])
+    chat         Chat?        @relation(fields: [chatId], references: [id], onDelete: SetNull)
 }
