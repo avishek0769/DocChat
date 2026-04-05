@@ -129,7 +129,8 @@ const createChat = asyncHandler(async (req, res) => {
                     create: {
                         totalPages: internalLinks.length,
                         heading: name,
-                        documentationUrl: docsUrl
+                        documentationUrl: docsUrl,
+                        collectionName
                     }
                 },
                 status: "QUEUED",
