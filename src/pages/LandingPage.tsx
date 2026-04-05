@@ -1,5 +1,6 @@
 import { Link as RouterLink } from "react-router-dom";
 import { motion } from "framer-motion";
+import demoImage from "../components/image.png";
 import {
     MessageSquare,
     Terminal,
@@ -59,10 +60,10 @@ const LandingPage = () => {
                         Features
                     </a>
                     <a
-                        href="#pricing"
+                        href="#open-source"
                         className="hover:text-white transition-colors"
                     >
-                        Pricing
+                        Open Source
                     </a>
                 </div>
                 <div className="flex items-center gap-4">
@@ -123,12 +124,6 @@ const LandingPage = () => {
                     >
                         Get Started
                     </RouterLink>
-                    <RouterLink
-                        to="/dashboard"
-                        className="w-full sm:w-auto px-8 py-3 rounded-lg glass border border-white/10 font-medium text-white hover:bg-white/10 transition-colors flex items-center justify-center gap-2"
-                    >
-                        Try Demo
-                    </RouterLink>
                 </motion.div>
             </section>
 
@@ -179,7 +174,7 @@ const LandingPage = () => {
                 <div className="text-center mb-12">
                     <h2 className="text-3xl font-bold mb-4">How It Works</h2>
                     <p className="text-lg text-gray-400">
-                        Paste a documentation link and we handle the rest.
+                        From docs URL to source-backed answers in three steps.
                     </p>
                 </div>
                 <div className="grid md:grid-cols-3 gap-6 relative mb-10">
@@ -196,8 +191,8 @@ const LandingPage = () => {
                             icon: (
                                 <Database className="w-6 h-6 text-indigo-400" />
                             ),
-                            title: "We Process",
-                            desc: "We mechanically crawl, extract structure, and create vector embeddings.",
+                            title: "We Build Context",
+                            desc: "We crawl internal pages, clean content, chunk it, and generate embeddings.",
                         },
                         {
                             step: "3",
@@ -205,7 +200,7 @@ const LandingPage = () => {
                                 <MessageSquare className="w-6 h-6 text-accent-purple" />
                             ),
                             title: "Start Chatting",
-                            desc: "Ask questions and get precision answers backed by source citations.",
+                            desc: "Ask questions and get precise answers backed by source citations.",
                         },
                     ].map((item, idx) => (
                         <div
@@ -231,8 +226,7 @@ const LandingPage = () => {
                         You ask questions. It gives answers with sources.
                     </p>
                     <p className="text-center text-gray-500 text-sm">
-                        Processing happens in the background. You can come back
-                        anytime.
+                        First-time ingestion runs in the background. If the same docs URL is already indexed, chat creation is instant.
                     </p>
                 </div>
             </section>
@@ -243,35 +237,12 @@ const LandingPage = () => {
                 className="relative z-10 py-20 px-6 max-w-6xl mx-auto"
             >
                 <div className="grid md:grid-cols-2 gap-12 items-center">
-                    <div className="order-2 md:order-1 relative rounded-xl border border-white/10 bg-[#0d0d12] p-6 shadow-2xl">
-                        {/* Mock Chat UI (Simplified) */}
-                        <div className="space-y-4">
-                            <div className="flex gap-3">
-                                <div className="w-6 h-6 rounded bg-white/10 flex items-center justify-center shrink-0 text-xs">
-                                    U
-                                </div>
-                                <div className="bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-sm text-gray-200">
-                                    How do I implement pagination?
-                                </div>
-                            </div>
-                            <div className="flex gap-3">
-                                <div className="w-6 h-6 rounded bg-linear-to-br from-accent-blue to-accent-purple flex items-center justify-center shrink-0">
-                                    <Terminal className="w-3 h-3 text-white" />
-                                </div>
-                                <div className="flex-1 space-y-3">
-                                    <div className="text-sm text-gray-300 leading-relaxed">
-                                        Use the limit and cursor query
-                                        parameters in your request...
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-white/5 border border-white/10 text-xs text-gray-400">
-                                            <Target className="w-3 h-3 text-accent-blue" />{" "}
-                                            API Reference Models
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                    <div className="order-2 md:order-1 relative rounded-xl border border-white/10 bg-[#0d0d12] p-3 shadow-2xl">
+                        <img
+                            src={demoImage}
+                            alt="DocChat interface preview"
+                            className="w-full h-full object-cover rounded-lg border border-white/10"
+                        />
                     </div>
                     <div className="order-1 md:order-2">
                         <h2 className="text-3xl font-bold mb-6">
@@ -318,23 +289,23 @@ const LandingPage = () => {
                         },
                         {
                             icon: <Zap className="w-5 h-5" />,
-                            title: "Fast retrieval",
-                            desc: "Optimized and instant vector search",
+                            title: "Instant reuse",
+                            desc: "Reuses existing knowledge base for the same docs URL",
                         },
                         {
-                            icon: <Link className="w-5 h-5" />,
-                            title: "Works with statics",
-                            desc: "Supports most static documentation sites",
+                            icon: <Server className="w-5 h-5" />,
+                            title: "Background processing",
+                            desc: "Tracks ingestion progress from queued to ready",
                         },
                         {
                             icon: <Key className="w-5 h-5" />,
-                            title: "Bring your own API key",
-                            desc: "Use any LLM that fits your needs",
+                            title: "Encrypted API keys",
+                            desc: "Bring your own key and store it encrypted",
                         },
                         {
                             icon: <GitBranch className="w-5 h-5" />,
-                            title: "Open source",
-                            desc: "Self-host anytime, fully open",
+                            title: "Multi-provider LLMs",
+                            desc: "OpenAI, Anthropic, Gemini, xAI, and OpenRouter",
                         },
                     ].map((feature, idx) => (
                         <div
@@ -360,30 +331,30 @@ const LandingPage = () => {
             {/* 7. Developer-Focused Section */}
             <section className="relative z-10 py-20 px-6 max-w-4xl mx-auto text-center border-y border-white/5 mt-10">
                 <h2 className="text-3xl font-bold mb-4">
-                    Built for real-world developer workflows
+                    Built for developer documentation workflows
                 </h2>
                 <div className="text-gray-400 mb-8 max-w-2xl mx-auto">
-                    Never lose track of the right docs again. From massive API references to internal component wikis, DocChat keeps context in one place.
+                    Ingest docs once, ask naturally, and keep references attached to every answer. Bring your own API keys or use the included model access.
                 </div>
                 <div className="flex flex-wrap justify-center gap-4 text-sm font-medium text-gray-300">
                     <span className="px-4 py-2 rounded-full glass border border-white/10">
-                        Works with API docs, SDK docs, guides
+                        API docs, SDK docs, guides
                     </span>
                     <span className="px-4 py-2 rounded-full glass border border-white/10">
-                        Helps debug faster
+                        Reuse existing indexed docs instantly
                     </span>
                     <span className="px-4 py-2 rounded-full glass border border-white/10">
-                        Reduces time spent searching
+                        Source-backed answers
                     </span>
                     <span className="px-4 py-2 rounded-full glass border border-white/10">
-                        Keeps context in one place
+                        Usage tracking built in
                     </span>
                 </div>
             </section>
 
-            {/* 8. Limitations & 9. Pricing */}
+            {/* 8. Limitations & 9. Open Source */}
             <section
-                id="pricing"
+                id="open-source"
                 className="relative z-10 py-20 px-6 max-w-6xl mx-auto mt-10"
             >
                 <div className="grid md:grid-cols-2 gap-8">
@@ -405,7 +376,7 @@ const LandingPage = () => {
                             </li>
                             <li className="flex items-start gap-2">
                                 <span className="text-gray-600">•</span> Free
-                                usage is limited
+                                usage has practical limits
                             </li>
                             <li className="flex items-start gap-2">
                                 <span className="text-gray-600">•</span> Large
@@ -414,28 +385,28 @@ const LandingPage = () => {
                         </ul>
                     </div>
 
-                    {/* Pricing */}
+                    {/* Open Source */}
                     <div className="glass p-8 rounded-2xl border border-accent-blue/20 bg-accent-blue/2">
                         <h3 className="text-xl font-semibold mb-6 flex items-center gap-2">
                             <Server className="w-5 h-5 text-accent-blue" />{" "}
-                            Simple Usage Model
+                            Open Source & Contributions
                         </h3>
                         <div className="space-y-4 text-sm text-gray-300 mb-8">
-                            <div className="flex justify-between items-center py-2 border-b border-white/5">
-                                <span>Free tier</span>
-                                <span className="text-gray-500">
-                                    Limited usage
-                                </span>
-                            </div>
-                            <div className="flex justify-between items-center py-2 border-b border-white/5">
-                                <span>Bring your own API key</span>
-                                <span className="text-gray-500">
-                                    For extended usage
-                                </span>
-                            </div>
+                            <p>
+                                DocChat is open source, and contributions are welcome.
+                            </p>
+                            <a
+                                href="https://github.com/avishek0769/DocChat"
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-white/10 hover:bg-white/10 transition-colors"
+                            >
+                                <GitBranch className="w-4 h-4" />
+                                View Repository
+                            </a>
                         </div>
                         <p className="text-center font-medium text-accent-blue">
-                            "You control your usage and cost."
+                            "PRs and issues are always welcome."
                         </p>
                     </div>
                 </div>
@@ -457,7 +428,7 @@ const LandingPage = () => {
                         to="/dashboard"
                         className="px-8 py-3 rounded-lg glass border border-white/10 font-medium text-white hover:bg-white/10 transition-colors"
                     >
-                        Try with your own API key
+                        Start with your docs URL
                     </RouterLink>
                 </div>
             </section>
@@ -471,22 +442,26 @@ const LandingPage = () => {
                     </div>
                     <div className="flex gap-6 text-sm text-gray-500">
                         <a
-                            href="#"
+                            href="https://github.com/avishek0769/DocChat"
+                            target="_blank"
+                            rel="noreferrer"
                             className="hover:text-white transition-colors flex items-center gap-1"
                         >
                             <GitBranch className="w-4 h-4" /> GitHub
                         </a>
                         <a
-                            href="#"
+                            href="https://avishek.short.gy/docchat"
+                            target="_blank"
+                            rel="noreferrer"
                             className="hover:text-white transition-colors"
                         >
-                            Docs
+                            Live Website
                         </a>
                         <a
-                            href="#"
+                            href="/signin"
                             className="hover:text-white transition-colors"
                         >
-                            About
+                            Sign In
                         </a>
                     </div>
                 </div>
