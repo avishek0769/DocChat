@@ -60,6 +60,12 @@ const LandingPage = () => {
                         Features
                     </a>
                     <a
+                        href="#limitations"
+                        className="hover:text-white transition-colors"
+                    >
+                        Limitations
+                    </a>
+                    <a
                         href="#open-source"
                         className="hover:text-white transition-colors"
                     >
@@ -67,6 +73,21 @@ const LandingPage = () => {
                     </a>
                 </div>
                 <div className="flex items-center gap-4">
+                    <a
+                        href="https://github.com/avishek0769/DocChat"
+                        target="_blank"
+                        rel="noreferrer"
+                        aria-label="DocChat GitHub Repository"
+                        className="text-gray-300 hover:text-white transition-colors hidden sm:inline-flex"
+                    >
+                        <svg
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                            className="w-8 h-8 fill-current"
+                        >
+                            <path d="M12 2C6.48 2 2 6.59 2 12.25c0 4.52 2.87 8.36 6.84 9.71.5.1.66-.22.66-.49 0-.24-.01-1.03-.01-1.86-2.78.62-3.37-1.21-3.37-1.21-.45-1.19-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.9 1.57 2.36 1.12 2.94.86.09-.67.35-1.12.64-1.38-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.04 1.03-2.76-.1-.26-.45-1.31.1-2.72 0 0 .84-.28 2.75 1.05A9.31 9.31 0 0 1 12 6.84c.85 0 1.7.12 2.5.35 1.9-1.33 2.74-1.05 2.74-1.05.55 1.41.2 2.46.1 2.72.65.72 1.03 1.64 1.03 2.76 0 3.93-2.35 4.8-4.58 5.05.36.31.68.92.68 1.86 0 1.34-.01 2.42-.01 2.75 0 .27.17.59.67.49A10.26 10.26 0 0 0 22 12.25C22 6.59 17.52 2 12 2Z" />
+                        </svg>
+                    </a>
                     <RouterLink
                         to="/signin"
                         className="text-sm font-medium text-gray-300 hover:text-white transition-colors hidden sm:block"
@@ -236,15 +257,15 @@ const LandingPage = () => {
                 id="demo"
                 className="relative z-10 py-20 px-6 max-w-6xl mx-auto"
             >
-                <div className="grid md:grid-cols-2 gap-12 items-center">
-                    <div className="order-2 md:order-1 relative rounded-xl border border-white/10 bg-[#0d0d12] p-3 shadow-2xl">
+                <div className="grid grid-cols-1 md:grid-cols-[1.05fr_0.95fr] gap-10 md:gap-14 items-center">
+                    <div className="order-2 md:order-1 relative rounded-xl border border-white/10 bg-[#0d0d12] p-3 shadow-2xl w-full max-w-2xl md:justify-self-center">
                         <img
                             src={demoImage}
                             alt="DocChat interface preview"
                             className="w-full h-full object-cover rounded-lg border border-white/10"
                         />
                     </div>
-                    <div className="order-1 md:order-2">
+                    <div className="order-1 md:order-2 w-full max-w-xl md:justify-self-center text-left">
                         <h2 className="text-3xl font-bold mb-6">
                             See it in action
                         </h2>
@@ -352,62 +373,93 @@ const LandingPage = () => {
                 </div>
             </section>
 
-            {/* 8. Limitations & 9. Open Source */}
+            {/* 8. Limitations */}
             <section
-                id="open-source"
+                id="limitations"
                 className="relative z-10 py-20 px-6 max-w-6xl mx-auto mt-10"
             >
-                <div className="grid md:grid-cols-2 gap-8">
-                    {/* Limitations */}
-                    <div className="glass p-8 rounded-2xl border border-white/5">
-                        <h3 className="text-xl font-semibold mb-6 flex items-center gap-2">
-                            <AlertCircle className="w-5 h-5 text-gray-400" />{" "}
-                            Current Limitations
-                        </h3>
-                        <ul className="space-y-4 text-sm text-gray-400">
-                            <li className="flex items-start gap-2">
-                                <span className="text-gray-600">•</span> Works
-                                best with static documentation sites
-                            </li>
-                            <li className="flex items-start gap-2">
-                                <span className="text-gray-600">•</span>{" "}
-                                JavaScript-heavy sites may not be fully
-                                supported
-                            </li>
-                            <li className="flex items-start gap-2">
-                                <span className="text-gray-600">•</span> Free
-                                usage has practical limits
-                            </li>
-                            <li className="flex items-start gap-2">
-                                <span className="text-gray-600">•</span> Large
-                                docs may take time to process
-                            </li>
-                        </ul>
-                    </div>
+                <div className="mb-10 text-center">
+                    <p className="text-xs uppercase tracking-[0.22em] text-red-300/70 mb-3">
+                        Know Before You Start
+                    </p>
+                    <h3 className="text-3xl font-bold mb-4">Current Limitations</h3>
+                    <p className="text-gray-400 max-w-2xl mx-auto">
+                        DocChat is fast for most documentation sites, but these are the practical constraints right now.
+                    </p>
+                </div>
 
-                    {/* Open Source */}
-                    <div className="glass p-8 rounded-2xl border border-accent-blue/20 bg-accent-blue/2">
-                        <h3 className="text-xl font-semibold mb-6 flex items-center gap-2">
-                            <Server className="w-5 h-5 text-accent-blue" />{" "}
-                            Open Source & Contributions
-                        </h3>
-                        <div className="space-y-4 text-sm text-gray-300 mb-8">
-                            <p>
-                                DocChat is open source, and contributions are welcome.
+                <div className="relative">
+                    <div className="absolute left-2 top-0 bottom-0 w-px bg-white/10 md:left-1/2 md:-translate-x-1/2" />
+                    <div className="space-y-5">
+                        {[
+                            "You cannot control the web crawler’s depth or breadth yet",
+                            "JavaScript-heavy sites may not be fully supported",
+                            "Only up to 300 pages can be ingested reliably each chat",
+                            "Large docs may take time to process",
+                        ].map((item, idx) => (
+                            <div
+                                key={idx}
+                                className="grid md:grid-cols-2 items-center gap-4 md:gap-10"
+                            >
+                                <div className={`hidden md:block ${idx % 2 === 0 ? "" : "order-2"}`} />
+                                <div
+                                    className={`relative ml-8 md:ml-0 glass rounded-xl border border-white/10 p-5 text-sm text-gray-300 ${idx % 2 === 0 ? "md:mr-8" : "md:ml-8 md:order-1"}`}
+                                >
+                                    <span
+                                        className={`absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-red-400/80 shadow-[0_0_0_4px_rgba(248,113,113,0.15)] ${idx % 2 === 0 ? "-left-9 md:-right-10 md:left-auto" : "-left-9 md:-left-10"}`}
+                                    />
+                                    <div className="flex items-start gap-3">
+                                        <AlertCircle className="w-4 h-4 text-red-300 mt-0.5 shrink-0" />
+                                        <span>{item}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </section>
+
+            {/* 9. Open Source */}
+            <section
+                id="open-source"
+                className="relative z-10 py-20 px-6 max-w-6xl mx-auto"
+            >
+                <div className="relative overflow-hidden rounded-3xl border border-accent-blue/30 bg-[radial-gradient(circle_at_15%_20%,rgba(59,130,246,0.2),transparent_40%),radial-gradient(circle_at_90%_80%,rgba(168,85,247,0.2),transparent_45%),linear-gradient(180deg,rgba(16,16,24,0.95),rgba(10,10,16,0.95))] p-8 md:p-12">
+                    <div className="absolute inset-0 bg-[linear-gradient(120deg,rgba(255,255,255,0.06)_0%,transparent_45%)] pointer-events-none" />
+                    <div className="relative grid md:grid-cols-[1.2fr_0.8fr] gap-8 items-center">
+                        <div>
+                            <p className="text-xs uppercase tracking-[0.22em] text-accent-blue/80 mb-3">
+                                Community Driven
                             </p>
+                            <h3 className="text-3xl md:text-4xl font-bold mb-4">
+                                Open source and built in public
+                            </h3>
+                            <p className="text-gray-300 mb-6 max-w-2xl">
+                                DocChat is fully open source. If you want to fix bugs, improve crawling quality, or ship new ideas, contributions are welcome.
+                            </p>
+                            <div className="flex flex-wrap gap-3 text-sm">
+                                <span className="px-3 py-1.5 rounded-full border border-white/15 bg-white/5 text-gray-300">
+                                    Issues welcome
+                                </span>
+                                <span className="px-3 py-1.5 rounded-full border border-white/15 bg-white/5 text-gray-300">
+                                    PRs welcome
+                                </span>
+                                <span className="px-3 py-1.5 rounded-full border border-white/15 bg-white/5 text-gray-300">
+                                    MIT Licensed
+                                </span>
+                            </div>
+                        </div>
+                        <div className="md:justify-self-end">
                             <a
                                 href="https://github.com/avishek0769/DocChat"
                                 target="_blank"
                                 rel="noreferrer"
-                                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-white/10 hover:bg-white/10 transition-colors"
+                                className="inline-flex w-full md:w-auto items-center justify-center gap-2 px-6 py-3 rounded-xl bg-white text-black font-semibold hover:bg-gray-200 transition-colors"
                             >
                                 <GitBranch className="w-4 h-4" />
-                                View Repository
+                                Explore on GitHub
                             </a>
                         </div>
-                        <p className="text-center font-medium text-accent-blue">
-                            "PRs and issues are always welcome."
-                        </p>
                     </div>
                 </div>
             </section>
