@@ -66,7 +66,10 @@ const tokensUsedByGroup = asyncHandler(async (req, res) => {
 
 const topChatsByTokensUsed = asyncHandler(async (req, res) => {
     const topChats = await prisma.usageEvents.groupBy({
-        where: { userId: req.user.id },
+        where: {
+            userId: req.user.id,
+            chatId: { not: null }
+        },
         by: ['chatId'],
         _sum: {
             inputTokens: true,
