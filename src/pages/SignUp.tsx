@@ -6,7 +6,6 @@ import {
     Eye,
     EyeOff,
     ArrowRight,
-    GitBranch,
     Check,
 } from "lucide-react";
 import {
@@ -343,34 +342,6 @@ const SignUp = () => {
                             )}
                         </button>
                     </form>
-
-                    {/* Divider */}
-                    <div className="flex items-center gap-4 my-6">
-                        <div className="flex-1 h-px bg-white/10" />
-                        <span className="text-xs text-gray-500 font-medium">
-                            OR
-                        </span>
-                        <div className="flex-1 h-px bg-white/10" />
-                    </div>
-
-                    {/* Social Signup */}
-                    <button className="w-full py-2.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white text-sm font-medium transition-all flex items-center justify-center gap-2">
-                        <GitBranch className="w-4 h-4" />
-                        Sign up with GitHub
-                    </button>
-
-                    {/* Terms */}
-                    <p className="text-[11px] text-gray-600 text-center mt-5 leading-relaxed">
-                        By creating an account, you agree to our{" "}
-                        <span className="text-gray-400 hover:text-white cursor-pointer transition-colors">
-                            Terms of Service
-                        </span>{" "}
-                        and{" "}
-                        <span className="text-gray-400 hover:text-white cursor-pointer transition-colors">
-                            Privacy Policy
-                        </span>
-                        .
-                    </p>
                 </div>
 
                 {/* Footer */}

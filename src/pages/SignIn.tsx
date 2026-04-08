@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Terminal, Eye, EyeOff, ArrowRight, GitBranch } from "lucide-react";
+import { Terminal, Eye, EyeOff, ArrowRight } from "lucide-react";
 import { resetPassword, sendPasswordResetCode, signIn } from "../lib/auth";
 
 const SignIn = () => {
@@ -265,21 +265,6 @@ const SignIn = () => {
                             )}
                         </div>
                     )}
-
-                    {/* Divider */}
-                    <div className="flex items-center gap-4 my-6">
-                        <div className="flex-1 h-px bg-white/10" />
-                        <span className="text-xs text-gray-500 font-medium">
-                            OR
-                        </span>
-                        <div className="flex-1 h-px bg-white/10" />
-                    </div>
-
-                    {/* Social Login */}
-                    <button className="w-full py-2.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white text-sm font-medium transition-all flex items-center justify-center gap-2">
-                        <GitBranch className="w-4 h-4" />
-                        Continue with GitHub
-                    </button>
                 </div>
 
                 {/* Footer */}
