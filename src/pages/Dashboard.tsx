@@ -19,6 +19,7 @@ import {
     createChat,
     deleteChat,
     getChatStatus,
+    getLifetimeTokens,
     getRecentChats,
     type ChatItem,
 } from "../lib/api";
@@ -84,6 +85,7 @@ const Dashboard = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState("");
     const [isCreating, setIsCreating] = useState(false);
+    const [lifetimeTokens, setLifetimeTokens] = useState(0);
     const [chatProgress, setChatProgress] = useState<
         Record<string, { status: string; progress: number }>
     >({});
@@ -109,8 +111,14 @@ const Dashboard = () => {
     const loadDashboardData = useCallback(async () => {
         setError("");
         try {
-            const chatData = await getRecentChats();
+            const [chatData, lifetime] = await Promise.all([
+                getRecentChats(),
+                getLifetimeTokens(),
+            ]);
             setChats((chatData || []).map(mapBackendChat));
+            const input = Number(lifetime?._sum?.inputTokens || 0);
+            const output = Number(lifetime?._sum?.outputTokens || 0);
+            setLifetimeTokens(input + output);
         } catch (err) {
             setError(
                 err instanceof Error
@@ -288,10 +296,6 @@ const Dashboard = () => {
     // Disabled state for the Start Processing button
     const isStartDisabled = !chatUrl;
 
-    const totalTokensUsed = chats
-        .filter((c) => c.status === "ready")
-        .reduce((sum, c) => sum + (c.tokens || 0), 0);
-
     const formatTokens = (tokens: number) => {
         if (tokens >= 1000000) return (tokens / 1000000).toFixed(1) + "M";
         if (tokens >= 1000) return (tokens / 1000).toFixed(1) + "k";
@@ -405,7 +409,7 @@ const Dashboard = () => {
                                         </div>
                                     </span>
                                 ),
-                                value: formatTokens(totalTokensUsed),
+                                value: formatTokens(lifetimeTokens),
                                 icon: (
                                     <Database className="w-5 h-5 text-purple-400" />
                                 ),
