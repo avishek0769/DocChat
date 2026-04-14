@@ -2,7 +2,7 @@
 
 Chat with any documentation using AI. Provide a documentation link, and the system will scrape, process, and convert it into a searchable knowledge base that you can interact with through natural language.
 
-Live Website: https://avishek.short.gy/docchat
+Check out the live website here: [DocChat](https://avishek.short.gy/docchat)
 
 ---
 
