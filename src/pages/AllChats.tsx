@@ -40,8 +40,7 @@ const fromNow = (iso: string) => {
 
 const mapChat = (chat: ChatItem): ChatRow => {
     const source = chat.chatSources?.[0];
-    const pages =
-        source?._count?.pagesIndexed ?? source?.pagesIndexed?.length ?? 0;
+    const pages = source?._count?.pagesIndexed ?? source?.pagesIndexed?.length ?? 0;
     return {
         id: chat.id,
         title: chat.name,
@@ -74,9 +73,7 @@ const AllChats = () => {
             const data = await getChats();
             setChats((data || []).map(mapChat));
         } catch (err) {
-            setError(
-                err instanceof Error ? err.message : "Failed to load chats.",
-            );
+            setError(err instanceof Error ? err.message : "Failed to load chats.");
         } finally {
             setIsLoading(false);
         }
@@ -92,11 +89,7 @@ const AllChats = () => {
                 await deleteChat(id);
                 setChats((prev) => prev.filter((c) => c.id !== id));
             } catch (err) {
-                setError(
-                    err instanceof Error
-                        ? err.message
-                        : "Failed to delete chat.",
-                );
+                setError(err instanceof Error ? err.message : "Failed to delete chat.");
             }
         }
     };
@@ -104,9 +97,7 @@ const AllChats = () => {
     const filteredChats = chats.filter((chat) => {
         const matchesSearch =
             chat.title.toLowerCase().includes(search.toLowerCase()) ||
-            chat.urls.some((u) =>
-                u.toLowerCase().includes(search.toLowerCase()),
-            );
+            chat.urls.some((u) => u.toLowerCase().includes(search.toLowerCase()));
         const matchesFilter = filter === "all" || chat.status === filter;
         return matchesSearch && matchesFilter;
     });
@@ -193,9 +184,7 @@ const AllChats = () => {
                     <div className="space-y-3">
                         {isLoading ? (
                             <div className="text-center py-20 bg-white/1 rounded-xl border border-white/5 border-dashed">
-                                <p className="text-gray-400">
-                                    Loading chats...
-                                </p>
+                                <p className="text-gray-400">Loading chats...</p>
                             </div>
                         ) : filteredChats.length > 0 ? (
                             filteredChats.map((chat) => (
@@ -221,9 +210,7 @@ const AllChats = () => {
                                                     >
                                                         {(() => {
                                                             try {
-                                                                return new URL(
-                                                                    u,
-                                                                ).hostname;
+                                                                return new URL(u).hostname;
                                                             } catch {
                                                                 return u;
                                                             }
@@ -241,8 +228,7 @@ const AllChats = () => {
                                                 className="flex items-center gap-1.5 text-xs text-gray-400 w-16"
                                                 title="Pages Indexed"
                                             >
-                                                <FileText className="w-3.5 h-3.5" />{" "}
-                                                {chat.pages}
+                                                <FileText className="w-3.5 h-3.5" /> {chat.pages}
                                             </div>
                                             <div
                                                 className="flex items-center gap-1.5 text-xs text-gray-400 w-20"
@@ -252,31 +238,24 @@ const AllChats = () => {
                                                 {formatTokens(chat.tokens)}
                                             </div>
                                             <div className="flex items-center gap-1.5 text-xs text-gray-400 w-24">
-                                                <Clock className="w-3.5 h-3.5" />{" "}
-                                                {chat.createdAt}
+                                                <Clock className="w-3.5 h-3.5" /> {chat.createdAt}
                                             </div>
                                         </div>
 
                                         <div className="flex items-center gap-2 border-l border-white/10 pl-6">
                                             <button
-                                                onClick={() =>
-                                                    navigate(`/chat/${chat.id}`)
-                                                }
+                                                onClick={() => navigate(`/chat/${chat.id}`)}
                                                 className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
                                                     chat.status === "ready"
                                                         ? "bg-white/10 hover:bg-white/15 text-white"
                                                         : "bg-white/5 text-gray-600 cursor-not-allowed hidden sm:block"
                                                 }`}
-                                                disabled={
-                                                    chat.status !== "ready"
-                                                }
+                                                disabled={chat.status !== "ready"}
                                             >
                                                 Open
                                             </button>
                                             <button
-                                                onClick={() =>
-                                                    handleDelete(chat.id)
-                                                }
+                                                onClick={() => handleDelete(chat.id)}
                                                 className="p-1.5 rounded-md text-gray-500 hover:text-red-400 hover:bg-red-400/10 transition-colors"
                                             >
                                                 <Trash2 className="w-4 h-4" />

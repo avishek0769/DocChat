@@ -3691,8 +3691,7 @@ snapshots:
         dependencies:
             "@prisma/debug": 7.5.0
 
-    "@prisma/engines-version@7.5.0-15.280c870be64f457428992c43c1f6d557fab6e29e":
-        {}
+    "@prisma/engines-version@7.5.0-15.280c870be64f457428992c43c1f6d557fab6e29e": {}
 
     "@prisma/engines@7.5.0":
         dependencies:

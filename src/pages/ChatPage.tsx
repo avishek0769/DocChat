@@ -128,13 +128,12 @@ export const ChatPage = () => {
         setIsMessagesLoading(true);
         setError("");
         try {
-            const [chatDetails, indexedPageData, apiKeyData, messageData] =
-                await Promise.all([
-                    getChatDetails(chatId),
-                    getPagesIndexed(chatId),
-                    getApiKeys(),
-                    getChatMessages(chatId),
-                ]);
+            const [chatDetails, indexedPageData, apiKeyData, messageData] = await Promise.all([
+                getChatDetails(chatId),
+                getPagesIndexed(chatId),
+                getApiKeys(),
+                getChatMessages(chatId),
+            ]);
 
             const chat = chatDetails.chat;
             const primarySource = chat?.chatSources?.[0];
@@ -147,9 +146,7 @@ export const ChatPage = () => {
                     indexedPageData.pagesIndexed.length ||
                     prev.pages,
                 tokensUsed: chat?.totalUsage?.total || 0,
-                lastUpdated: new Date(
-                    chat?.updatedAt || Date.now(),
-                ).toLocaleString(),
+                lastUpdated: new Date(chat?.updatedAt || Date.now()).toLocaleString(),
             }));
 
             setCurrentLinks(
@@ -186,9 +183,7 @@ export const ChatPage = () => {
 
             const options = [...defaultOptions, ...dynamicModels];
             setModelOptions(options);
-            setSelectedModel(
-                (prev) => prev || options[0]?.model || "default-1",
-            );
+            setSelectedModel((prev) => prev || options[0]?.model || "default-1");
 
             const messageList = messageData.messages || [];
             const messagePairs: Message[] = [];
@@ -214,11 +209,7 @@ export const ChatPage = () => {
             setMessages(messagePairs);
             setIsMessagesLoading(false);
         } catch (err) {
-            setError(
-                err instanceof Error
-                    ? err.message
-                    : "Failed to load chat data.",
-            );
+            setError(err instanceof Error ? err.message : "Failed to load chat data.");
             setIsMessagesLoading(false);
         } finally {
             setIsPageLoading(false);
@@ -272,20 +263,12 @@ export const ChatPage = () => {
 
             setSelectedSources(sources);
             setMessages((prev) =>
-                prev.map((m) =>
-                    m.id === message.id
-                        ? { ...m, sources, sourcesLoaded: true }
-                        : m,
-                ),
+                prev.map((m) => (m.id === message.id ? { ...m, sources, sourcesLoaded: true } : m)),
             );
         } catch {
             setSelectedSources([]);
             setMessages((prev) =>
-                prev.map((m) =>
-                    m.id === message.id
-                        ? { ...m, sources: [], sourcesLoaded: true }
-                        : m,
-                ),
+                prev.map((m) => (m.id === message.id ? { ...m, sources: [], sourcesLoaded: true } : m)),
             );
         } finally {
             setIsSourcesLoading(false);
@@ -309,9 +292,7 @@ export const ChatPage = () => {
         e?.preventDefault();
         if (!input.trim() || isTyping) return;
 
-        const selectedOption = modelOptions.find(
-            (opt) => opt.model === selectedModel,
-        ) ||
+        const selectedOption = modelOptions.find((opt) => opt.model === selectedModel) ||
             modelOptions[0] || {
                 provider: "DEFAULT",
                 model: "default-1",
@@ -358,11 +339,7 @@ export const ChatPage = () => {
                 if (!buffered) return;
                 pendingChunkRef.current = "";
                 setMessages((prev) =>
-                    prev.map((m) =>
-                        m.id === aiId
-                            ? { ...m, content: `${m.content}${buffered}` }
-                            : m,
-                    ),
+                    prev.map((m) => (m.id === aiId ? { ...m, content: `${m.content}${buffered}` } : m)),
                 );
             };
 
@@ -401,11 +378,7 @@ export const ChatPage = () => {
 
             setIsAwaitingFirstChunk(false);
 
-            setMessages((prev) =>
-                prev.map((m) =>
-                    m.id === aiId ? { ...m, isStreaming: false } : m,
-                ),
-            );
+            setMessages((prev) => prev.map((m) => (m.id === aiId ? { ...m, isStreaming: false } : m)));
 
             const latestMessages = await getChatMessages(chatId);
             const latestAi = (latestMessages.messages || []).at(-1);
@@ -432,9 +405,7 @@ export const ChatPage = () => {
             }
             pendingChunkRef.current = "";
             setIsAwaitingFirstChunk(false);
-            setError(
-                err instanceof Error ? err.message : "Failed to send message.",
-            );
+            setError(err instanceof Error ? err.message : "Failed to send message.");
             setMessages((prev) => prev.filter((m) => m.id !== aiId));
         } finally {
             setIsTyping(false);
@@ -587,16 +558,11 @@ export const ChatPage = () => {
                                     </span>
                                     <select
                                         value={selectedModel}
-                                        onChange={(e) =>
-                                            setSelectedModel(e.target.value)
-                                        }
+                                        onChange={(e) => setSelectedModel(e.target.value)}
                                         className="appearance-none bg-[#12121a] border border-white/10 rounded-lg pl-2.5 pr-7 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-accent-blue/60 focus:ring-2 focus:ring-accent-blue/25 transition-all"
                                     >
                                         {modelOptions.map((m) => (
-                                            <option
-                                                key={`${m.provider}-${m.model}`}
-                                                value={m.model}
-                                            >
+                                            <option key={`${m.provider}-${m.model}`} value={m.model}>
                                                 {m.label}
                                             </option>
                                         ))}
@@ -605,9 +571,7 @@ export const ChatPage = () => {
                                 </div>
                             </div>
                             <button
-                                onClick={() =>
-                                    setRightPanelOpen(!rightPanelOpen)
-                                }
+                                onClick={() => setRightPanelOpen(!rightPanelOpen)}
                                 className={clsx(
                                     "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border flex items-center gap-2",
                                     rightPanelOpen
@@ -616,9 +580,7 @@ export const ChatPage = () => {
                                 )}
                             >
                                 <Search className="w-4 h-4" />
-                                <span className="hidden sm:inline">
-                                    Sources
-                                </span>
+                                <span className="hidden sm:inline">Sources</span>
                             </button>
                         </div>
                     </header>
@@ -641,9 +603,7 @@ export const ChatPage = () => {
                             {isMessagesLoading ? (
                                 <div className="flex flex-col items-center justify-center h-full min-h-[50vh] text-center space-y-3 text-gray-400">
                                     <Loader2 className="w-6 h-6 animate-spin text-accent-blue" />
-                                    <p className="text-sm">
-                                        Fetching messages...
-                                    </p>
+                                    <p className="text-sm">Fetching messages...</p>
                                 </div>
                             ) : messages.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center h-full min-h-[50vh] text-center space-y-6">
@@ -655,10 +615,8 @@ export const ChatPage = () => {
                                             How can I help you?
                                         </h2>
                                         <p className="text-gray-400 text-sm max-w-md mx-auto leading-relaxed">
-                                            Ask me anything about the{" "}
-                                            {docInfo.title}. I can provide code
-                                            examples, explain concepts, and
-                                            point you to the right pages.
+                                            Ask me anything about the {docInfo.title}. I can provide code
+                                            examples, explain concepts, and point you to the right pages.
                                         </p>
                                     </div>
                                     <div className="flex flex-wrap items-center justify-center gap-2 pt-4">
@@ -737,8 +695,7 @@ export const ChatPage = () => {
                             </form>
                             <div className="text-center mt-3">
                                 <span className="text-sm text-gray-500 font-medium tracking-wide">
-                                    DocChat AI can make mistakes. Verify
-                                    important information.
+                                    DocChat AI can make mistakes. Verify important information.
                                 </span>
                             </div>
                         </div>
@@ -770,9 +727,7 @@ export const ChatPage = () => {
                             <div className="p-4 border-b border-white/5 w-[320px] flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                     <Search className="w-4 h-4 text-accent-blue" />
-                                    <h2 className="font-semibold text-gray-200">
-                                        Sources Retreived
-                                    </h2>
+                                    <h2 className="font-semibold text-gray-200">Sources Retreived</h2>
                                 </div>
                                 <span className="text-sm font-mono text-gray-500 bg-white/5 px-2 py-0.5 rounded-full">
                                     {selectedSources.length} found
@@ -783,9 +738,7 @@ export const ChatPage = () => {
                                 {isSourcesLoading ? (
                                     <div className="flex flex-col items-center justify-center h-40 text-gray-400 gap-3">
                                         <Loader2 className="w-6 h-6 animate-spin text-accent-blue" />
-                                        <span className="text-sm">
-                                            Fetching source chunks...
-                                        </span>
+                                        <span className="text-sm">Fetching source chunks...</span>
                                     </div>
                                 ) : selectedSources.length === 0 ? (
                                     <div className="text-center text-gray-500 text-sm py-10">
@@ -814,11 +767,7 @@ export const ChatPage = () => {
                                                             rel="noreferrer"
                                                             className="text-sm text-gray-500 hover:text-accent-blue truncate block"
                                                         >
-                                                            {
-                                                                new URL(
-                                                                    source.url,
-                                                                ).pathname
-                                                            }
+                                                            {new URL(source.url).pathname}
                                                         </a>
                                                     </div>
                                                 </div>
@@ -831,25 +780,18 @@ export const ChatPage = () => {
                                                 <div className="pl-3 relative z-10">
                                                     {source.snippet
                                                         .split("\n")
-                                                        .map(
-                                                            (
-                                                                line: string,
-                                                                i: number,
-                                                            ) => (
-                                                                <p
-                                                                    key={i}
-                                                                    className={clsx(
-                                                                        line.startsWith(
-                                                                            "```",
-                                                                        )
-                                                                            ? "font-mono text-sm text-gray-300 my-1 bg-white/5 p-1 rounded"
-                                                                            : "",
-                                                                    )}
-                                                                >
-                                                                    {line}
-                                                                </p>
-                                                            ),
-                                                        )}
+                                                        .map((line: string, i: number) => (
+                                                            <p
+                                                                key={i}
+                                                                className={clsx(
+                                                                    line.startsWith("```")
+                                                                        ? "font-mono text-sm text-gray-300 my-1 bg-white/5 p-1 rounded"
+                                                                        : "",
+                                                                )}
+                                                            >
+                                                                {line}
+                                                            </p>
+                                                        ))}
                                                     <a
                                                         href={source.url}
                                                         target="_blank"
@@ -888,9 +830,7 @@ export const ChatPage = () => {
                             className="bg-[#1a1a24] border border-white/10 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col relative z-10"
                         >
                             <div className="p-6 border-b border-white/10 flex items-center justify-between">
-                                <h2 className="text-xl font-semibold text-white">
-                                    Indexed Pages
-                                </h2>
+                                <h2 className="text-xl font-semibold text-white">Indexed Pages</h2>
                                 <button
                                     onClick={() => setIsIndexedModalOpen(false)}
                                     className="p-2 -mr-2 text-gray-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors"
@@ -906,8 +846,7 @@ export const ChatPage = () => {
                                     >
                                         <h3 className="font-semibold text-gray-200 flex items-center gap-2 mb-1">
                                             <FileText className="w-4 h-4 text-accent-blue" />
-                                            {page.heading ||
-                                                `Indexed Page ${idx + 1}`}
+                                            {page.heading || `Indexed Page ${idx + 1}`}
                                         </h3>
                                         <a
                                             href={page.pageUrl}
@@ -1007,9 +946,7 @@ const ChatMessage = ({
                                 remarkPlugins={[remarkGfm]}
                                 components={{
                                     p: ({ children }) => (
-                                        <p className="mb-2 text-gray-300 leading-relaxed">
-                                            {children}
-                                        </p>
+                                        <p className="mb-2 text-gray-300 leading-relaxed">{children}</p>
                                     ),
                                     h1: ({ children }) => (
                                         <h1 className="text-white font-bold text-lg mt-4 mb-2">
@@ -1036,11 +973,7 @@ const ChatMessage = ({
                                             {children}
                                         </ol>
                                     ),
-                                    li: ({ children }) => (
-                                        <li className="text-gray-300">
-                                            {children}
-                                        </li>
-                                    ),
+                                    li: ({ children }) => <li className="text-gray-300">{children}</li>,
                                     a: ({ href, children }) => (
                                         <a
                                             href={href}
@@ -1052,15 +985,9 @@ const ChatMessage = ({
                                         </a>
                                     ),
                                     code: ({ className, children }) => {
-                                        const languageMatch =
-                                            /language-(\w+)/.exec(
-                                                className || "",
-                                            );
-                                        const code = String(
-                                            children || "",
-                                        ).replace(/\n$/, "");
-                                        const language =
-                                            languageMatch?.[1] || "";
+                                        const languageMatch = /language-(\w+)/.exec(className || "");
+                                        const code = String(children || "").replace(/\n$/, "");
+                                        const language = languageMatch?.[1] || "";
                                         const isBlock = Boolean(languageMatch);
 
                                         if (!isBlock) {
@@ -1080,9 +1007,7 @@ const ChatMessage = ({
                                                     </div>
                                                     <button
                                                         onClick={() =>
-                                                            navigator.clipboard.writeText(
-                                                                code,
-                                                            )
+                                                            navigator.clipboard.writeText(code)
                                                         }
                                                         className="text-sm uppercase font-bold tracking-wider text-gray-500 hover:text-white transition-colors cursor-pointer"
                                                     >
@@ -1093,10 +1018,7 @@ const ChatMessage = ({
                                                     <pre>
                                                         <code
                                                             dangerouslySetInnerHTML={{
-                                                                __html: highlightCode(
-                                                                    language,
-                                                                    code,
-                                                                ),
+                                                                __html: highlightCode(language, code),
                                                             }}
                                                         />
                                                     </pre>
@@ -1126,11 +1048,7 @@ const ChatMessage = ({
                             ) : (
                                 <Copy className="w-3.5 h-3.5" />
                             )}
-                            {copied ? (
-                                <span className="text-green-400">Copied</span>
-                            ) : (
-                                "Copy"
-                            )}
+                            {copied ? <span className="text-green-400">Copied</span> : "Copy"}
                         </button>
 
                         <>

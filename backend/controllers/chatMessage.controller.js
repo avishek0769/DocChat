@@ -39,13 +39,7 @@ const getAvailableModels = asyncHandler(async (req, res) => {
 
     return res
         .status(200)
-        .json(
-            new ApiResponse(
-                200,
-                { models },
-                "Available models retrieved successfully.",
-            ),
-        );
+        .json(new ApiResponse(200, { models }, "Available models retrieved successfully."));
 });
 
 const sendMessage = asyncHandler(async (req, res) => {
@@ -64,13 +58,8 @@ const sendMessage = asyncHandler(async (req, res) => {
 
     if (provider == "DEFAULT") {
         if (model === "default-1") modelId = "qwen/qwen3.6-plus:free";
-        else if (model === "default-2")
-            modelId = "nvidia/nemotron-3-super-120b-a12b:free";
-        else
-            throw new ApiError(
-                400,
-                "Invalid model selection for default provider.",
-            );
+        else if (model === "default-2") modelId = "nvidia/nemotron-3-super-120b-a12b:free";
+        else throw new ApiError(400, "Invalid model selection for default provider.");
 
         openai = new OpenAI({
             baseURL: "https://openrouter.ai/api/v1",
@@ -110,14 +99,12 @@ const sendMessage = asyncHandler(async (req, res) => {
     });
 
     // Dynamic System Instructions
-    let systemInstructions =
-        "You are a helpful assistant for answering questions. \n";
+    let systemInstructions = "You are a helpful assistant for answering questions. \n";
     if (relevantSources.points?.length) {
         systemInstructions +=
             "Use the provided documentation sources to answer. If the answer isn't in the sources, say you don't know. Be concise, use Markdown, and wrap code in triple backticks.";
     } else {
-        systemInstructions +=
-            "Answer the user's greeting or general question directly.";
+        systemInstructions += "Answer the user's greeting or general question directly.";
     }
 
     // Source Data (if any)
@@ -157,8 +144,7 @@ const sendMessage = asyncHandler(async (req, res) => {
         orderBy: { createdAt: "asc" },
     });
     messages.forEach((msg) => {
-        if (msg.userPrompt)
-            messagesForLLM.push({ role: "user", content: msg.userPrompt });
+        if (msg.userPrompt) messagesForLLM.push({ role: "user", content: msg.userPrompt });
         if (msg.llmResponse)
             messagesForLLM.push({
                 role: "assistant",
@@ -212,8 +198,7 @@ const sendMessage = asyncHandler(async (req, res) => {
             ],
             {
                 user_id: req.user.id,
-                custom_instructions:
-                    "Note: Store this interaction history for future reference.",
+                custom_instructions: "Note: Store this interaction history for future reference.",
             },
         );
 
@@ -276,24 +261,12 @@ const getChatMessages = asyncHandler(async (req, res) => {
     if (!messages.length) {
         return res
             .status(200)
-            .json(
-                new ApiResponse(
-                    200,
-                    { messages: [] },
-                    "No messages found for this chat.",
-                ),
-            );
+            .json(new ApiResponse(200, { messages: [] }, "No messages found for this chat."));
     }
 
     return res
         .status(200)
-        .json(
-            new ApiResponse(
-                200,
-                { messages: messages },
-                "Chat messages retrieved successfully.",
-            ),
-        );
+        .json(new ApiResponse(200, { messages: messages }, "Chat messages retrieved successfully."));
 });
 
 const getChatMessageSources = asyncHandler(async (req, res) => {
@@ -307,28 +280,13 @@ const getChatMessageSources = asyncHandler(async (req, res) => {
         return res
             .status(200)
             .json(
-                new ApiResponse(
-                    200,
-                    { messageSources: [] },
-                    "No sources found for this chat message.",
-                ),
+                new ApiResponse(200, { messageSources: [] }, "No sources found for this chat message."),
             );
     }
 
     return res
         .status(200)
-        .json(
-            new ApiResponse(
-                200,
-                { messageSources },
-                "Chat message sources retrieved successfully.",
-            ),
-        );
+        .json(new ApiResponse(200, { messageSources }, "Chat message sources retrieved successfully."));
 });
 
-export {
-    sendMessage,
-    getAvailableModels,
-    getChatMessages,
-    getChatMessageSources,
-};
+export { sendMessage, getAvailableModels, getChatMessages, getChatMessageSources };

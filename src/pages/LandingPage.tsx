@@ -36,39 +36,22 @@ const LandingPage = () => {
             <nav className="relative z-10 w-full max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <Terminal className="w-6 h-6 text-accent-blue" />
-                    <span className="font-semibold text-xl tracking-tight">
-                        DocChat
-                    </span>
+                    <span className="font-semibold text-xl tracking-tight">DocChat</span>
                 </div>
                 <div className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-400">
-                    <a
-                        href="#problem"
-                        className="hover:text-white transition-colors"
-                    >
+                    <a href="#problem" className="hover:text-white transition-colors">
                         Problem
                     </a>
-                    <a
-                        href="#how-it-works"
-                        className="hover:text-white transition-colors"
-                    >
+                    <a href="#how-it-works" className="hover:text-white transition-colors">
                         How it works
                     </a>
-                    <a
-                        href="#features"
-                        className="hover:text-white transition-colors"
-                    >
+                    <a href="#features" className="hover:text-white transition-colors">
                         Features
                     </a>
-                    <a
-                        href="#limitations"
-                        className="hover:text-white transition-colors"
-                    >
+                    <a href="#limitations" className="hover:text-white transition-colors">
                         Limitations
                     </a>
-                    <a
-                        href="#open-source"
-                        className="hover:text-white transition-colors"
-                    >
+                    <a href="#open-source" className="hover:text-white transition-colors">
                         Open Source
                     </a>
                 </div>
@@ -80,11 +63,7 @@ const LandingPage = () => {
                         aria-label="DocChat GitHub Repository"
                         className="text-gray-300 hover:text-white transition-colors hidden sm:inline-flex"
                     >
-                        <svg
-                            viewBox="0 0 24 24"
-                            aria-hidden="true"
-                            className="w-8 h-8 fill-current"
-                        >
+                        <svg viewBox="0 0 24 24" aria-hidden="true" className="w-8 h-8 fill-current">
                             <path d="M12 2C6.48 2 2 6.59 2 12.25c0 4.52 2.87 8.36 6.84 9.71.5.1.66-.22.66-.49 0-.24-.01-1.03-.01-1.86-2.78.62-3.37-1.21-3.37-1.21-.45-1.19-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.9 1.57 2.36 1.12 2.94.86.09-.67.35-1.12.64-1.38-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.04 1.03-2.76-.1-.26-.45-1.31.1-2.72 0 0 .84-.28 2.75 1.05A9.31 9.31 0 0 1 12 6.84c.85 0 1.7.12 2.5.35 1.9-1.33 2.74-1.05 2.74-1.05.55 1.41.2 2.46.1 2.72.65.72 1.03 1.64 1.03 2.76 0 3.93-2.35 4.8-4.58 5.05.36.31.68.92.68 1.86 0 1.34-.01 2.42-.01 2.75 0 .27.17.59.67.49A10.26 10.26 0 0 0 22 12.25C22 6.59 17.52 2 12 2Z" />
                         </svg>
                     </a>
@@ -120,8 +99,7 @@ const LandingPage = () => {
                     transition={{ duration: 0.6, delay: 0.1 }}
                     className="text-lg text-gray-400 max-w-2xl mx-auto mb-4"
                 >
-                    Paste a documentation link. We index it and turn it into an
-                    AI you can query.
+                    Paste a documentation link. We index it and turn it into an AI you can query.
                 </motion.p>
 
                 <motion.p
@@ -149,10 +127,7 @@ const LandingPage = () => {
             </section>
 
             {/* 2. Problem Section */}
-            <section
-                id="problem"
-                className="relative z-10 py-20 px-6 max-w-4xl mx-auto"
-            >
+            <section id="problem" className="relative z-10 py-20 px-6 max-w-4xl mx-auto">
                 <div className="glass rounded-2xl p-8 md:p-12 border border-red-500/10">
                     <div className="flex items-center gap-3 mb-6 text-red-400">
                         <AlertCircle className="w-6 h-6" />
@@ -161,15 +136,11 @@ const LandingPage = () => {
                     <ul className="space-y-4 text-gray-400 mb-8">
                         <li className="flex items-start gap-3">
                             <span className="text-gray-600 mt-1">•</span>
-                            <span>
-                                Documentation is long and hard to navigate
-                            </span>
+                            <span>Documentation is long and hard to navigate</span>
                         </li>
                         <li className="flex items-start gap-3">
                             <span className="text-gray-600 mt-1">•</span>
-                            <span>
-                                Searching through multiple pages is slow
-                            </span>
+                            <span>Searching through multiple pages is slow</span>
                         </li>
                         <li className="flex items-start gap-3">
                             <span className="text-gray-600 mt-1">•</span>
@@ -181,17 +152,13 @@ const LandingPage = () => {
                         </li>
                     </ul>
                     <p className="text-lg font-medium text-white border-l-2 border-red-500/50 pl-4 py-1">
-                        "You waste more time searching docs than actually
-                        building."
+                        "You waste more time searching docs than actually building."
                     </p>
                 </div>
             </section>
 
             {/* 3. How It Works */}
-            <section
-                id="how-it-works"
-                className="relative z-10 py-20 px-6 max-w-5xl mx-auto"
-            >
+            <section id="how-it-works" className="relative z-10 py-20 px-6 max-w-5xl mx-auto">
                 <div className="text-center mb-12">
                     <h2 className="text-3xl font-bold mb-4">How It Works</h2>
                     <p className="text-lg text-gray-400">
@@ -209,17 +176,13 @@ const LandingPage = () => {
                         },
                         {
                             step: "2",
-                            icon: (
-                                <Database className="w-6 h-6 text-indigo-400" />
-                            ),
+                            icon: <Database className="w-6 h-6 text-indigo-400" />,
                             title: "We Build Context",
                             desc: "We crawl internal pages, clean content, chunk it, and generate embeddings.",
                         },
                         {
                             step: "3",
-                            icon: (
-                                <MessageSquare className="w-6 h-6 text-accent-purple" />
-                            ),
+                            icon: <MessageSquare className="w-6 h-6 text-accent-purple" />,
                             title: "Start Chatting",
                             desc: "Ask questions and get precise answers backed by source citations.",
                         },
@@ -234,9 +197,7 @@ const LandingPage = () => {
                                 </span>
                                 {item.icon}
                             </div>
-                            <h3 className="text-lg font-semibold mb-2">
-                                {item.title}
-                            </h3>
+                            <h3 className="text-lg font-semibold mb-2">{item.title}</h3>
                             <p className="text-sm text-gray-400">{item.desc}</p>
                         </div>
                     ))}
@@ -247,17 +208,14 @@ const LandingPage = () => {
                         You ask questions. It gives answers with sources.
                     </p>
                     <p className="text-center text-gray-500 text-sm">
-                        First-time ingestion runs in the background. If the same
-                        docs URL is already indexed, chat creation is instant.
+                        First-time ingestion runs in the background. If the same docs URL is already
+                        indexed, chat creation is instant.
                     </p>
                 </div>
             </section>
 
             {/* 4. Demo Explanation Section */}
-            <section
-                id="demo"
-                className="relative z-10 py-20 px-6 max-w-6xl mx-auto"
-            >
+            <section id="demo" className="relative z-10 py-20 px-6 max-w-6xl mx-auto">
                 <div className="grid grid-cols-1 md:grid-cols-[1.05fr_0.95fr] gap-10 md:gap-14 items-center">
                     <div className="order-2 md:order-1 relative rounded-xl border border-white/10 bg-[#0d0d12] p-3 shadow-2xl w-full max-w-2xl md:justify-self-center">
                         <img
@@ -267,36 +225,29 @@ const LandingPage = () => {
                         />
                     </div>
                     <div className="order-1 md:order-2 w-full max-w-xl md:justify-self-center text-left">
-                        <h2 className="text-3xl font-bold mb-6">
-                            See it in action
-                        </h2>
+                        <h2 className="text-3xl font-bold mb-6">See it in action</h2>
                         <ul className="space-y-4 text-gray-400 mb-8">
                             <li className="flex items-center gap-3">
-                                <Check className="w-4 h-4 text-accent-blue" />{" "}
-                                Ask natural language questions
+                                <Check className="w-4 h-4 text-accent-blue" /> Ask natural language
+                                questions
                             </li>
                             <li className="flex items-center gap-3">
-                                <Check className="w-4 h-4 text-accent-blue" />{" "}
-                                Get precise answers
+                                <Check className="w-4 h-4 text-accent-blue" /> Get precise answers
                             </li>
                             <li className="flex items-center gap-3">
-                                <Check className="w-4 h-4 text-accent-blue" />{" "}
-                                See exactly where the answer came from
+                                <Check className="w-4 h-4 text-accent-blue" /> See exactly where the
+                                answer came from
                             </li>
                         </ul>
                         <p className="inline-block px-4 py-2 glass rounded-lg border-white/10 font-medium text-white">
-                            No hallucinations. Every answer is backed by
-                            sources.
+                            No hallucinations. Every answer is backed by sources.
                         </p>
                     </div>
                 </div>
             </section>
 
             {/* 6. Features Section */}
-            <section
-                id="features"
-                className="relative z-10 py-20 px-6 max-w-6xl mx-auto"
-            >
+            <section id="features" className="relative z-10 py-20 px-6 max-w-6xl mx-auto">
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {[
                         {
@@ -334,16 +285,10 @@ const LandingPage = () => {
                             key={idx}
                             className="glass p-5 rounded-lg border border-white/5 flex gap-4 items-start"
                         >
-                            <div className="mt-1 text-gray-400">
-                                {feature.icon}
-                            </div>
+                            <div className="mt-1 text-gray-400">{feature.icon}</div>
                             <div>
-                                <h3 className="font-semibold text-gray-200 mb-1">
-                                    {feature.title}
-                                </h3>
-                                <p className="text-sm text-gray-500">
-                                    {feature.desc}
-                                </p>
+                                <h3 className="font-semibold text-gray-200 mb-1">{feature.title}</h3>
+                                <p className="text-sm text-gray-500">{feature.desc}</p>
                             </div>
                         </div>
                     ))}
@@ -352,13 +297,10 @@ const LandingPage = () => {
 
             {/* 7. Developer-Focused Section */}
             <section className="relative z-10 py-20 px-6 max-w-4xl mx-auto text-center border-y border-white/5 mt-10">
-                <h2 className="text-3xl font-bold mb-4">
-                    Built for developer documentation workflows
-                </h2>
+                <h2 className="text-3xl font-bold mb-4">Built for developer documentation workflows</h2>
                 <div className="text-gray-400 mb-8 max-w-2xl mx-auto">
-                    Ingest docs once, ask naturally, and keep references
-                    attached to every answer. Bring your own API keys or use the
-                    included model access.
+                    Ingest docs once, ask naturally, and keep references attached to every answer. Bring
+                    your own API keys or use the included model access.
                 </div>
                 <div className="flex flex-wrap justify-center gap-4 text-sm font-medium text-gray-300">
                     <span className="px-4 py-2 rounded-full glass border border-white/10">
@@ -377,20 +319,15 @@ const LandingPage = () => {
             </section>
 
             {/* 8. Limitations */}
-            <section
-                id="limitations"
-                className="relative z-10 py-20 px-6 max-w-6xl mx-auto mt-10"
-            >
+            <section id="limitations" className="relative z-10 py-20 px-6 max-w-6xl mx-auto mt-10">
                 <div className="mb-10 text-center">
                     <p className="text-xs uppercase tracking-[0.22em] text-red-300/70 mb-3">
                         Know Before You Start
                     </p>
-                    <h3 className="text-3xl font-bold mb-4">
-                        Current Limitations
-                    </h3>
+                    <h3 className="text-3xl font-bold mb-4">Current Limitations</h3>
                     <p className="text-gray-400 max-w-2xl mx-auto">
-                        DocChat is fast for most documentation sites, but these
-                        are the practical constraints right now.
+                        DocChat is fast for most documentation sites, but these are the practical
+                        constraints right now.
                     </p>
                 </div>
 
@@ -403,13 +340,8 @@ const LandingPage = () => {
                             "Only up to 300 pages can be ingested reliably each chat",
                             "Large docs may take time to process",
                         ].map((item, idx) => (
-                            <div
-                                key={idx}
-                                className="grid md:grid-cols-2 items-center gap-4 md:gap-10"
-                            >
-                                <div
-                                    className={`hidden md:block ${idx % 2 === 0 ? "" : "order-2"}`}
-                                />
+                            <div key={idx} className="grid md:grid-cols-2 items-center gap-4 md:gap-10">
+                                <div className={`hidden md:block ${idx % 2 === 0 ? "" : "order-2"}`} />
                                 <div
                                     className={`relative ml-8 md:ml-0 glass rounded-xl border border-white/10 p-5 text-sm text-gray-300 ${idx % 2 === 0 ? "md:mr-8" : "md:ml-8 md:order-1"}`}
                                 >
@@ -428,10 +360,7 @@ const LandingPage = () => {
             </section>
 
             {/* 9. Open Source */}
-            <section
-                id="open-source"
-                className="relative z-10 py-20 px-6 max-w-6xl mx-auto"
-            >
+            <section id="open-source" className="relative z-10 py-20 px-6 max-w-6xl mx-auto">
                 <div className="relative overflow-hidden rounded-3xl border border-accent-blue/30 bg-[radial-gradient(circle_at_15%_20%,rgba(59,130,246,0.2),transparent_40%),radial-gradient(circle_at_90%_80%,rgba(168,85,247,0.2),transparent_45%),linear-gradient(180deg,rgba(16,16,24,0.95),rgba(10,10,16,0.95))] p-8 md:p-12">
                     <div className="absolute inset-0 bg-[linear-gradient(120deg,rgba(255,255,255,0.06)_0%,transparent_45%)] pointer-events-none" />
                     <div className="relative grid md:grid-cols-[1.2fr_0.8fr] gap-8 items-center">
@@ -443,9 +372,8 @@ const LandingPage = () => {
                                 Open source and built in public
                             </h3>
                             <p className="text-gray-300 mb-6 max-w-2xl">
-                                DocChat is fully open source. If you want to fix
-                                bugs, improve crawling quality, or ship new
-                                ideas, contributions are welcome.
+                                DocChat is fully open source. If you want to fix bugs, improve crawling
+                                quality, or ship new ideas, contributions are welcome.
                             </p>
                             <div className="flex flex-wrap gap-3 text-sm">
                                 <span className="px-3 py-1.5 rounded-full border border-white/15 bg-white/5 text-gray-300">
@@ -476,9 +404,7 @@ const LandingPage = () => {
 
             {/* 10. CTA Section */}
             <section className="relative z-10 py-24 px-6 text-center">
-                <h2 className="text-4xl font-bold mb-8">
-                    Stop searching docs. Start asking.
-                </h2>
+                <h2 className="text-4xl font-bold mb-8">Stop searching docs. Start asking.</h2>
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                     <RouterLink
                         to="/signup"
@@ -519,10 +445,7 @@ const LandingPage = () => {
                         >
                             Live Website
                         </a>
-                        <a
-                            href="/signin"
-                            className="hover:text-white transition-colors"
-                        >
+                        <a href="/signin" className="hover:text-white transition-colors">
                             Sign In
                         </a>
                     </div>

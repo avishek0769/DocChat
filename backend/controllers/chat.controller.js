@@ -59,9 +59,7 @@ const expectation = asyncHandler(async (req, res) => {
             throw new Error("Failed to scrape sample pages");
         }
 
-        let expectedTokens = Math.ceil(
-            ((totalBodyLengthOfCount / count) * allLinks.length) / 3.8,
-        );
+        let expectedTokens = Math.ceil(((totalBodyLengthOfCount / count) * allLinks.length) / 3.8);
         let expectedCost = ((expectedTokens / 1000000) * 0.02).toFixed(4);
 
         res.status(200).json(
@@ -85,7 +83,7 @@ const expectation = asyncHandler(async (req, res) => {
 
 const createChat = asyncHandler(async (req, res) => {
     let { name, docsUrl, isVectorLess } = req.body;
-    const isVectorLessChat = Boolean(isVectorLess)
+    const isVectorLessChat = Boolean(isVectorLess);
     const { internalLinks, title } = await scrapeWebpage(docsUrl, docsUrl);
     name = name || title || "Untitled Chat";
 
@@ -158,13 +156,9 @@ const createChat = asyncHandler(async (req, res) => {
             { jobId: chat.id },
         );
 
-        return res.status(200).json(
-            new ApiResponse(
-                200,
-                { chatId: chat.id },
-                "Chat creation initiated successfully",
-            ),
-        );
+        return res
+            .status(200)
+            .json(new ApiResponse(200, { chatId: chat.id }, "Chat creation initiated successfully"));
     }
 });
 
@@ -176,17 +170,9 @@ const progressStatus = asyncHandler(async (req, res) => {
     });
 
     const redisData = await redis.get(chat.collectionName);
-    const progress = redisData
-        ? JSON.parse(redisData)
-        : { status: "QUEUED", progress: 0 };
+    const progress = redisData ? JSON.parse(redisData) : { status: "QUEUED", progress: 0 };
 
-    res.status(200).json(
-        new ApiResponse(
-            200,
-            { progress: progress },
-            "Progress fetched successfully",
-        ),
-    );
+    res.status(200).json(new ApiResponse(200, { progress: progress }, "Progress fetched successfully"));
 });
 
 const listAllChats = asyncHandler(async (req, res) => {
@@ -234,9 +220,7 @@ const listAllChats = asyncHandler(async (req, res) => {
         };
     });
 
-    res.status(200).json(
-        new ApiResponse(200, chatsWithUsage, "Chats fetched successfully"),
-    );
+    res.status(200).json(new ApiResponse(200, chatsWithUsage, "Chats fetched successfully"));
 });
 
 const recentChats = asyncHandler(async (req, res) => {
@@ -285,13 +269,7 @@ const recentChats = asyncHandler(async (req, res) => {
         };
     });
 
-    res.status(200).json(
-        new ApiResponse(
-            200,
-            chatsWithUsage,
-            "Recent chats fetched successfully",
-        ),
-    );
+    res.status(200).json(new ApiResponse(200, chatsWithUsage, "Recent chats fetched successfully"));
 });
 
 const chatDetails = asyncHandler(async (req, res) => {
@@ -309,9 +287,7 @@ const chatDetails = asyncHandler(async (req, res) => {
         },
     });
 
-    res.status(200).json(
-        new ApiResponse(200, { chat }, "Chat details fetched successfully"),
-    );
+    res.status(200).json(new ApiResponse(200, { chat }, "Chat details fetched successfully"));
 });
 
 const listAllPagesIndexed = asyncHandler(async (req, res) => {
@@ -332,9 +308,7 @@ const listAllPagesIndexed = asyncHandler(async (req, res) => {
         new ApiResponse(
             200,
             {
-                pagesIndexed: chat.chatSources.flatMap(
-                    (source) => source.pagesIndexed,
-                ),
+                pagesIndexed: chat.chatSources.flatMap((source) => source.pagesIndexed),
             },
             "Pages indexed fetched successfully",
         ),
@@ -352,21 +326,12 @@ const cancelProcessing = asyncHandler(async (req, res) => {
         throw new ApiError(404, "Chat not found");
     }
 
-    const jobs = await chatCreationQueue.getJobs(
-        ["active", "waiting", "delayed"],
-        0,
-        -1,
-        false,
-    );
+    const jobs = await chatCreationQueue.getJobs(["active", "waiting", "delayed"], 0, -1, false);
     const job = jobs.find((j) => j.id === chatId);
 
     if (job) {
         await job.remove();
-        await redis.setex(
-            chat.collectionName,
-            3600,
-            JSON.stringify({ status: "READY", progress: 100 }),
-        );
+        await redis.setex(chat.collectionName, 3600, JSON.stringify({ status: "READY", progress: 100 }));
 
         await prisma.chat
             .update({
@@ -377,13 +342,7 @@ const cancelProcessing = asyncHandler(async (req, res) => {
                 throw new ApiError(500, `Failed Update: ${err.message}`, err);
             });
 
-        res.status(200).json(
-            new ApiResponse(
-                200,
-                null,
-                "Chat processing cancelled successfully",
-            ),
-        );
+        res.status(200).json(new ApiResponse(200, null, "Chat processing cancelled successfully"));
     } else {
         throw new ApiError(404, "Job not found or already completed");
     }
@@ -411,9 +370,7 @@ const deleteChat = asyncHandler(async (req, res) => {
         throw new ApiError(404, "Chat not found");
     }
 
-    res.status(200).json(
-        new ApiResponse(200, null, "Chat deleted successfully"),
-    );
+    res.status(200).json(new ApiResponse(200, null, "Chat deleted successfully"));
 });
 
 export {

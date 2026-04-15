@@ -14,13 +14,7 @@ const totalTokensUsedInLifetime = asyncHandler(async (req, res) => {
     });
     return res
         .status(200)
-        .json(
-            new ApiResponse(
-                200,
-                usage,
-                "Total tokens used in lifetime retrieved successfully",
-            ),
-        );
+        .json(new ApiResponse(200, usage, "Total tokens used in lifetime retrieved successfully"));
 });
 
 const tokensUsedByGroup = asyncHandler(async (req, res) => {
@@ -115,13 +109,7 @@ const topChatsByTokensUsed = asyncHandler(async (req, res) => {
 
     return res
         .status(200)
-        .json(
-            new ApiResponse(
-                200,
-                result,
-                "Top chats by tokens used retrieved successfully",
-            ),
-        );
+        .json(new ApiResponse(200, result, "Top chats by tokens used retrieved successfully"));
 });
 
 export { totalTokensUsedInLifetime, tokensUsedByGroup, topChatsByTokensUsed };

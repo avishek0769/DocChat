@@ -1,7 +1,6 @@
 import { forceSignOut, getAccessToken } from "./auth";
 
-const API_BASE_URL =
-    import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api/v1";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api/v1";
 
 type ApiEnvelope<T> = {
     statuscode?: number;
@@ -94,27 +93,19 @@ export const getUserProfile = () =>
         email?: string | null;
     }>("/user/profile", { method: "GET" });
 
-export const getApiKeys = () =>
-    apiRequest<{ apiKeys: ApiKeyItem[] }>("/apikey/list", { method: "GET" });
+export const getApiKeys = () => apiRequest<{ apiKeys: ApiKeyItem[] }>("/apikey/list", { method: "GET" });
 
-export const createApiKey = (payload: {
-    key: string;
-    name: string;
-    provider: Provider;
-}) =>
+export const createApiKey = (payload: { key: string; name: string; provider: Provider }) =>
     apiRequest("/apikey/add", {
         method: "POST",
         body: JSON.stringify(payload),
     });
 
-export const deleteApiKey = (id: string) =>
-    apiRequest(`/apikey/${id}`, { method: "DELETE" });
+export const deleteApiKey = (id: string) => apiRequest(`/apikey/${id}`, { method: "DELETE" });
 
-export const getApiKeyCount = () =>
-    apiRequest<{ count: number }>("/apikey/count", { method: "GET" });
+export const getApiKeyCount = () => apiRequest<{ count: number }>("/apikey/count", { method: "GET" });
 
-export const getChats = () =>
-    apiRequest<ChatItem[]>("/chat/list", { method: "GET" });
+export const getChats = () => apiRequest<ChatItem[]>("/chat/list", { method: "GET" });
 
 export const createChat = (payload: { name?: string; docsUrl: string }) =>
     apiRequest<{ chatId?: string; id?: string }>("/chat/create", {
@@ -122,16 +113,12 @@ export const createChat = (payload: { name?: string; docsUrl: string }) =>
         body: JSON.stringify(payload),
     });
 
-export const deleteChat = (chatId: string) =>
-    apiRequest(`/chat/${chatId}`, { method: "DELETE" });
+export const deleteChat = (chatId: string) => apiRequest(`/chat/${chatId}`, { method: "DELETE" });
 
 export const getChatStatus = (chatId: string) =>
-    apiRequest<{ progress: { status: string; progress: number } }>(
-        `/chat/status/${chatId}`,
-        {
-            method: "GET",
-        },
-    );
+    apiRequest<{ progress: { status: string; progress: number } }>(`/chat/status/${chatId}`, {
+        method: "GET",
+    });
 
 export const getChatDetails = (chatId: string) =>
     apiRequest<{ chat: ChatItem }>(`/chat/${chatId}`, { method: "GET" });
@@ -150,12 +137,9 @@ export const getChatMessages = (chatId: string) =>
     });
 
 export const getMessageSources = (messageId: string) =>
-    apiRequest<{ messageSources: ChatMessageSourceItem[] }>(
-        `/message/sources/${messageId}`,
-        {
-            method: "GET",
-        },
-    );
+    apiRequest<{ messageSources: ChatMessageSourceItem[] }>(`/message/sources/${messageId}`, {
+        method: "GET",
+    });
 
 export const sendMessageStream = async (payload: {
     userPrompt: string;
@@ -178,9 +162,7 @@ export const sendMessageStream = async (payload: {
     });
 
     if (!response.ok || !response.body) {
-        const payload = (await response
-            .json()
-            .catch(() => ({}))) as ApiEnvelope<unknown>;
+        const payload = (await response.json().catch(() => ({}))) as ApiEnvelope<unknown>;
         if (response.status === 401 || response.status === 403) {
             forceSignOut();
         }
@@ -228,8 +210,7 @@ export const getTokensByGroup = (groupBy: "day" | "week" | "month" | "year") =>
         >
     >(`/usage/tokens/${groupBy}`, { method: "GET" });
 
-export const getRecentChats = () =>
-    apiRequest<ChatItem[]>("/chat/recent", { method: "GET" });
+export const getRecentChats = () => apiRequest<ChatItem[]>("/chat/recent", { method: "GET" });
 
 export const getTopChatsByUsage = () =>
     apiRequest<

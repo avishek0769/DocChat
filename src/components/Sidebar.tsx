@@ -28,10 +28,7 @@ export const Sidebar = ({ isCollapsed = false }: SidebarProps) => {
 
         const loadSidebarProfile = async () => {
             try {
-                const [profile, keyCount] = await Promise.all([
-                    getUserProfile(),
-                    getApiKeyCount(),
-                ]);
+                const [profile, keyCount] = await Promise.all([getUserProfile(), getApiKeyCount()]);
 
                 if (!mounted) return;
 
@@ -76,17 +73,10 @@ export const Sidebar = ({ isCollapsed = false }: SidebarProps) => {
                 isCollapsed ? "w-20" : "w-64",
             )}
         >
-            <div
-                className={clsx(
-                    "p-6 flex items-center gap-2",
-                    isCollapsed && "justify-center px-0",
-                )}
-            >
+            <div className={clsx("p-6 flex items-center gap-2", isCollapsed && "justify-center px-0")}>
                 <Terminal className="w-6 h-6 text-accent-blue shrink-0" />
                 {!isCollapsed && (
-                    <span className="font-semibold text-xl tracking-tight text-white">
-                        DocChat
-                    </span>
+                    <span className="font-semibold text-xl tracking-tight text-white">DocChat</span>
                 )}
             </div>
 
@@ -101,19 +91,14 @@ export const Sidebar = ({ isCollapsed = false }: SidebarProps) => {
                             title={isCollapsed ? item.name : undefined}
                             className={clsx(
                                 "flex items-center rounded-lg font-medium transition-colors text-sm",
-                                isCollapsed
-                                    ? "justify-center p-3"
-                                    : "gap-3 px-3 py-2",
+                                isCollapsed ? "justify-center p-3" : "gap-3 px-3 py-2",
                                 isActive
                                     ? "bg-white/5 text-white border border-white/5"
                                     : "text-gray-400 hover:text-white hover:bg-white/5 border border-transparent",
                             )}
                         >
                             <Icon
-                                className={clsx(
-                                    "w-5 h-5 shrink-0",
-                                    isActive ? "text-accent-blue" : "",
-                                )}
+                                className={clsx("w-5 h-5 shrink-0", isActive ? "text-accent-blue" : "")}
                             />
                             {!isCollapsed && item.name}
                         </Link>
@@ -128,9 +113,7 @@ export const Sidebar = ({ isCollapsed = false }: SidebarProps) => {
                     title={isCollapsed ? "Profile" : undefined}
                     className={clsx(
                         "w-full flex items-center rounded-lg hover:bg-white/5 transition-colors group",
-                        isCollapsed
-                            ? "justify-center p-2"
-                            : "justify-between p-2",
+                        isCollapsed ? "justify-center p-2" : "justify-between p-2",
                     )}
                 >
                     <div
@@ -144,9 +127,7 @@ export const Sidebar = ({ isCollapsed = false }: SidebarProps) => {
                         </div>
                         {!isCollapsed && (
                             <div className="text-left whitespace-nowrap overflow-hidden">
-                                <p className="text-sm font-medium text-gray-200">
-                                    {profileName}
-                                </p>
+                                <p className="text-sm font-medium text-gray-200">{profileName}</p>
                                 <p className="text-xs text-gray-500 group-hover:text-gray-400">
                                     {profileSubline}
                                 </p>

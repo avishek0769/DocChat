@@ -12,21 +12,9 @@ import {
 } from "chart.js";
 import type { TooltipItem } from "chart.js";
 import { Bar } from "react-chartjs-2";
-import {
-    getApiKeyCount,
-    getLifetimeTokens,
-    getTopChatsByUsage,
-    getTokensByGroup,
-} from "../lib/api";
+import { getApiKeyCount, getLifetimeTokens, getTopChatsByUsage, getTokensByGroup } from "../lib/api";
 
-ChartJS.register(
-    CategoryScale,
-    LinearScale,
-    BarElement,
-    Title,
-    Tooltip,
-    Legend,
-);
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
 type UsagePoint = {
     period: string;
@@ -106,9 +94,7 @@ export const Usage = () => {
     const [usagePoints, setUsagePoints] = useState<UsagePoint[]>([]);
     const [lifetimeTotal, setLifetimeTotal] = useState(0);
     const [apiKeyCount, setApiKeyCount] = useState(0);
-    const [topChats, setTopChats] = useState<
-        Array<{ name: string; tokens: number; color: string }>
-    >([]);
+    const [topChats, setTopChats] = useState<Array<{ name: string; tokens: number; color: string }>>([]);
     const [error, setError] = useState("");
     const requestIdRef = useRef(0);
 
@@ -116,8 +102,7 @@ export const Usage = () => {
         const now = new Date();
         const first = new Date(now.getFullYear(), now.getMonth(), 1);
         const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-        const fmt = (d: Date) =>
-            d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+        const fmt = (d: Date) => d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
         return `${fmt(first)} - ${fmt(last)}`;
     }, []);
 
@@ -127,20 +112,17 @@ export const Usage = () => {
             setError("");
             setUsagePoints(getPlaceholderUsagePoints(timeframe));
             try {
-                const [grouped, lifetime, keys, topChatsByUsage] =
-                    await Promise.all([
-                        getTokensByGroup(timeframe),
-                        getLifetimeTokens(),
-                        getApiKeyCount(),
-                        getTopChatsByUsage(),
-                    ]);
+                const [grouped, lifetime, keys, topChatsByUsage] = await Promise.all([
+                    getTokensByGroup(timeframe),
+                    getLifetimeTokens(),
+                    getApiKeyCount(),
+                    getTopChatsByUsage(),
+                ]);
 
                 if (requestId !== requestIdRef.current) return;
 
                 const normalizedUsage = Object.values(grouped || {}).sort(
-                    (a, b) =>
-                        new Date(a.period).getTime() -
-                        new Date(b.period).getTime(),
+                    (a, b) => new Date(a.period).getTime() - new Date(b.period).getTime(),
                 );
                 setUsagePoints(normalizedUsage);
                 const input = lifetime?._sum?.inputTokens || 0;
@@ -150,32 +132,21 @@ export const Usage = () => {
 
                 const ranked = [...(topChatsByUsage || [])]
                     .map((chat) => ({
-                        name:
-                            chat.name?.trim() ||
-                            `Deleted Chat - ${chat.chatId.slice(0, 6)}`,
+                        name: chat.name?.trim() || `Deleted Chat - ${chat.chatId.slice(0, 6)}`,
                         tokens:
-                            Number(chat?._sum?.inputTokens || 0) +
-                            Number(chat?._sum?.outputTokens || 0),
+                            Number(chat?._sum?.inputTokens || 0) + Number(chat?._sum?.outputTokens || 0),
                     }))
                     .sort((a, b) => b.tokens - a.tokens)
                     .slice(0, 3)
                     .map((item, idx) => ({
                         ...item,
                         color:
-                            idx === 0
-                                ? "bg-accent-blue"
-                                : idx === 1
-                                  ? "bg-purple-500"
-                                  : "bg-green-500",
+                            idx === 0 ? "bg-accent-blue" : idx === 1 ? "bg-purple-500" : "bg-green-500",
                     }));
                 setTopChats(ranked);
             } catch (err) {
                 if (requestId !== requestIdRef.current) return;
-                setError(
-                    err instanceof Error
-                        ? err.message
-                        : "Failed to load usage data.",
-                );
+                setError(err instanceof Error ? err.message : "Failed to load usage data.");
             }
         };
 
@@ -184,32 +155,20 @@ export const Usage = () => {
 
     // Chart.js Data & Options configurations
     const chartData = useMemo(() => {
-        const labels = usagePoints.map((d) =>
-            new Date(d.period).toLocaleDateString(),
-        );
+        const labels = usagePoints.map((d) => new Date(d.period).toLocaleDateString());
 
         const models = Array.from(
-            new Set(
-                usagePoints.flatMap((period) =>
-                    period.usageByModels.map((item) => item.model),
-                ),
-            ),
+            new Set(usagePoints.flatMap((period) => period.usageByModels.map((item) => item.model))),
         );
 
         const datasets = models.map((model, idx) => ({
             label: modelDisplayName(model),
             data: usagePoints.map((period) => {
-                const modelUsage = period.usageByModels.find(
-                    (item) => item.model === model,
-                );
+                const modelUsage = period.usageByModels.find((item) => item.model === model);
                 if (!modelUsage) return 0;
-                return (
-                    Number(modelUsage.totalInput || 0) +
-                    Number(modelUsage.totalOutput || 0)
-                );
+                return Number(modelUsage.totalInput || 0) + Number(modelUsage.totalOutput || 0);
             }),
-            backgroundColor:
-                MODEL_COLOR_PALETTE[idx % MODEL_COLOR_PALETTE.length],
+            backgroundColor: MODEL_COLOR_PALETTE[idx % MODEL_COLOR_PALETTE.length],
             borderRadius: 4,
             barThickness: 32,
         }));
@@ -327,26 +286,19 @@ export const Usage = () => {
                 <div className="max-w-5xl mx-auto space-y-10">
                     <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-6">
                         <div>
-                            <h1 className="text-3xl font-bold mb-2">
-                                Usage Metrics
-                            </h1>
+                            <h1 className="text-3xl font-bold mb-2">Usage Metrics</h1>
                             <p className="text-gray-400 text-sm">
-                                Track your token consumption across different
-                                models and API keys.
+                                Track your token consumption across different models and API keys.
                             </p>
                             <p className="text-sm text-gray-400 mt-3">
-                                <strong>Usage calculation:</strong> We also add
-                                token usage from the free default models for
-                                your usage tracking.
+                                <strong>Usage calculation:</strong> We also add token usage from the free
+                                default models for your usage tracking.
                             </p>
                         </div>
                         <div className="flex items-center gap-3 bg-white/5 border border-white/10 px-4 py-2 rounded-lg">
                             <Calendar className="w-4 h-4 text-gray-400" />
                             <span className="text-sm font-medium text-gray-200">
-                                Current Cycle:{" "}
-                                <strong className="text-white">
-                                    {cycleLabel}
-                                </strong>
+                                Current Cycle: <strong className="text-white">{cycleLabel}</strong>
                             </span>
                         </div>
                     </header>
@@ -372,25 +324,19 @@ export const Usage = () => {
                                 <h3 className="text-3xl font-bold text-white mb-2">
                                     {formatTokens(lifetimeTotal)}
                                 </h3>
-                                <p className="text-xs text-gray-500 font-medium">
-                                    Lifetime token usage
-                                </p>
+                                <p className="text-xs text-gray-500 font-medium">Lifetime token usage</p>
                             </div>
                         </div>
 
                         <div className="p-6 rounded-xl bg-white/2 border border-white/5 relative overflow-hidden group hover:border-white/10 transition-colors">
                             <div className="flex justify-between items-start mb-6">
-                                <p className="text-sm font-medium text-gray-400">
-                                    Active API Keys
-                                </p>
+                                <p className="text-sm font-medium text-gray-400">Active API Keys</p>
                                 <div className="p-2.5 rounded-lg bg-accent-blue/10 border border-accent-blue/20 text-accent-blue">
                                     <Key className="w-5 h-5" />
                                 </div>
                             </div>
                             <div>
-                                <h3 className="text-3xl font-bold text-white mb-2">
-                                    {apiKeyCount}
-                                </h3>
+                                <h3 className="text-3xl font-bold text-white mb-2">{apiKeyCount}</h3>
                                 <p className="text-xs text-gray-500 font-medium">
                                     Active keys in your account
                                 </p>
@@ -408,14 +354,7 @@ export const Usage = () => {
                                 </h3>
 
                                 <div className="flex bg-[#111] border border-white/10 rounded-lg p-1">
-                                    {(
-                                        [
-                                            "day",
-                                            "week",
-                                            "month",
-                                            "year",
-                                        ] as const
-                                    ).map((t) => (
+                                    {(["day", "week", "month", "year"] as const).map((t) => (
                                         <button
                                             key={t}
                                             onClick={() => setTimeframe(t)}
@@ -454,10 +393,7 @@ export const Usage = () => {
                                                 {chat.name}
                                             </span>
                                             <span className="text-gray-300 font-mono font-medium shrink-0">
-                                                {(chat.tokens / 1000).toFixed(
-                                                    0,
-                                                )}
-                                                k
+                                                {(chat.tokens / 1000).toFixed(0)}k
                                             </span>
                                         </div>
                                         <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden border border-white/5">

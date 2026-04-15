@@ -42,10 +42,7 @@ async function scrapeWebpage(url = "", rootUrl = "") {
         try {
             const resolved = new URL(href, url);
 
-            if (
-                resolved.hostname === rootHostname &&
-                resolved.protocol.startsWith("http")
-            ) {
+            if (resolved.hostname === rootHostname && resolved.protocol.startsWith("http")) {
                 const normalized = normalizeUrl(resolved.toString());
                 if (isValidDocUrl(normalized, rootUrl)) {
                     internalLinks.add(normalized);
@@ -94,8 +91,7 @@ function isValidDocUrl(url, rootUrl = "") {
 
     if (u.origin !== root.origin) return false;
 
-    if (u.pathname.match(/\.(png|ico|xml|jpg|jpeg|gif|svg|pdf|css|js)$/))
-        return false;
+    if (u.pathname.match(/\.(png|ico|xml|jpg|jpeg|gif|svg|pdf|css|js)$/)) return false;
 
     return true;
 }
@@ -127,10 +123,4 @@ function extractHrefsFromScripts($, rootUrl, rootHostname) {
     return hrefs;
 }
 
-export {
-    normalizeUrl,
-    isValidDocUrl,
-    scrapeWebpage,
-    scrapeTitle,
-    generateVectorEmbeddings,
-};
+export { normalizeUrl, isValidDocUrl, scrapeWebpage, scrapeTitle, generateVectorEmbeddings };

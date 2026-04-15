@@ -96,9 +96,7 @@ const addApiKey = asyncHandler(async (req, res) => {
         },
     });
 
-    res.status(201).json(
-        new ApiResponse(200, {}, "API key added successfully"),
-    );
+    res.status(201).json(new ApiResponse(200, {}, "API key added successfully"));
 });
 
 const listApiKeys = asyncHandler(async (req, res) => {
@@ -134,11 +132,7 @@ const listApiKeys = asyncHandler(async (req, res) => {
     });
 
     res.status(200).json(
-        new ApiResponse(
-            200,
-            { apiKeys: formattedApiKeys },
-            "API keys listed successfully",
-        ),
+        new ApiResponse(200, { apiKeys: formattedApiKeys }, "API keys listed successfully"),
     );
 });
 
@@ -151,9 +145,7 @@ const removeApiKey = asyncHandler(async (req, res) => {
         },
     });
 
-    res.status(200).json(
-        new ApiResponse(200, {}, "API key removed successfully"),
-    );
+    res.status(200).json(new ApiResponse(200, {}, "API key removed successfully"));
 });
 
 const getApiKey = asyncHandler(async (req, res) => {
@@ -178,21 +170,13 @@ const getApiKey = asyncHandler(async (req, res) => {
         throw new ApiError(404, "API key not found");
     }
 
-    const decryptedKey = decryptApiKey(
-        apiKey.encryptedKey,
-        apiKey.iv,
-        apiKey.tag,
-    );
+    const decryptedKey = decryptApiKey(apiKey.encryptedKey, apiKey.iv, apiKey.tag);
     delete apiKey.encryptedKey;
     delete apiKey.iv;
     delete apiKey.tag;
 
     res.status(200).json(
-        new ApiResponse(
-            200,
-            { ...apiKey, decryptedKey },
-            "API key retrieved successfully",
-        ),
+        new ApiResponse(200, { ...apiKey, decryptedKey }, "API key retrieved successfully"),
     );
 });
 
@@ -202,18 +186,8 @@ const totalNumberOfApiKeys = asyncHandler(async (req, res) => {
     });
 
     res.status(200).json(
-        new ApiResponse(
-            200,
-            { count },
-            "Total number of API keys retrieved successfully",
-        ),
+        new ApiResponse(200, { count }, "Total number of API keys retrieved successfully"),
     );
 });
 
-export {
-    addApiKey,
-    listApiKeys,
-    removeApiKey,
-    getApiKey,
-    totalNumberOfApiKeys,
-};
+export { addApiKey, listApiKeys, removeApiKey, getApiKey, totalNumberOfApiKeys };

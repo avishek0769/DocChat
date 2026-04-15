@@ -12,8 +12,6 @@ const chatMessageRouter = Router();
 chatMessageRouter.route("/models").get(verifyStrictJWT, getAvailableModels);
 chatMessageRouter.route("/send").post(verifyStrictJWT, sendMessage);
 chatMessageRouter.route("/all/:chatId").get(verifyStrictJWT, getChatMessages);
-chatMessageRouter
-    .route("/sources/:messageId")
-    .get(verifyStrictJWT, getChatMessageSources);
+chatMessageRouter.route("/sources/:messageId").get(verifyStrictJWT, getChatMessageSources);
 
 export default chatMessageRouter;

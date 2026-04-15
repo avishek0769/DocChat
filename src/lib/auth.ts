@@ -1,5 +1,4 @@
-const API_BASE_URL =
-    import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api/v1";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api/v1";
 
 const AUTH_STORAGE_KEY = "docchat_auth";
 
@@ -34,11 +33,7 @@ type ApiEnvelope<T> = {
 const isUsableToken = (token: unknown): token is string => {
     if (typeof token !== "string") return false;
     const normalized = token.trim().toLowerCase();
-    return (
-        Boolean(normalized) &&
-        normalized !== "undefined" &&
-        normalized !== "null"
-    );
+    return Boolean(normalized) && normalized !== "undefined" && normalized !== "null";
 };
 
 const isAccessTokenExpired = (token: string) => {
@@ -125,10 +120,7 @@ export const isAuthenticated = () => {
 
 export const getAuthUser = () => getStoredSession()?.user || null;
 
-const request = async <T>(
-    path: string,
-    init?: RequestInit,
-): Promise<ApiEnvelope<T>> => {
+const request = async <T>(path: string, init?: RequestInit): Promise<ApiEnvelope<T>> => {
     const headers = new Headers(init?.headers || {});
     if (!headers.has("Content-Type") && init?.body) {
         headers.set("Content-Type", "application/json");
@@ -217,11 +209,7 @@ export const sendPasswordResetCode = async (email: string) => {
     });
 };
 
-export const resetPassword = async (
-    email: string,
-    code: string,
-    password: string,
-) => {
+export const resetPassword = async (email: string, code: string, password: string) => {
     return request<{ reset: boolean }>("/user/reset-password", {
         method: "PATCH",
         body: JSON.stringify({ email, code, password }),

@@ -20,9 +20,7 @@ chatRouter.route("/status/:chatId").get(verifyStrictJWT, progressStatus);
 chatRouter.route("/list").get(verifyStrictJWT, listAllChats);
 chatRouter.route("/recent").get(verifyStrictJWT, recentChats);
 chatRouter.route("/:chatId").get(verifyStrictJWT, chatDetails);
-chatRouter
-    .route("/pages-indexed/:chatId")
-    .get(verifyStrictJWT, listAllPagesIndexed);
+chatRouter.route("/pages-indexed/:chatId").get(verifyStrictJWT, listAllPagesIndexed);
 chatRouter.route("/:chatId").delete(verifyStrictJWT, deleteChat);
 chatRouter.route("/cancel/:chatId").get(verifyStrictJWT, cancelProcessing);
 

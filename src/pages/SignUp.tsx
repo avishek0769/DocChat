@@ -2,11 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Terminal, Eye, EyeOff, ArrowRight, Check } from "lucide-react";
-import {
-    registerUser,
-    sendVerificationCode,
-    verifyEmailCode,
-} from "../lib/auth";
+import { registerUser, sendVerificationCode, verifyEmailCode } from "../lib/auth";
 
 const SignUp = () => {
     const navigate = useNavigate();
@@ -61,11 +57,7 @@ const SignUp = () => {
 
             navigate("/signin");
         } catch (err) {
-            setError(
-                err instanceof Error
-                    ? err.message
-                    : "Unable to register. Please try again.",
-            );
+            setError(err instanceof Error ? err.message : "Unable to register. Please try again.");
         } finally {
             setIsLoading(false);
         }
@@ -86,11 +78,7 @@ const SignUp = () => {
             setIsCodeSent(true);
             setMessage("Verification code sent to your email.");
         } catch (err) {
-            setError(
-                err instanceof Error
-                    ? err.message
-                    : "Could not send verification code.",
-            );
+            setError(err instanceof Error ? err.message : "Could not send verification code.");
         } finally {
             setIsSendingCode(false);
         }
@@ -111,9 +99,7 @@ const SignUp = () => {
             setIsEmailVerified(true);
             setMessage("Email verified successfully.");
         } catch (err) {
-            setError(
-                err instanceof Error ? err.message : "Verification failed.",
-            );
+            setError(err instanceof Error ? err.message : "Verification failed.");
         } finally {
             setIsVerifyingCode(false);
         }
@@ -147,9 +133,7 @@ const SignUp = () => {
                 {/* Card */}
                 <div className="bg-white/3 border border-white/10 rounded-2xl p-8 backdrop-blur-sm shadow-2xl">
                     <div className="text-center mb-8">
-                        <h1 className="text-2xl font-bold mb-2">
-                            Create your account
-                        </h1>
+                        <h1 className="text-2xl font-bold mb-2">Create your account</h1>
                         <p className="text-gray-400 text-sm">
                             Start chatting with any documentation in minutes
                         </p>
@@ -177,9 +161,7 @@ const SignUp = () => {
 
                     <form onSubmit={handleSubmit} className="space-y-5">
                         <div className="space-y-1.5">
-                            <label className="text-sm font-medium text-gray-300">
-                                Full Name
-                            </label>
+                            <label className="text-sm font-medium text-gray-300">Full Name</label>
                             <input
                                 type="text"
                                 value={name}
@@ -191,9 +173,7 @@ const SignUp = () => {
                         </div>
 
                         <div className="space-y-1.5">
-                            <label className="text-sm font-medium text-gray-300">
-                                Username
-                            </label>
+                            <label className="text-sm font-medium text-gray-300">Username</label>
                             <input
                                 type="text"
                                 value={username}
@@ -205,9 +185,7 @@ const SignUp = () => {
                         </div>
 
                         <div className="space-y-1.5">
-                            <label className="text-sm font-medium text-gray-300">
-                                Email
-                            </label>
+                            <label className="text-sm font-medium text-gray-300">Email</label>
                             <input
                                 type="email"
                                 value={email}
@@ -220,9 +198,7 @@ const SignUp = () => {
                                 <input
                                     type="text"
                                     value={verificationCode}
-                                    onChange={(e) =>
-                                        setVerificationCode(e.target.value)
-                                    }
+                                    onChange={(e) => setVerificationCode(e.target.value)}
                                     placeholder="Verification code"
                                     className="flex-1 bg-[#111] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-blue/50"
                                 />
@@ -241,9 +217,7 @@ const SignUp = () => {
                                 <button
                                     type="button"
                                     onClick={handleVerifyCode}
-                                    disabled={
-                                        isVerifyingCode || isEmailVerified
-                                    }
+                                    disabled={isVerifyingCode || isEmailVerified}
                                     className="px-3 py-2 rounded-lg bg-accent-blue hover:bg-blue-600 disabled:opacity-50 text-xs font-medium"
                                 >
                                     {isVerifyingCode
@@ -256,25 +230,19 @@ const SignUp = () => {
                         </div>
 
                         <div className="space-y-1.5">
-                            <label className="text-sm font-medium text-gray-300">
-                                Password
-                            </label>
+                            <label className="text-sm font-medium text-gray-300">Password</label>
                             <div className="relative">
                                 <input
                                     type={showPassword ? "text" : "password"}
                                     value={password}
-                                    onChange={(e) =>
-                                        setPassword(e.target.value)
-                                    }
+                                    onChange={(e) => setPassword(e.target.value)}
                                     placeholder="••••••••"
                                     className="w-full bg-[#111] border border-white/10 rounded-lg px-4 pr-12 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-blue/50 focus:ring-1 focus:ring-accent-blue/50 transition-all"
                                     autoComplete="new-password"
                                 />
                                 <button
                                     type="button"
-                                    onClick={() =>
-                                        setShowPassword(!showPassword)
-                                    }
+                                    onClick={() => setShowPassword(!showPassword)}
                                     className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
                                 >
                                     {showPassword ? (
@@ -293,10 +261,7 @@ const SignUp = () => {
                                     className="mt-3 space-y-1.5"
                                 >
                                     {passwordChecks.map((check, i) => (
-                                        <div
-                                            key={i}
-                                            className="flex items-center gap-2"
-                                        >
+                                        <div key={i} className="flex items-center gap-2">
                                             <div
                                                 className={`w-3.5 h-3.5 rounded-full flex items-center justify-center transition-colors ${
                                                     check.met
@@ -308,9 +273,7 @@ const SignUp = () => {
                                             </div>
                                             <span
                                                 className={`text-xs transition-colors ${
-                                                    check.met
-                                                        ? "text-gray-300"
-                                                        : "text-gray-500"
+                                                    check.met ? "text-gray-300" : "text-gray-500"
                                                 }`}
                                             >
                                                 {check.label}

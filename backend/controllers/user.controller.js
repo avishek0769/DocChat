@@ -62,10 +62,7 @@ const generateAccessAndRefreshTokens = async (userId) => {
 
         return { accessToken, refreshToken };
     } catch (error) {
-        throw new ApiError(
-            500,
-            "Something went wrong while generating Access & Refresh tokens",
-        );
+        throw new ApiError(500, "Something went wrong while generating Access & Refresh tokens");
     }
 };
 
@@ -94,11 +91,7 @@ const sendVerificationCode = asyncHandler(async (req, res) => {
     });
 
     res.status(200).json(
-        new ApiResponse(
-            200,
-            { emailSent: true },
-            "Verification code sent to email successfully !!",
-        ),
+        new ApiResponse(200, { emailSent: true }, "Verification code sent to email successfully !!"),
     );
 });
 
@@ -118,19 +111,13 @@ const verifyEmail = asyncHandler(async (req, res) => {
     });
 
     await redis.del(email);
-    res.status(200).json(
-        new ApiResponse(200, { ...user }, "Email verified successfully !!"),
-    );
+    res.status(200).json(new ApiResponse(200, { ...user }, "Email verified successfully !!"));
 });
 
 const userRegister = asyncHandler(async (req, res) => {
     const { fullname, username, email, password } = req.body;
 
-    if (
-        [fullname, username, email, password].some(
-            (field) => !field || field.trim() === "",
-        )
-    ) {
+    if ([fullname, username, email, password].some((field) => !field || field.trim() === "")) {
         throw new ApiError(400, "All fields are required");
     }
 
@@ -161,9 +148,7 @@ const userRegister = asyncHandler(async (req, res) => {
         },
     });
 
-    return res
-        .status(201)
-        .json(new ApiResponse(201, user, "User Registered Successfully !!"));
+    return res.status(201).json(new ApiResponse(201, user, "User Registered Successfully !!"));
 });
 
 const userLogIn = asyncHandler(async (req, res) => {
@@ -187,9 +172,7 @@ const userLogIn = asyncHandler(async (req, res) => {
     const isPasswordValid = await isPasswordCorrect(password, user.password);
     if (!isPasswordValid) throw new ApiError(401, "Password is incorrect !");
 
-    const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(
-        user.id,
-    );
+    const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(user.id);
 
     const loggedInUser = await prisma.user.update({
         where: { id: user.id },
@@ -230,10 +213,7 @@ const refreshTokens = asyncHandler(async (req, res) => {
     if (!incomingToken) throw new ApiError(401, "No Refresh Token found");
 
     try {
-        const decodedToken = jwt.verify(
-            incomingToken,
-            process.env.REFRESH_TOKEN_SECRET,
-        );
+        const decodedToken = jwt.verify(incomingToken, process.env.REFRESH_TOKEN_SECRET);
 
         const user = await prisma.user.findUnique({
             where: { id: decodedToken.id },
@@ -245,8 +225,9 @@ const refreshTokens = asyncHandler(async (req, res) => {
             throw new ApiError(401, "Refresh token is expired or used");
         }
 
-        const { accessToken, refreshToken: newRefreshToken } =
-            await generateAccessAndRefreshTokens(user.id);
+        const { accessToken, refreshToken: newRefreshToken } = await generateAccessAndRefreshTokens(
+            user.id,
+        );
 
         await prisma.user.update({
             where: { id: user.id },
@@ -281,13 +262,7 @@ const refreshTokens = asyncHandler(async (req, res) => {
 
 const currentUserProfile = asyncHandler(async (req, res) => {
     const user = req.user;
-    res.status(200).json(
-        new ApiResponse(
-            200,
-            user,
-            "Current user profile fetched successfully !",
-        ),
-    );
+    res.status(200).json(new ApiResponse(200, user, "Current user profile fetched successfully !"));
 });
 
 const sendResetCode = asyncHandler(async (req, res) => {
@@ -311,13 +286,7 @@ const sendResetCode = asyncHandler(async (req, res) => {
         html: `<p>Your password reset code is: <strong>${code}</strong></p>`,
     });
 
-    res.status(200).json(
-        new ApiResponse(
-            200,
-            { emailSent: true },
-            "Reset code sent successfully !!",
-        ),
-    );
+    res.status(200).json(new ApiResponse(200, { emailSent: true }, "Reset code sent successfully !!"));
 });
 
 const resetPassword = asyncHandler(async (req, res) => {
@@ -344,9 +313,7 @@ const resetPassword = asyncHandler(async (req, res) => {
 
     await redis.del(email);
 
-    res.status(200).json(
-        new ApiResponse(200, { reset: true }, "Password reset successfully !!"),
-    );
+    res.status(200).json(new ApiResponse(200, { reset: true }, "Password reset successfully !!"));
 });
 
 export {

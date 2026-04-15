@@ -23,11 +23,7 @@ const Profile = () => {
                 setName(profile.fullname || profile.username || "");
                 setEmail(profile.email || "");
             } catch (err) {
-                setError(
-                    err instanceof Error
-                        ? err.message
-                        : "Failed to load profile.",
-                );
+                setError(err instanceof Error ? err.message : "Failed to load profile.");
             } finally {
                 setIsProfileLoading(false);
             }
@@ -58,9 +54,7 @@ const Profile = () => {
                 <div className="max-w-3xl mx-auto space-y-10">
                     <header>
                         <h1 className="text-3xl font-bold mb-2">Profile</h1>
-                        <p className="text-gray-400 text-sm">
-                            Manage your account and preferences.
-                        </p>
+                        <p className="text-gray-400 text-sm">Manage your account and preferences.</p>
                     </header>
 
                     {error && (
@@ -73,13 +67,9 @@ const Profile = () => {
                     <section className="bg-white/3 border border-white/10 rounded-2xl p-6 md:p-8">
                         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 mb-8 pb-8 border-b border-white/5">
                             <div className="flex-1">
-                                <h2 className="text-xl font-semibold">
-                                    {name}
-                                </h2>
+                                <h2 className="text-xl font-semibold">{name}</h2>
                                 <p className="text-sm text-gray-400">
-                                    {isProfileLoading
-                                        ? "Loading profile..."
-                                        : email || "-"}
+                                    {isProfileLoading ? "Loading profile..." : email || "-"}
                                 </p>
                             </div>
                         </div>
@@ -89,15 +79,12 @@ const Profile = () => {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                                 <div className="space-y-1.5">
                                     <label className="text-sm font-medium text-gray-400 flex items-center gap-1.5">
-                                        <User className="w-3.5 h-3.5" /> Display
-                                        Name
+                                        <User className="w-3.5 h-3.5" /> Display Name
                                     </label>
                                     <input
                                         type="text"
                                         value={name}
-                                        onChange={(e) =>
-                                            setName(e.target.value)
-                                        }
+                                        onChange={(e) => setName(e.target.value)}
                                         className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-accent-blue/50 focus:ring-1 focus:ring-accent-blue/50 transition-all"
                                     />
                                 </div>
@@ -146,9 +133,7 @@ const Profile = () => {
                                 <div className="flex items-center gap-3">
                                     <Key className="w-4 h-4 text-gray-400" />
                                     <div>
-                                        <p className="text-sm font-medium text-gray-200">
-                                            API Keys
-                                        </p>
+                                        <p className="text-sm font-medium text-gray-200">API Keys</p>
                                         <p className="text-xs text-gray-500">
                                             Manage your provider API keys
                                         </p>
@@ -172,8 +157,7 @@ const Profile = () => {
                                     Sign out of your account
                                 </p>
                                 <p className="text-xs text-gray-500">
-                                    You will need to sign in again to access
-                                    your data.
+                                    You will need to sign in again to access your data.
                                 </p>
                             </div>
                             <button
@@ -199,9 +183,7 @@ const Profile = () => {
                         <div className="w-14 h-14 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-4">
                             <LogOut className="w-6 h-6 text-red-400" />
                         </div>
-                        <h3 className="text-lg font-semibold mb-2">
-                            Sign out?
-                        </h3>
+                        <h3 className="text-lg font-semibold mb-2">Sign out?</h3>
                         <p className="text-sm text-gray-400 mb-6">
                             Are you sure you want to sign out of your account?
                         </p>

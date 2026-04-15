@@ -1,14 +1,6 @@
 import { useEffect, useState } from "react";
 import { Sidebar } from "../components/Sidebar";
-import {
-    Key,
-    Trash2,
-    AlertCircle,
-    Eye,
-    EyeOff,
-    Plus,
-    Network,
-} from "lucide-react";
+import { Key, Trash2, AlertCircle, Eye, EyeOff, Plus, Network } from "lucide-react";
 import {
     createApiKey,
     deleteApiKey,
@@ -68,16 +60,11 @@ const Settings = () => {
         setIsLoading(true);
         setError("");
         try {
-            const [listData, countData] = await Promise.all([
-                getApiKeys(),
-                getApiKeyCount(),
-            ]);
+            const [listData, countData] = await Promise.all([getApiKeys(), getApiKeyCount()]);
             setApiKeys((listData.apiKeys || []).map(toUiApiKey));
             setApiKeyCount(countData.count || 0);
         } catch (err) {
-            setError(
-                err instanceof Error ? err.message : "Failed to load API keys.",
-            );
+            setError(err instanceof Error ? err.message : "Failed to load API keys.");
         } finally {
             setIsLoading(false);
         }
@@ -94,16 +81,11 @@ const Settings = () => {
 
         let detected = "";
         if (val.startsWith("sk-ant")) detected = "ANTHROPIC";
-        else if (val.startsWith("sk-proj-") || val.startsWith("sk-"))
-            detected = "OPENAI";
+        else if (val.startsWith("sk-proj-") || val.startsWith("sk-")) detected = "OPENAI";
         else if (val.startsWith("xai-")) detected = "XAI";
         else if (val.startsWith("AIza")) detected = "GOOGLE";
 
-        if (
-            detected &&
-            detected !== selectedProvider &&
-            detected in PROVIDER_LABEL
-        ) {
+        if (detected && detected !== selectedProvider && detected in PROVIDER_LABEL) {
             setSelectedProvider(detected as Provider);
         }
     };
@@ -129,9 +111,7 @@ const Settings = () => {
             setShowKey(false);
             await loadApiKeys();
         } catch (err) {
-            setError(
-                err instanceof Error ? err.message : "Failed to save API key.",
-            );
+            setError(err instanceof Error ? err.message : "Failed to save API key.");
         } finally {
             setIsSaving(false);
         }
@@ -143,11 +123,7 @@ const Settings = () => {
             await deleteApiKey(id);
             await loadApiKeys();
         } catch (err) {
-            setError(
-                err instanceof Error
-                    ? err.message
-                    : "Failed to delete API key.",
-            );
+            setError(err instanceof Error ? err.message : "Failed to delete API key.");
         }
     };
 
@@ -178,17 +154,11 @@ const Settings = () => {
                                     Security & Transparency
                                 </p>
                                 <p className="leading-relaxed">
-                                    Your API keys are stored using
-                                    industry-standard
-                                    <strong className="text-gray-300">
-                                        {" "}
-                                        encryption
-                                    </strong>{" "}
-                                    to ensure they are protected within our
-                                    database. To maintain full transparency, our
-                                    entire codebase is open-sourced, allowing
-                                    you to independently verify our security
-                                    practices and how your data is handled.
+                                    Your API keys are stored using industry-standard
+                                    <strong className="text-gray-300"> encryption</strong> to ensure they
+                                    are protected within our database. To maintain full transparency, our
+                                    entire codebase is open-sourced, allowing you to independently verify
+                                    our security practices and how your data is handled.
                                 </p>
                             </div>
                         </div>
@@ -208,22 +178,16 @@ const Settings = () => {
                                 <div className="w-10 h-10 rounded-lg bg-accent-blue/10 flex items-center justify-center border border-accent-blue/20 text-accent-blue">
                                     <Network className="w-5 h-5" />
                                 </div>
-                                <h3 className="text-lg font-medium text-gray-200">
-                                    Add New Key
-                                </h3>
+                                <h3 className="text-lg font-medium text-gray-200">Add New Key</h3>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-5 relative z-10">
                                 <div className="space-y-1.5">
-                                    <label className="text-sm font-medium text-gray-400">
-                                        Key Name
-                                    </label>
+                                    <label className="text-sm font-medium text-gray-400">Key Name</label>
                                     <input
                                         type="text"
                                         value={newKeyName}
-                                        onChange={(e) =>
-                                            setNewKeyName(e.target.value)
-                                        }
+                                        onChange={(e) => setNewKeyName(e.target.value)}
                                         placeholder="e.g. Production OpenAI Key"
                                         className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-accent-blue/50"
                                     />
@@ -237,9 +201,7 @@ const Settings = () => {
                                         <input
                                             type={showKey ? "text" : "password"}
                                             value={newKeyValue}
-                                            onChange={(e) =>
-                                                handleKeyChange(e.target.value)
-                                            }
+                                            onChange={(e) => handleKeyChange(e.target.value)}
                                             placeholder="sk-... (Auto-detects provider)"
                                             className="w-full bg-[#111] border border-white/10 rounded-lg pl-4 pr-12 py-2.5 text-white focus:outline-none focus:border-accent-blue/50 font-mono text-sm"
                                         />
@@ -257,24 +219,15 @@ const Settings = () => {
                                 </div>
 
                                 <div className="space-y-1.5">
-                                    <label className="text-sm font-medium text-gray-400">
-                                        Provider
-                                    </label>
+                                    <label className="text-sm font-medium text-gray-400">Provider</label>
                                     <select
                                         value={selectedProvider}
-                                        onChange={(e) =>
-                                            handleProviderChange(e.target.value)
-                                        }
+                                        onChange={(e) => handleProviderChange(e.target.value)}
                                         className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-accent-blue/50 appearance-none"
                                     >
-                                        <option value="">
-                                            Select a provider...
-                                        </option>
+                                        <option value="">Select a provider...</option>
                                         {PROVIDERS.map((p) => (
-                                            <option
-                                                key={p.value}
-                                                value={p.value}
-                                            >
+                                            <option key={p.value} value={p.value}>
                                                 {p.label}
                                             </option>
                                         ))}
@@ -286,17 +239,12 @@ const Settings = () => {
                                 <button
                                     onClick={handleSaveKey}
                                     disabled={
-                                        isSaving ||
-                                        !newKeyName ||
-                                        !newKeyValue ||
-                                        !selectedProvider
+                                        isSaving || !newKeyName || !newKeyValue || !selectedProvider
                                     }
                                     className="bg-accent-blue hover:bg-blue-600 disabled:opacity-50 disabled:bg-gray-700 disabled:cursor-not-allowed text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 justify-center shrink-0 w-full sm:w-auto"
                                 >
                                     <Plus className="w-4 h-4" />
-                                    {isSaving
-                                        ? "Saving..."
-                                        : "Save Key Configuration"}
+                                    {isSaving ? "Saving..." : "Save Key Configuration"}
                                 </button>
                             </div>
                         </div>
@@ -322,9 +270,7 @@ const Settings = () => {
                                     >
                                         <div className="flex flex-col gap-1">
                                             <div className="flex items-center gap-2">
-                                                <h4 className="font-medium text-gray-200">
-                                                    {key.name}
-                                                </h4>
+                                                <h4 className="font-medium text-gray-200">{key.name}</h4>
                                                 <span className="px-2 py-0.5 rounded text-xs font-medium bg-white/10 text-accent-blue">
                                                     {key.provider}
                                                 </span>
@@ -335,8 +281,7 @@ const Settings = () => {
                                                 </span>
                                             </div>
                                             <div className="flex flex-wrap gap-1.5 pt-1">
-                                                {(key.models || []).length >
-                                                0 ? (
+                                                {(key.models || []).length > 0 ? (
                                                     key.models?.map((model) => (
                                                         <span
                                                             key={model}
@@ -347,17 +292,14 @@ const Settings = () => {
                                                     ))
                                                 ) : (
                                                     <span className="text-xs text-gray-500">
-                                                        No models configured for
-                                                        this key.
+                                                        No models configured for this key.
                                                     </span>
                                                 )}
                                             </div>
                                         </div>
 
                                         <button
-                                            onClick={() =>
-                                                handleDeleteKey(key.id)
-                                            }
+                                            onClick={() => handleDeleteKey(key.id)}
                                             className="p-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors self-end sm:self-auto shrink-0"
                                             title="Delete Key"
                                         >
@@ -368,9 +310,7 @@ const Settings = () => {
                             ) : (
                                 <div className="p-8 text-center bg-white/1 border border-white/5 border-dashed rounded-xl">
                                     <Key className="w-6 h-6 text-gray-600 mx-auto mb-3" />
-                                    <p className="text-sm text-gray-400">
-                                        No API keys configured yet.
-                                    </p>
+                                    <p className="text-sm text-gray-400">No API keys configured yet.</p>
                                 </div>
                             )}
                         </div>

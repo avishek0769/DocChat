@@ -50,8 +50,7 @@ const fromNow = (iso: string) => {
 
 const mapBackendChat = (chat: ChatItem): Chat => {
     const source = chat.chatSources?.[0];
-    const pagesIndexed =
-        source?._count?.pagesIndexed ?? source?.pagesIndexed?.length ?? 0;
+    const pagesIndexed = source?._count?.pagesIndexed ?? source?.pagesIndexed?.length ?? 0;
     return {
         id: chat.id,
         title: chat.name,
@@ -91,9 +90,7 @@ const Dashboard = () => {
         Record<string, { status: string; progress: number }>
     >({});
     const chatsRef = useRef<Chat[]>([]);
-    const chatProgressRef = useRef<
-        Record<string, { status: string; progress: number }>
-    >({});
+    const chatProgressRef = useRef<Record<string, { status: string; progress: number }>>({});
     const pollIntervalRef = useRef<number | null>(null);
 
     // New Chat Form State
@@ -114,20 +111,13 @@ const Dashboard = () => {
     const loadDashboardData = useCallback(async () => {
         setError("");
         try {
-            const [chatData, lifetime] = await Promise.all([
-                getRecentChats(),
-                getLifetimeTokens(),
-            ]);
+            const [chatData, lifetime] = await Promise.all([getRecentChats(), getLifetimeTokens()]);
             setChats((chatData || []).map(mapBackendChat));
             const input = Number(lifetime?._sum?.inputTokens || 0);
             const output = Number(lifetime?._sum?.outputTokens || 0);
             setLifetimeTokens(input + output);
         } catch (err) {
-            setError(
-                err instanceof Error
-                    ? err.message
-                    : "Failed to load dashboard data.",
-            );
+            setError(err instanceof Error ? err.message : "Failed to load dashboard data.");
         } finally {
             setIsLoading(false);
         }
@@ -148,12 +138,8 @@ const Dashboard = () => {
     const pollStatuses = useCallback(async () => {
         const inFlightChats = chatsRef.current.filter(
             (chat) =>
-                normalizeStatus(
-                    chatProgressRef.current[chat.id]?.status || chat.status,
-                ) !== "ready" &&
-                normalizeStatus(
-                    chatProgressRef.current[chat.id]?.status || chat.status,
-                ) !== "failed",
+                normalizeStatus(chatProgressRef.current[chat.id]?.status || chat.status) !== "ready" &&
+                normalizeStatus(chatProgressRef.current[chat.id]?.status || chat.status) !== "failed",
         );
 
         if (!inFlightChats.length) {
@@ -180,8 +166,7 @@ const Dashboard = () => {
         );
 
         const updates = statusResults.filter(
-            (item): item is { id: string; status: string; progress: number } =>
-                Boolean(item),
+            (item): item is { id: string; status: string; progress: number } => Boolean(item),
         );
 
         if (!updates.length) {
@@ -226,12 +211,8 @@ const Dashboard = () => {
     useEffect(() => {
         const hasInFlightChats = chats.some(
             (chat) =>
-                normalizeStatus(
-                    chatProgress[chat.id]?.status || chat.status,
-                ) !== "ready" &&
-                normalizeStatus(
-                    chatProgress[chat.id]?.status || chat.status,
-                ) !== "failed",
+                normalizeStatus(chatProgress[chat.id]?.status || chat.status) !== "ready" &&
+                normalizeStatus(chatProgress[chat.id]?.status || chat.status) !== "failed",
         );
 
         if (hasInFlightChats && pollIntervalRef.current === null) {
@@ -265,9 +246,7 @@ const Dashboard = () => {
             showToast("Chat created and processing started.");
             await loadDashboardData();
         } catch (err) {
-            setError(
-                err instanceof Error ? err.message : "Failed to create chat.",
-            );
+            setError(err instanceof Error ? err.message : "Failed to create chat.");
         } finally {
             setIsCreating(false);
         }
@@ -282,9 +261,7 @@ const Dashboard = () => {
             setDeleteTarget(null);
             showToast(`"${title}" deleted successfully.`);
         } catch (err) {
-            setError(
-                err instanceof Error ? err.message : "Failed to delete chat.",
-            );
+            setError(err instanceof Error ? err.message : "Failed to delete chat.");
         }
     };
 
@@ -299,9 +276,7 @@ const Dashboard = () => {
             showToast(`Retrying "${chat.title}"...`);
             await loadDashboardData();
         } catch (err) {
-            setError(
-                err instanceof Error ? err.message : "Failed to retry chat.",
-            );
+            setError(err instanceof Error ? err.message : "Failed to retry chat.");
         }
     };
 
@@ -350,20 +325,14 @@ const Dashboard = () => {
                     {/* Header Section */}
                     <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-6">
                         <div>
-                            <h1 className="text-3xl font-bold mb-2">
-                                Your Chats
-                            </h1>
+                            <h1 className="text-3xl font-bold mb-2">Your Chats</h1>
                             <p className="text-gray-400">
-                                Create and manage your documentation knowledge
-                                bases.
+                                Create and manage your documentation knowledge bases.
                             </p>
                         </div>
                         <div className="flex items-center gap-4">
                             <div className="text-sm font-medium text-gray-400 bg-white/5 px-3 py-1.5 rounded-full border border-white/5">
-                                <span className="text-white">
-                                    {chats.length}
-                                </span>{" "}
-                                chats
+                                <span className="text-white">{chats.length}</span> chats
                             </div>
                             <button
                                 onClick={() => setIsModalOpen(true)}
@@ -386,9 +355,7 @@ const Dashboard = () => {
                             {
                                 label: "Total Chats",
                                 value: chats.length.toString(),
-                                icon: (
-                                    <MessageSquare className="w-5 h-5 text-accent-blue" />
-                                ),
+                                icon: <MessageSquare className="w-5 h-5 text-accent-blue" />,
                             },
                             {
                                 label: "Docs Processed",
@@ -396,9 +363,7 @@ const Dashboard = () => {
                                     .filter((c) => c.status === "ready")
                                     .reduce((acc, c) => acc + c.urls.length, 0)
                                     .toString(),
-                                icon: (
-                                    <CheckCircle2 className="w-5 h-5 text-green-400" />
-                                ),
+                                icon: <CheckCircle2 className="w-5 h-5 text-green-400" />,
                                 action: (
                                     <button
                                         onClick={() => setIsDocsListOpen(true)}
@@ -416,15 +381,12 @@ const Dashboard = () => {
                                             i
                                         </span>
                                         <div className="absolute bottom-full left-0 mb-2 w-48 p-2 rounded-lg bg-[#2a2a35] text-xs text-gray-200 shadow-xl border border-white/10 opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none z-50 whitespace-normal normal-case font-normal tracking-normal text-left">
-                                            Total tokens used for creating
-                                            embeddings and retrieval.
+                                            Total tokens used for creating embeddings and retrieval.
                                         </div>
                                     </span>
                                 ),
                                 value: formatTokens(lifetimeTokens),
-                                icon: (
-                                    <Database className="w-5 h-5 text-purple-400" />
-                                ),
+                                icon: <Database className="w-5 h-5 text-purple-400" />,
                                 action: (
                                     <button
                                         onClick={() => navigate("/usage")}
@@ -440,12 +402,8 @@ const Dashboard = () => {
                                 className="p-5 rounded-xl bg-white/2 border border-white/5 flex items-center justify-between"
                             >
                                 <div>
-                                    <p className="text-sm text-gray-400 mb-1">
-                                        {stat.label}
-                                    </p>
-                                    <p className="text-2xl font-bold">
-                                        {stat.value}
-                                    </p>
+                                    <p className="text-sm text-gray-400 mb-1">{stat.label}</p>
+                                    <p className="text-2xl font-bold">{stat.value}</p>
                                     {stat.action}
                                 </div>
                                 <div className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center border border-white/5">
@@ -472,18 +430,12 @@ const Dashboard = () => {
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                 {chats.map((chat) => {
                                     const liveStatus = normalizeStatus(
-                                        chatProgress[chat.id]?.status ||
-                                            chat.status,
+                                        chatProgress[chat.id]?.status || chat.status,
                                     );
                                     const progressPercent =
                                         chatProgress[chat.id]?.progress ??
-                                        (liveStatus === "processing" &&
-                                        chat.totalPages > 0
-                                            ? Math.round(
-                                                  (chat.pages /
-                                                      chat.totalPages) *
-                                                      100,
-                                              )
+                                        (liveStatus === "processing" && chat.totalPages > 0
+                                            ? Math.round((chat.pages / chat.totalPages) * 100)
                                             : 0);
 
                                     return (
@@ -500,29 +452,24 @@ const Dashboard = () => {
                                                         {chat.title}
                                                     </h3>
                                                     <div className="flex flex-wrap gap-1.5 mt-2">
-                                                        {chat.urls.map(
-                                                            (u, i) => (
-                                                                <a
-                                                                    key={i}
-                                                                    href={u}
-                                                                    target="_blank"
-                                                                    rel="noreferrer"
-                                                                    className="text-xs text-gray-500 hover:text-accent-blue bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 px-2 py-0.5 rounded transition-all truncate max-w-37.5"
-                                                                    title={u}
-                                                                >
-                                                                    {(() => {
-                                                                        try {
-                                                                            return new URL(
-                                                                                u,
-                                                                            )
-                                                                                .hostname;
-                                                                        } catch {
-                                                                            return u;
-                                                                        }
-                                                                    })()}
-                                                                </a>
-                                                            ),
-                                                        )}
+                                                        {chat.urls.map((u, i) => (
+                                                            <a
+                                                                key={i}
+                                                                href={u}
+                                                                target="_blank"
+                                                                rel="noreferrer"
+                                                                className="text-xs text-gray-500 hover:text-accent-blue bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 px-2 py-0.5 rounded transition-all truncate max-w-37.5"
+                                                                title={u}
+                                                            >
+                                                                {(() => {
+                                                                    try {
+                                                                        return new URL(u).hostname;
+                                                                    } catch {
+                                                                        return u;
+                                                                    }
+                                                                })()}
+                                                            </a>
+                                                        ))}
                                                     </div>
                                                 </div>
                                                 <div className="shrink-0">
@@ -541,14 +488,10 @@ const Dashboard = () => {
                                                         </span>
                                                         <span className="text-yellow-400 font-medium font-mono">
                                                             {Math.round(
-                                                                (progressPercent /
-                                                                    100) *
-                                                                    (chat.totalPages ||
-                                                                        0),
+                                                                (progressPercent / 100) *
+                                                                    (chat.totalPages || 0),
                                                             )}
-                                                            /
-                                                            {chat.totalPages ||
-                                                                0}
+                                                            /{chat.totalPages || 0}
                                                         </span>
                                                     </div>
                                                     <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden border border-white/5">
@@ -560,57 +503,48 @@ const Dashboard = () => {
                                                         />
                                                     </div>
                                                     <p className="text-xs text-gray-500 mt-1.5 text-right">
-                                                        {progressPercent}%
-                                                        complete
+                                                        {progressPercent}% complete
                                                     </p>
                                                 </div>
                                             )}
 
                                             {/* Stats for ready/failed */}
-                                            {liveStatus !== "processing" &&
-                                                liveStatus !== "queued" && (
-                                                    <div className="grid grid-cols-3 gap-2 mt-2 mb-6">
-                                                        <div className="bg-white/5 rounded-lg p-2 flex flex-col items-center justify-center border border-white/5">
-                                                            <FileText className="w-3 h-3 text-gray-400 mb-1" />
-                                                            <span className="text-xs font-medium text-gray-300">
-                                                                {chat.pages}
-                                                            </span>
-                                                        </div>
-                                                        <div
-                                                            className="bg-white/5 rounded-lg p-2 flex flex-col items-center justify-center border border-white/5"
-                                                            title="Tokens used"
-                                                        >
-                                                            <Database className="w-3 h-3 text-gray-400 mb-1" />
-                                                            <span className="text-xs font-medium text-gray-300">
-                                                                {formatTokens(
-                                                                    chat.tokens,
-                                                                )}
-                                                            </span>
-                                                        </div>
-                                                        <div className="bg-white/5 rounded-lg p-2 flex flex-col items-center justify-center border border-white/5">
-                                                            <Clock className="w-3 h-3 text-gray-400 mb-1" />
-                                                            <span className="text-xs font-medium text-gray-300 truncate w-full text-center">
-                                                                {chat.createdAt}
-                                                            </span>
-                                                        </div>
+                                            {liveStatus !== "processing" && liveStatus !== "queued" && (
+                                                <div className="grid grid-cols-3 gap-2 mt-2 mb-6">
+                                                    <div className="bg-white/5 rounded-lg p-2 flex flex-col items-center justify-center border border-white/5">
+                                                        <FileText className="w-3 h-3 text-gray-400 mb-1" />
+                                                        <span className="text-xs font-medium text-gray-300">
+                                                            {chat.pages}
+                                                        </span>
                                                     </div>
-                                                )}
+                                                    <div
+                                                        className="bg-white/5 rounded-lg p-2 flex flex-col items-center justify-center border border-white/5"
+                                                        title="Tokens used"
+                                                    >
+                                                        <Database className="w-3 h-3 text-gray-400 mb-1" />
+                                                        <span className="text-xs font-medium text-gray-300">
+                                                            {formatTokens(chat.tokens)}
+                                                        </span>
+                                                    </div>
+                                                    <div className="bg-white/5 rounded-lg p-2 flex flex-col items-center justify-center border border-white/5">
+                                                        <Clock className="w-3 h-3 text-gray-400 mb-1" />
+                                                        <span className="text-xs font-medium text-gray-300 truncate w-full text-center">
+                                                            {chat.createdAt}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            )}
 
                                             <div className="mt-auto flex items-center gap-3 pt-4 border-t border-white/5">
                                                 {liveStatus === "ready" && (
                                                     <button
-                                                        onClick={() =>
-                                                            navigate(
-                                                                `/chat/${chat.id}`,
-                                                            )
-                                                        }
+                                                        onClick={() => navigate(`/chat/${chat.id}`)}
                                                         className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors bg-white/10 hover:bg-white/15 text-white"
                                                     >
                                                         Open Chat
                                                     </button>
                                                 )}
-                                                {liveStatus ===
-                                                    "processing" && (
+                                                {liveStatus === "processing" && (
                                                     <button
                                                         disabled
                                                         className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors bg-white/10 text-white/40 cursor-not-allowed opacity-50"
@@ -620,11 +554,7 @@ const Dashboard = () => {
                                                 )}
                                                 {liveStatus === "failed" && (
                                                     <button
-                                                        onClick={() =>
-                                                            handleRetryFailed(
-                                                                chat.id,
-                                                            )
-                                                        }
+                                                        onClick={() => handleRetryFailed(chat.id)}
                                                         className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/10"
                                                     >
                                                         <RefreshCw className="w-3.5 h-3.5" />
@@ -632,9 +562,7 @@ const Dashboard = () => {
                                                     </button>
                                                 )}
                                                 <button
-                                                    onClick={() =>
-                                                        setDeleteTarget(chat)
-                                                    }
+                                                    onClick={() => setDeleteTarget(chat)}
                                                     className="p-2 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-400/10 transition-colors border border-transparent hover:border-red-400/20"
                                                 >
                                                     <Trash2 className="w-4 h-4" />
@@ -650,13 +578,10 @@ const Dashboard = () => {
                                 <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mb-4 border border-white/10">
                                     <Database className="w-8 h-8 text-gray-400" />
                                 </div>
-                                <h3 className="text-xl font-semibold mb-2">
-                                    No chats yet
-                                </h3>
+                                <h3 className="text-xl font-semibold mb-2">No chats yet</h3>
                                 <p className="text-gray-400 max-w-sm mb-6">
-                                    You haven't processed any documentation.
-                                    Create your first knowledge base to start
-                                    chatting.
+                                    You haven't processed any documentation. Create your first knowledge
+                                    base to start chatting.
                                 </p>
                                 <button
                                     onClick={() => setIsModalOpen(true)}
@@ -694,8 +619,7 @@ const Dashboard = () => {
 
                         {/* Modal Body */}
                         <div className="p-5 overflow-y-auto custom-scrollbar flex-1 space-y-4">
-                            {chats.filter((c) => c.status === "ready").length >
-                            0 ? (
+                            {chats.filter((c) => c.status === "ready").length > 0 ? (
                                 chats
                                     .filter((c) => c.status === "ready")
                                     .flatMap((chat) =>
@@ -721,8 +645,7 @@ const Dashboard = () => {
                             ) : (
                                 <div className="text-center py-8">
                                     <p className="text-sm text-gray-400">
-                                        No documentations have been fully
-                                        processed yet.
+                                        No documentations have been fully processed yet.
                                     </p>
                                 </div>
                             )}
@@ -770,16 +693,12 @@ const Dashboard = () => {
                             <div className="space-y-1.5">
                                 <label className="text-sm font-medium text-gray-300">
                                     Chat Name{" "}
-                                    <span className="text-gray-500 font-normal">
-                                        (Optional)
-                                    </span>
+                                    <span className="text-gray-500 font-normal">(Optional)</span>
                                 </label>
                                 <input
                                     type="text"
                                     value={chatName}
-                                    onChange={(e) =>
-                                        setChatName(e.target.value)
-                                    }
+                                    onChange={(e) => setChatName(e.target.value)}
                                     placeholder="e.g. React Docs 18.2"
                                     className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-blue/50 focus:ring-1 focus:ring-accent-blue/50 transition-all"
                                 />
@@ -788,8 +707,7 @@ const Dashboard = () => {
                             {/* URL Input */}
                             <div className="space-y-1.5">
                                 <label className="text-sm font-medium text-gray-300">
-                                    Documentation URL{" "}
-                                    <span className="text-red-400">*</span>
+                                    Documentation URL <span className="text-red-400">*</span>
                                 </label>
                                 <input
                                     type="url"
@@ -799,8 +717,7 @@ const Dashboard = () => {
                                     className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-blue/50 focus:ring-1 focus:ring-accent-blue/50 transition-all font-mono"
                                 />
                                 <p className="text-xs text-gray-500">
-                                    We'll scrape this page and sub-pages
-                                    automatically.
+                                    We'll scrape this page and sub-pages automatically.
                                 </p>
                             </div>
                         </div>
@@ -818,9 +735,7 @@ const Dashboard = () => {
                                 disabled={isStartDisabled || isCreating}
                                 className="px-5 py-2 rounded-lg bg-accent-blue hover:bg-accent-blue/90 disabled:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors shadow-lg shadow-accent-blue/20"
                             >
-                                {isCreating
-                                    ? "Starting..."
-                                    : "Start Processing"}
+                                {isCreating ? "Starting..." : "Start Processing"}
                             </button>
                         </div>
                     </div>
@@ -838,19 +753,14 @@ const Dashboard = () => {
                         <div className="w-14 h-14 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-4">
                             <Trash2 className="w-6 h-6 text-red-400" />
                         </div>
-                        <h3 className="text-lg font-semibold mb-2">
-                            Delete Chat?
-                        </h3>
+                        <h3 className="text-lg font-semibold mb-2">Delete Chat?</h3>
                         <p className="text-sm text-gray-400 mb-2">
                             Are you sure you want to delete{" "}
-                            <strong className="text-gray-200">
-                                "{deleteTarget.title}"
-                            </strong>
-                            ?
+                            <strong className="text-gray-200">"{deleteTarget.title}"</strong>?
                         </p>
                         <p className="text-xs text-gray-500 mb-6">
-                            This will permanently remove all indexed pages and
-                            chat history. This action cannot be undone.
+                            This will permanently remove all indexed pages and chat history. This action
+                            cannot be undone.
                         </p>
                         <div className="flex gap-3">
                             <button

@@ -33,11 +33,7 @@ const SignIn = () => {
             await signIn(identifier, password);
             navigate("/dashboard");
         } catch (err) {
-            setError(
-                err instanceof Error
-                    ? err.message
-                    : "Unable to sign in. Please try again.",
-            );
+            setError(err instanceof Error ? err.message : "Unable to sign in. Please try again.");
         } finally {
             setIsLoading(false);
         }
@@ -57,11 +53,7 @@ const SignIn = () => {
             await sendPasswordResetCode(resetEmail);
             setResetMessage("Reset code sent to your email.");
         } catch (err) {
-            setError(
-                err instanceof Error
-                    ? err.message
-                    : "Could not send reset code.",
-            );
+            setError(err instanceof Error ? err.message : "Could not send reset code.");
         } finally {
             setIsSendingResetCode(false);
         }
@@ -83,11 +75,7 @@ const SignIn = () => {
             setResetCode("");
             setNewPassword("");
         } catch (err) {
-            setError(
-                err instanceof Error
-                    ? err.message
-                    : "Could not reset password.",
-            );
+            setError(err instanceof Error ? err.message : "Could not reset password.");
         } finally {
             setIsResettingPassword(false);
         }
@@ -112,21 +100,15 @@ const SignIn = () => {
                 <div className="flex items-center justify-center gap-2 mb-10">
                     <Link to="/" className="flex items-center gap-2 group">
                         <Terminal className="w-7 h-7 text-accent-blue group-hover:text-accent-purple transition-colors" />
-                        <span className="font-semibold text-2xl tracking-tight">
-                            DocChat
-                        </span>
+                        <span className="font-semibold text-2xl tracking-tight">DocChat</span>
                     </Link>
                 </div>
 
                 {/* Card */}
                 <div className="bg-white/3 border border-white/10 rounded-2xl p-8 backdrop-blur-sm shadow-2xl">
                     <div className="text-center mb-8">
-                        <h1 className="text-2xl font-bold mb-2">
-                            Welcome back
-                        </h1>
-                        <p className="text-gray-400 text-sm">
-                            Sign in to continue to your dashboard
-                        </p>
+                        <h1 className="text-2xl font-bold mb-2">Welcome back</h1>
+                        <p className="text-gray-400 text-sm">Sign in to continue to your dashboard</p>
                     </div>
 
                     {error && (
@@ -156,18 +138,12 @@ const SignIn = () => {
 
                         <div className="space-y-1.5">
                             <div className="flex items-center justify-between">
-                                <label className="text-sm font-medium text-gray-300">
-                                    Password
-                                </label>
+                                <label className="text-sm font-medium text-gray-300">Password</label>
                                 <button
                                     type="button"
                                     onClick={() => {
                                         setShowResetPanel((prev) => !prev);
-                                        setResetEmail(
-                                            identifier.includes("@")
-                                                ? identifier
-                                                : "",
-                                        );
+                                        setResetEmail(identifier.includes("@") ? identifier : "");
                                         setResetMessage("");
                                     }}
                                     className="text-xs text-accent-blue hover:text-accent-blue/80 transition-colors"
@@ -179,18 +155,14 @@ const SignIn = () => {
                                 <input
                                     type={showPassword ? "text" : "password"}
                                     value={password}
-                                    onChange={(e) =>
-                                        setPassword(e.target.value)
-                                    }
+                                    onChange={(e) => setPassword(e.target.value)}
                                     placeholder="••••••••"
                                     className="w-full bg-[#111] border border-white/10 rounded-lg px-4 pr-12 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-blue/50 focus:ring-1 focus:ring-accent-blue/50 transition-all"
                                     autoComplete="current-password"
                                 />
                                 <button
                                     type="button"
-                                    onClick={() =>
-                                        setShowPassword(!showPassword)
-                                    }
+                                    onClick={() => setShowPassword(!showPassword)}
                                     className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
                                 >
                                     {showPassword ? (
@@ -234,9 +206,7 @@ const SignIn = () => {
                                 <input
                                     type="text"
                                     value={resetCode}
-                                    onChange={(e) =>
-                                        setResetCode(e.target.value)
-                                    }
+                                    onChange={(e) => setResetCode(e.target.value)}
                                     placeholder="Reset code"
                                     className="flex-1 bg-[#111] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-blue/50"
                                 />
@@ -246,9 +216,7 @@ const SignIn = () => {
                                     disabled={isSendingResetCode}
                                     className="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/15 disabled:opacity-50 text-xs font-medium"
                                 >
-                                    {isSendingResetCode
-                                        ? "Sending..."
-                                        : "Send code"}
+                                    {isSendingResetCode ? "Sending..." : "Send code"}
                                 </button>
                             </div>
                             <input
@@ -264,15 +232,9 @@ const SignIn = () => {
                                 disabled={isResettingPassword}
                                 className="w-full py-2 rounded-lg bg-accent-blue hover:bg-blue-600 disabled:opacity-50 text-sm font-medium"
                             >
-                                {isResettingPassword
-                                    ? "Resetting..."
-                                    : "Reset Password"}
+                                {isResettingPassword ? "Resetting..." : "Reset Password"}
                             </button>
-                            {resetMessage && (
-                                <p className="text-xs text-green-400">
-                                    {resetMessage}
-                                </p>
-                            )}
+                            {resetMessage && <p className="text-xs text-green-400">{resetMessage}</p>}
                         </div>
                     )}
                 </div>
