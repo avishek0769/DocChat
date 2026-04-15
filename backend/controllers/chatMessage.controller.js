@@ -4,17 +4,12 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
 import { LLM_MODELS, PROVIDERS_BASE_URLS } from "../utils/constants.js";
 import OpenAI from "openai";
-import { QdrantClient } from "@qdrant/js-client-rest";
+import qdrant from "../utils/qdrant.js";
 import { decryptApiKey } from "../utils/decrypt.js";
 import { generateVectorEmbeddings } from "../utils/rag.js";
 import { MemoryClient } from "mem0ai";
 
 const memory = new MemoryClient({ apiKey: process.env.MEM0_API_KEY });
-
-const qdrant = new QdrantClient({
-    url: process.env.QDRANT_URL,
-    apiKey: process.env.QDRANT_API_KEY,
-});
 
 const getAvailableModels = asyncHandler(async (req, res) => {
     const apikeys = await prisma.apiKey.findMany({
@@ -47,6 +42,7 @@ const sendMessage = asyncHandler(async (req, res) => {
 
     const chat = await prisma.chat.findUnique({
         where: { id: chatId },
+        include: { chatSources: true },
     });
     if (!chat) {
         throw new ApiError(404, "Chat not found.");
@@ -90,13 +86,19 @@ const sendMessage = asyncHandler(async (req, res) => {
         });
     }
 
-    const userPromptEmbeddings = await generateVectorEmbeddings(userPrompt);
-    const relevantSources = await qdrant.query(chat.collectionName, {
-        query: userPromptEmbeddings,
-        limit: 5,
-        with_payload: true,
-        score_threshold: 0.35,
-    });
+    let relevantSources = [];
+    if (!chat.chatSources[0].isVectorLess) {
+        const userPromptEmbeddings = await generateVectorEmbeddings(userPrompt);
+        relevantSources = await qdrant.query(chat.collectionName, {
+            query: userPromptEmbeddings,
+            limit: 5,
+            with_payload: true,
+            score_threshold: 0.35,
+        });
+    }
+    else {
+        
+    }
 
     // Dynamic System Instructions
     let systemInstructions = "You are a helpful assistant for answering questions. \n";

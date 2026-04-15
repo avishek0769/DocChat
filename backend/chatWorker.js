@@ -3,7 +3,7 @@ import { Worker } from "bullmq";
 import redis from "./utils/redis.js";
 import { normalizeUrl, isValidDocUrl, scrapeWebpage, generateVectorEmbeddings } from "./utils/rag.js";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
-import { QdrantClient } from "@qdrant/js-client-rest";
+import qdrant from "./utils/qdrant.js";
 import { v4 as uuidv4 } from "uuid";
 import prisma from "./utils/prismaClient.js";
 import { PageIndexClient } from "@pageindex/sdk";
@@ -15,11 +15,6 @@ const doc = new PDFDocument();
 
 const pageindex = new PageIndexClient({
     apiKey: process.env.PAGEINDEX_API_KEY,
-});
-
-const client = new QdrantClient({
-    url: process.env.QDRANT_URL,
-    apiKey: process.env.QDRANT_API_KEY,
 });
 
 async function processVector(docsRootUrl, chatId, collectionName, chatSourceId) {
@@ -43,9 +38,9 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId) 
         }),
     );
 
-    const collections = await client.getCollections();
+    const collections = await qdrant.getCollections();
     if (!collections.collections.some((c) => c.name === collectionName)) {
-        await client.createCollection(collectionName, {
+        await qdrant.createCollection(collectionName, {
             vectors: { size: 1536, distance: "Cosine" },
         });
     }
@@ -93,7 +88,7 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId) 
             if (pageCount >= 3 || index === totalLinks - 1) {
                 if (batchPoints.length > 0) {
                     console.log(`Upserting batch of ${batchPoints.length} points...`);
-                    await client.upsert(collectionName, {
+                    await qdrant.upsert(collectionName, {
                         wait: true,
                         points: batchPoints,
                     });
