@@ -40,7 +40,8 @@ const fromNow = (iso: string) => {
 
 const mapChat = (chat: ChatItem): ChatRow => {
     const source = chat.chatSources?.[0];
-    const pages = source?._count?.pagesIndexed ?? source?.pagesIndexed?.length ?? 0;
+    const pages =
+        source?._count?.pagesIndexed ?? source?.pagesIndexed?.length ?? 0;
     return {
         id: chat.id,
         title: chat.name,
@@ -103,7 +104,9 @@ const AllChats = () => {
     const filteredChats = chats.filter((chat) => {
         const matchesSearch =
             chat.title.toLowerCase().includes(search.toLowerCase()) ||
-            chat.urls.some(u => u.toLowerCase().includes(search.toLowerCase()));
+            chat.urls.some((u) =>
+                u.toLowerCase().includes(search.toLowerCase()),
+            );
         const matchesFilter = filter === "all" || chat.status === filter;
         return matchesSearch && matchesFilter;
     });
@@ -190,7 +193,9 @@ const AllChats = () => {
                     <div className="space-y-3">
                         {isLoading ? (
                             <div className="text-center py-20 bg-white/1 rounded-xl border border-white/5 border-dashed">
-                                <p className="text-gray-400">Loading chats...</p>
+                                <p className="text-gray-400">
+                                    Loading chats...
+                                </p>
                             </div>
                         ) : filteredChats.length > 0 ? (
                             filteredChats.map((chat) => (
@@ -201,9 +206,9 @@ const AllChats = () => {
                                     <div className="flex items-center gap-4 min-w-0">
                                         {getStatusBadge(chat.status)}
                                         <div className="min-w-0">
-                                                <h3 className="font-medium text-gray-200 truncate">
-                                                    {chat.title}
-                                                </h3>
+                                            <h3 className="font-medium text-gray-200 truncate">
+                                                {chat.title}
+                                            </h3>
                                             <div className="flex flex-wrap gap-1.5 mt-1.5">
                                                 {chat.urls.map((u, i) => (
                                                     <a
@@ -214,7 +219,16 @@ const AllChats = () => {
                                                         className="text-xs text-gray-500 hover:text-accent-blue flex items-center gap-1.5 bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 px-2 py-0.5 rounded transition-all truncate max-w-37.5"
                                                         title={u}
                                                     >
-                                                        {(() => { try { return new URL(u).hostname; } catch { return u; } })()} <ExternalLink className="w-3 h-3 shrink-0" />
+                                                        {(() => {
+                                                            try {
+                                                                return new URL(
+                                                                    u,
+                                                                ).hostname;
+                                                            } catch {
+                                                                return u;
+                                                            }
+                                                        })()}{" "}
+                                                        <ExternalLink className="w-3 h-3 shrink-0" />
                                                     </a>
                                                 ))}
                                             </div>
@@ -223,11 +237,14 @@ const AllChats = () => {
 
                                     <div className="flex items-center gap-6 shrink-0 ml-4">
                                         <div className="hidden md:flex items-center gap-6">
-                                            <div className="flex items-center gap-1.5 text-xs text-gray-400 w-16" title="Pages Indexed">
+                                            <div
+                                                className="flex items-center gap-1.5 text-xs text-gray-400 w-16"
+                                                title="Pages Indexed"
+                                            >
                                                 <FileText className="w-3.5 h-3.5" />{" "}
                                                 {chat.pages}
                                             </div>
-                                            <div 
+                                            <div
                                                 className="flex items-center gap-1.5 text-xs text-gray-400 w-20"
                                                 title="Tokens used"
                                             >
@@ -242,7 +259,9 @@ const AllChats = () => {
 
                                         <div className="flex items-center gap-2 border-l border-white/10 pl-6">
                                             <button
-                                                onClick={() => navigate(`/chat/${chat.id}`)}
+                                                onClick={() =>
+                                                    navigate(`/chat/${chat.id}`)
+                                                }
                                                 className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
                                                     chat.status === "ready"
                                                         ? "bg-white/10 hover:bg-white/15 text-white"
@@ -254,8 +273,10 @@ const AllChats = () => {
                                             >
                                                 Open
                                             </button>
-                                            <button 
-                                                onClick={() => handleDelete(chat.id)}
+                                            <button
+                                                onClick={() =>
+                                                    handleDelete(chat.id)
+                                                }
                                                 className="p-1.5 rounded-md text-gray-500 hover:text-red-400 hover:bg-red-400/10 transition-colors"
                                             >
                                                 <Trash2 className="w-4 h-4" />

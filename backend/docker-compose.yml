@@ -30,11 +30,11 @@ volumes:
     redis_cont:
         external: true
     # ollama:
-        # external: true
+    # external: true
     # open-webui:
-        # external: true
+    # external: true
     # qdrant-vlm:
-        # external: true
+    # external: true
 # networks:
-    # docs-support-agent-network:
-        # external: true
+# docs-support-agent-network:
+# external: true

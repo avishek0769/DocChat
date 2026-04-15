@@ -128,12 +128,13 @@ export const ChatPage = () => {
         setIsMessagesLoading(true);
         setError("");
         try {
-            const [chatDetails, indexedPageData, apiKeyData, messageData] = await Promise.all([
-                getChatDetails(chatId),
-                getPagesIndexed(chatId),
-                getApiKeys(),
-                getChatMessages(chatId),
-            ]);
+            const [chatDetails, indexedPageData, apiKeyData, messageData] =
+                await Promise.all([
+                    getChatDetails(chatId),
+                    getPagesIndexed(chatId),
+                    getApiKeys(),
+                    getChatMessages(chatId),
+                ]);
 
             const chat = chatDetails.chat;
             const primarySource = chat?.chatSources?.[0];
@@ -146,7 +147,9 @@ export const ChatPage = () => {
                     indexedPageData.pagesIndexed.length ||
                     prev.pages,
                 tokensUsed: chat?.totalUsage?.total || 0,
-                lastUpdated: new Date(chat?.updatedAt || Date.now()).toLocaleString(),
+                lastUpdated: new Date(
+                    chat?.updatedAt || Date.now(),
+                ).toLocaleString(),
             }));
 
             setCurrentLinks(
@@ -183,7 +186,9 @@ export const ChatPage = () => {
 
             const options = [...defaultOptions, ...dynamicModels];
             setModelOptions(options);
-            setSelectedModel((prev) => prev || options[0]?.model || "default-1");
+            setSelectedModel(
+                (prev) => prev || options[0]?.model || "default-1",
+            );
 
             const messageList = messageData.messages || [];
             const messagePairs: Message[] = [];
@@ -210,7 +215,9 @@ export const ChatPage = () => {
             setIsMessagesLoading(false);
         } catch (err) {
             setError(
-                err instanceof Error ? err.message : "Failed to load chat data.",
+                err instanceof Error
+                    ? err.message
+                    : "Failed to load chat data.",
             );
             setIsMessagesLoading(false);
         } finally {
@@ -302,8 +309,9 @@ export const ChatPage = () => {
         e?.preventDefault();
         if (!input.trim() || isTyping) return;
 
-        const selectedOption =
-            modelOptions.find((opt) => opt.model === selectedModel) ||
+        const selectedOption = modelOptions.find(
+            (opt) => opt.model === selectedModel,
+        ) ||
             modelOptions[0] || {
                 provider: "DEFAULT",
                 model: "default-1",
@@ -425,9 +433,7 @@ export const ChatPage = () => {
             pendingChunkRef.current = "";
             setIsAwaitingFirstChunk(false);
             setError(
-                err instanceof Error
-                    ? err.message
-                    : "Failed to send message.",
+                err instanceof Error ? err.message : "Failed to send message.",
             );
             setMessages((prev) => prev.filter((m) => m.id !== aiId));
         } finally {
@@ -533,9 +539,7 @@ export const ChatPage = () => {
                                             </div>
                                         ))
                                     ) : (
-                                        <div
-                                            className="px-3 py-2 rounded-lg text-sm transition-colors border border-transparent text-gray-400"
-                                        >
+                                        <div className="px-3 py-2 rounded-lg text-sm transition-colors border border-transparent text-gray-400">
                                             No documentation source links found.
                                         </div>
                                     )}
@@ -589,7 +593,10 @@ export const ChatPage = () => {
                                         className="appearance-none bg-[#12121a] border border-white/10 rounded-lg pl-2.5 pr-7 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-accent-blue/60 focus:ring-2 focus:ring-accent-blue/25 transition-all"
                                     >
                                         {modelOptions.map((m) => (
-                                            <option key={`${m.provider}-${m.model}`} value={m.model}>
+                                            <option
+                                                key={`${m.provider}-${m.model}`}
+                                                value={m.model}
+                                            >
                                                 {m.label}
                                             </option>
                                         ))}
@@ -634,7 +641,9 @@ export const ChatPage = () => {
                             {isMessagesLoading ? (
                                 <div className="flex flex-col items-center justify-center h-full min-h-[50vh] text-center space-y-3 text-gray-400">
                                     <Loader2 className="w-6 h-6 animate-spin text-accent-blue" />
-                                    <p className="text-sm">Fetching messages...</p>
+                                    <p className="text-sm">
+                                        Fetching messages...
+                                    </p>
                                 </div>
                             ) : messages.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center h-full min-h-[50vh] text-center space-y-6">
@@ -647,8 +656,8 @@ export const ChatPage = () => {
                                         </h2>
                                         <p className="text-gray-400 text-sm max-w-md mx-auto leading-relaxed">
                                             Ask me anything about the{" "}
-                                            {docInfo.title}. I can provide
-                                            code examples, explain concepts, and
+                                            {docInfo.title}. I can provide code
+                                            examples, explain concepts, and
                                             point you to the right pages.
                                         </p>
                                     </div>
@@ -681,17 +690,17 @@ export const ChatPage = () => {
                             )}
 
                             {isTyping && isAwaitingFirstChunk && (
-                                    <div className="flex gap-4">
-                                        <div className="w-8 h-8 rounded-lg bg-linear-to-br from-accent-blue to-accent-purple flex items-center justify-center shrink-0 shadow-lg shadow-accent-blue/20">
-                                            <Bot className="w-5 h-5 text-white" />
-                                        </div>
-                                        <div className="flex gap-1 py-3 px-4 bg-white/5 border border-white/10 rounded-2xl rounded-tl-sm w-16 items-center justify-center">
-                                            <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-                                            <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-                                            <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"></span>
-                                        </div>
+                                <div className="flex gap-4">
+                                    <div className="w-8 h-8 rounded-lg bg-linear-to-br from-accent-blue to-accent-purple flex items-center justify-center shrink-0 shadow-lg shadow-accent-blue/20">
+                                        <Bot className="w-5 h-5 text-white" />
                                     </div>
-                                )}
+                                    <div className="flex gap-1 py-3 px-4 bg-white/5 border border-white/10 rounded-2xl rounded-tl-sm w-16 items-center justify-center">
+                                        <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                                        <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                                        <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"></span>
+                                    </div>
+                                </div>
+                            )}
                             <div ref={messagesEndRef} />
                         </div>
                     </div>
@@ -897,7 +906,8 @@ export const ChatPage = () => {
                                     >
                                         <h3 className="font-semibold text-gray-200 flex items-center gap-2 mb-1">
                                             <FileText className="w-4 h-4 text-accent-blue" />
-                                            {page.heading || `Indexed Page ${idx + 1}`}
+                                            {page.heading ||
+                                                `Indexed Page ${idx + 1}`}
                                         </h3>
                                         <a
                                             href={page.pageUrl}
@@ -1027,7 +1037,9 @@ const ChatMessage = ({
                                         </ol>
                                     ),
                                     li: ({ children }) => (
-                                        <li className="text-gray-300">{children}</li>
+                                        <li className="text-gray-300">
+                                            {children}
+                                        </li>
                                     ),
                                     a: ({ href, children }) => (
                                         <a
@@ -1040,14 +1052,15 @@ const ChatMessage = ({
                                         </a>
                                     ),
                                     code: ({ className, children }) => {
-                                        const languageMatch = /language-(\w+)/.exec(
-                                            className || "",
-                                        );
-                                        const code = String(children || "").replace(
-                                            /\n$/,
-                                            "",
-                                        );
-                                        const language = languageMatch?.[1] || "";
+                                        const languageMatch =
+                                            /language-(\w+)/.exec(
+                                                className || "",
+                                            );
+                                        const code = String(
+                                            children || "",
+                                        ).replace(/\n$/, "");
+                                        const language =
+                                            languageMatch?.[1] || "";
                                         const isBlock = Boolean(languageMatch);
 
                                         if (!isBlock) {
@@ -1095,7 +1108,6 @@ const ChatMessage = ({
                             >
                                 {message.content}
                             </ReactMarkdown>
-
                         </div>
                     ) : (
                         <p className="whitespace-pre-wrap">{message.content}</p>

@@ -164,7 +164,9 @@ const SignIn = () => {
                                     onClick={() => {
                                         setShowResetPanel((prev) => !prev);
                                         setResetEmail(
-                                            identifier.includes("@") ? identifier : "",
+                                            identifier.includes("@")
+                                                ? identifier
+                                                : "",
                                         );
                                         setResetMessage("");
                                     }}
@@ -232,7 +234,9 @@ const SignIn = () => {
                                 <input
                                     type="text"
                                     value={resetCode}
-                                    onChange={(e) => setResetCode(e.target.value)}
+                                    onChange={(e) =>
+                                        setResetCode(e.target.value)
+                                    }
                                     placeholder="Reset code"
                                     className="flex-1 bg-[#111] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-blue/50"
                                 />
@@ -242,7 +246,9 @@ const SignIn = () => {
                                     disabled={isSendingResetCode}
                                     className="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/15 disabled:opacity-50 text-xs font-medium"
                                 >
-                                    {isSendingResetCode ? "Sending..." : "Send code"}
+                                    {isSendingResetCode
+                                        ? "Sending..."
+                                        : "Send code"}
                                 </button>
                             </div>
                             <input
@@ -258,10 +264,14 @@ const SignIn = () => {
                                 disabled={isResettingPassword}
                                 className="w-full py-2 rounded-lg bg-accent-blue hover:bg-blue-600 disabled:opacity-50 text-sm font-medium"
                             >
-                                {isResettingPassword ? "Resetting..." : "Reset Password"}
+                                {isResettingPassword
+                                    ? "Resetting..."
+                                    : "Reset Password"}
                             </button>
                             {resetMessage && (
-                                <p className="text-xs text-green-400">{resetMessage}</p>
+                                <p className="text-xs text-green-400">
+                                    {resetMessage}
+                                </p>
                             )}
                         </div>
                     )}

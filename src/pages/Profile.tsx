@@ -1,14 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Sidebar } from "../components/Sidebar";
-import {
-    User,
-    Mail,
-    LogOut,
-    Save,
-    Key,
-    CheckCircle2,
-} from "lucide-react";
+import { User, Mail, LogOut, Save, Key, CheckCircle2 } from "lucide-react";
 import { logoutUser } from "../lib/auth";
 import { getUserProfile } from "../lib/api";
 
@@ -80,9 +73,13 @@ const Profile = () => {
                     <section className="bg-white/3 border border-white/10 rounded-2xl p-6 md:p-8">
                         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 mb-8 pb-8 border-b border-white/5">
                             <div className="flex-1">
-                                <h2 className="text-xl font-semibold">{name}</h2>
+                                <h2 className="text-xl font-semibold">
+                                    {name}
+                                </h2>
                                 <p className="text-sm text-gray-400">
-                                    {isProfileLoading ? "Loading profile..." : email || "-"}
+                                    {isProfileLoading
+                                        ? "Loading profile..."
+                                        : email || "-"}
                                 </p>
                             </div>
                         </div>
@@ -92,12 +89,15 @@ const Profile = () => {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                                 <div className="space-y-1.5">
                                     <label className="text-sm font-medium text-gray-400 flex items-center gap-1.5">
-                                        <User className="w-3.5 h-3.5" /> Display Name
+                                        <User className="w-3.5 h-3.5" /> Display
+                                        Name
                                     </label>
                                     <input
                                         type="text"
                                         value={name}
-                                        onChange={(e) => setName(e.target.value)}
+                                        onChange={(e) =>
+                                            setName(e.target.value)
+                                        }
                                         className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-accent-blue/50 focus:ring-1 focus:ring-accent-blue/50 transition-all"
                                     />
                                 </div>
@@ -172,7 +172,8 @@ const Profile = () => {
                                     Sign out of your account
                                 </p>
                                 <p className="text-xs text-gray-500">
-                                    You will need to sign in again to access your data.
+                                    You will need to sign in again to access
+                                    your data.
                                 </p>
                             </div>
                             <button

@@ -1,7 +1,12 @@
 import "dotenv/config";
 import { Worker } from "bullmq";
 import redis from "./utils/redis.js";
-import { normalizeUrl, isValidDocUrl, scrapeWebpage, generateVectorEmbeddings } from "./utils/rag.js";
+import {
+    normalizeUrl,
+    isValidDocUrl,
+    scrapeWebpage,
+    generateVectorEmbeddings,
+} from "./utils/rag.js";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { v4 as uuidv4 } from "uuid";
@@ -9,7 +14,7 @@ import prisma from "./utils/prismaClient.js";
 
 const client = new QdrantClient({
     url: process.env.QDRANT_URL,
-    apiKey: process.env.QDRANT_API_KEY
+    apiKey: process.env.QDRANT_API_KEY,
 });
 
 async function ingestAll(docsRootUrl, chatId, collectionName, chatSourceId) {
@@ -23,9 +28,9 @@ async function ingestAll(docsRootUrl, chatId, collectionName, chatSourceId) {
     console.log("Total unique links found:", totalLinks);
 
     const collections = await client.getCollections();
-    if (!collections.collections.some(c => c.name === collectionName)) {
+    if (!collections.collections.some((c) => c.name === collectionName)) {
         await client.createCollection(collectionName, {
-            vectors: { size: 1536, distance: "Cosine" }
+            vectors: { size: 1536, distance: "Cosine" },
         });
     }
 
@@ -46,7 +51,7 @@ async function ingestAll(docsRootUrl, chatId, collectionName, chatSourceId) {
 
             batchPage.push({
                 pageUrl: link,
-                heading: title
+                heading: title,
             });
 
             console.log(`Processing: ${link} (${chunks.length} chunks)`);
@@ -62,8 +67,8 @@ async function ingestAll(docsRootUrl, chatId, collectionName, chatSourceId) {
                         body: chunk,
                         chatId,
                         title,
-                        chatSourceId
-                    }
+                        chatSourceId,
+                    },
                 });
             }
 
@@ -71,42 +76,51 @@ async function ingestAll(docsRootUrl, chatId, collectionName, chatSourceId) {
 
             if (pageCount >= 3 || index === totalLinks - 1) {
                 if (batchPoints.length > 0) {
-                    console.log(`Upserting batch of ${batchPoints.length} points...`);
+                    console.log(
+                        `Upserting batch of ${batchPoints.length} points...`,
+                    );
                     await client.upsert(collectionName, {
                         wait: true,
-                        points: batchPoints
+                        points: batchPoints,
                     });
 
-                    await prisma.documentPage.createMany({
-                        data: batchPage.map(point => ({
-                            pageUrl: point.pageUrl,
-                            heading: point.heading,
-                            chatSourceId
-                        }))
-                    }).catch(err => {
-                        console.error("Failed to update indexed pages:", err.message);
-                    });
+                    await prisma.documentPage
+                        .createMany({
+                            data: batchPage.map((point) => ({
+                                pageUrl: point.pageUrl,
+                                heading: point.heading,
+                                chatSourceId,
+                            })),
+                        })
+                        .catch((err) => {
+                            console.error(
+                                "Failed to update indexed pages:",
+                                err.message,
+                            );
+                        });
 
                     batchPoints = [];
                     batchPage = [];
                     pageCount = 0;
                 }
 
-                await redis.setex(collectionName, 3600, JSON.stringify({
-                    status: "PROCESSING",
-                    current: index + 1,
-                    total: totalLinks,
-                    progress: Math.round(((index + 1) / totalLinks) * 100)
-                }));
+                await redis.setex(
+                    collectionName,
+                    3600,
+                    JSON.stringify({
+                        status: "PROCESSING",
+                        current: index + 1,
+                        total: totalLinks,
+                        progress: Math.round(((index + 1) / totalLinks) * 100),
+                    }),
+                );
             }
-        }
-        catch (err) {
+        } catch (err) {
             console.error(`Failed link ${link}:`, err.message);
             continue;
         }
     }
 }
-
 
 const worker = new Worker(
     "chatCreation",
@@ -117,23 +131,29 @@ const worker = new Worker(
     {
         connection: redis,
         removeOnComplete: { count: 50 },
-        removeOnFail: { count: 500 }
+        removeOnFail: { count: 500 },
     },
 );
 
 worker.on("completed", async (job) => {
     console.log(`Job ${job.id} completed!`);
-    await redis.setex(job.data.collectionName, 3600, JSON.stringify({ status: "READY", progress: 100 }));
+    await redis.setex(
+        job.data.collectionName,
+        3600,
+        JSON.stringify({ status: "READY", progress: 100 }),
+    );
 
-    await prisma.chat.update({
-        where: { id: job.data.chatId },
-        data: { status: "READY" }
-    }).catch(err => {
-        console.error("Update status Failed:", err.message);
-    });
+    await prisma.chat
+        .update({
+            where: { id: job.data.chatId },
+            data: { status: "READY" },
+        })
+        .catch((err) => {
+            console.error("Update status Failed:", err.message);
+        });
 });
 
 worker.on("failed", (job, err) => {
-    console.log(err)
+    console.log(err);
     console.error(`Job ${job?.id} failed: ${err.message}`);
 });

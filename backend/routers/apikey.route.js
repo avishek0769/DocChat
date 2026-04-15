@@ -1,6 +1,12 @@
 import { Router } from "express";
 import { verifyStrictJWT } from "../middlewares/auth.middleware.js";
-import { addApiKey, listApiKeys, removeApiKey, getApiKey, totalNumberOfApiKeys } from "../controllers/apikey.controller.js";
+import {
+    addApiKey,
+    listApiKeys,
+    removeApiKey,
+    getApiKey,
+    totalNumberOfApiKeys,
+} from "../controllers/apikey.controller.js";
 
 const apikeyRouter = Router();
 

@@ -50,7 +50,8 @@ const fromNow = (iso: string) => {
 
 const mapBackendChat = (chat: ChatItem): Chat => {
     const source = chat.chatSources?.[0];
-    const pagesIndexed = source?._count?.pagesIndexed ?? source?.pagesIndexed?.length ?? 0;
+    const pagesIndexed =
+        source?._count?.pagesIndexed ?? source?.pagesIndexed?.length ?? 0;
     return {
         id: chat.id,
         title: chat.name,
@@ -90,7 +91,9 @@ const Dashboard = () => {
         Record<string, { status: string; progress: number }>
     >({});
     const chatsRef = useRef<Chat[]>([]);
-    const chatProgressRef = useRef<Record<string, { status: string; progress: number }>>({});
+    const chatProgressRef = useRef<
+        Record<string, { status: string; progress: number }>
+    >({});
     const pollIntervalRef = useRef<number | null>(null);
 
     // New Chat Form State
@@ -143,86 +146,92 @@ const Dashboard = () => {
     }, [chatProgress]);
 
     const pollStatuses = useCallback(async () => {
-            const inFlightChats = chatsRef.current.filter(
-                (chat) =>
-                    normalizeStatus(chatProgressRef.current[chat.id]?.status || chat.status) !==
-                        "ready" &&
-                    normalizeStatus(chatProgressRef.current[chat.id]?.status || chat.status) !==
-                        "failed",
-            );
+        const inFlightChats = chatsRef.current.filter(
+            (chat) =>
+                normalizeStatus(
+                    chatProgressRef.current[chat.id]?.status || chat.status,
+                ) !== "ready" &&
+                normalizeStatus(
+                    chatProgressRef.current[chat.id]?.status || chat.status,
+                ) !== "failed",
+        );
 
-            if (!inFlightChats.length) {
-                if (pollIntervalRef.current !== null) {
-                    clearInterval(pollIntervalRef.current);
-                    pollIntervalRef.current = null;
-                }
-                return;
+        if (!inFlightChats.length) {
+            if (pollIntervalRef.current !== null) {
+                clearInterval(pollIntervalRef.current);
+                pollIntervalRef.current = null;
             }
+            return;
+        }
 
-            const statusResults = await Promise.all(
-                inFlightChats.map(async (chat) => {
-                    try {
-                        const statusData = await getChatStatus(chat.id);
-                        return {
-                            id: chat.id,
-                            status: normalizeStatus(statusData.progress?.status),
-                            progress: clampProgress(statusData.progress?.progress),
-                        };
-                    } catch {
-                        return null;
-                    }
-                }),
-            );
-
-            const updates = statusResults.filter(
-                (item): item is { id: string; status: string; progress: number } =>
-                    Boolean(item),
-            );
-
-            if (!updates.length) {
-                return;
-            }
-
-            setChatProgress((prev) => {
-                const next = { ...prev };
-                for (const update of updates) {
-                    next[update.id] = {
-                        status: update.status,
-                        progress: update.progress,
-                    };
-                }
-                return next;
-            });
-
-            setChats((prev) =>
-                prev.map((chat) => {
-                    const update = updates.find((item) => item.id === chat.id);
-                    if (!update) return chat;
-
-                    const estimatedPages =
-                        chat.totalPages > 0
-                            ? Math.round((update.progress / 100) * chat.totalPages)
-                            : chat.pages;
-
-                    const nextPages =
-                        update.status === "ready"
-                            ? chat.totalPages || chat.pages
-                            : Math.max(chat.pages, estimatedPages);
-
+        const statusResults = await Promise.all(
+            inFlightChats.map(async (chat) => {
+                try {
+                    const statusData = await getChatStatus(chat.id);
                     return {
-                        ...chat,
-                        status: update.status,
-                        pages: nextPages,
+                        id: chat.id,
+                        status: normalizeStatus(statusData.progress?.status),
+                        progress: clampProgress(statusData.progress?.progress),
                     };
-                }),
-            );
+                } catch {
+                    return null;
+                }
+            }),
+        );
+
+        const updates = statusResults.filter(
+            (item): item is { id: string; status: string; progress: number } =>
+                Boolean(item),
+        );
+
+        if (!updates.length) {
+            return;
+        }
+
+        setChatProgress((prev) => {
+            const next = { ...prev };
+            for (const update of updates) {
+                next[update.id] = {
+                    status: update.status,
+                    progress: update.progress,
+                };
+            }
+            return next;
+        });
+
+        setChats((prev) =>
+            prev.map((chat) => {
+                const update = updates.find((item) => item.id === chat.id);
+                if (!update) return chat;
+
+                const estimatedPages =
+                    chat.totalPages > 0
+                        ? Math.round((update.progress / 100) * chat.totalPages)
+                        : chat.pages;
+
+                const nextPages =
+                    update.status === "ready"
+                        ? chat.totalPages || chat.pages
+                        : Math.max(chat.pages, estimatedPages);
+
+                return {
+                    ...chat,
+                    status: update.status,
+                    pages: nextPages,
+                };
+            }),
+        );
     }, []);
 
     useEffect(() => {
         const hasInFlightChats = chats.some(
             (chat) =>
-                normalizeStatus(chatProgress[chat.id]?.status || chat.status) !== "ready" &&
-                normalizeStatus(chatProgress[chat.id]?.status || chat.status) !== "failed",
+                normalizeStatus(
+                    chatProgress[chat.id]?.status || chat.status,
+                ) !== "ready" &&
+                normalizeStatus(
+                    chatProgress[chat.id]?.status || chat.status,
+                ) !== "failed",
         );
 
         if (hasInFlightChats && pollIntervalRef.current === null) {
@@ -283,7 +292,10 @@ const Dashboard = () => {
         const chat = chats.find((c) => c.id === chatId);
         if (!chat) return;
         try {
-            await createChat({ name: chat.title, docsUrl: chat.urls[0] || chatUrl });
+            await createChat({
+                name: chat.title,
+                docsUrl: chat.urls[0] || chatUrl,
+            });
             showToast(`Retrying "${chat.title}"...`);
             await loadDashboardData();
         } catch (err) {
@@ -460,14 +472,16 @@ const Dashboard = () => {
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                 {chats.map((chat) => {
                                     const liveStatus = normalizeStatus(
-                                        chatProgress[chat.id]?.status || chat.status,
+                                        chatProgress[chat.id]?.status ||
+                                            chat.status,
                                     );
                                     const progressPercent =
                                         chatProgress[chat.id]?.progress ??
                                         (liveStatus === "processing" &&
                                         chat.totalPages > 0
                                             ? Math.round(
-                                                  (chat.pages / chat.totalPages) *
+                                                  (chat.pages /
+                                                      chat.totalPages) *
                                                       100,
                                               )
                                             : 0);
@@ -529,10 +543,12 @@ const Dashboard = () => {
                                                             {Math.round(
                                                                 (progressPercent /
                                                                     100) *
-                                                                    (chat.totalPages || 0),
+                                                                    (chat.totalPages ||
+                                                                        0),
                                                             )}
                                                             /
-                                                            {chat.totalPages || 0}
+                                                            {chat.totalPages ||
+                                                                0}
                                                         </span>
                                                     </div>
                                                     <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden border border-white/5">
@@ -553,32 +569,32 @@ const Dashboard = () => {
                                             {/* Stats for ready/failed */}
                                             {liveStatus !== "processing" &&
                                                 liveStatus !== "queued" && (
-                                                <div className="grid grid-cols-3 gap-2 mt-2 mb-6">
-                                                    <div className="bg-white/5 rounded-lg p-2 flex flex-col items-center justify-center border border-white/5">
-                                                        <FileText className="w-3 h-3 text-gray-400 mb-1" />
-                                                        <span className="text-xs font-medium text-gray-300">
-                                                            {chat.pages}
-                                                        </span>
+                                                    <div className="grid grid-cols-3 gap-2 mt-2 mb-6">
+                                                        <div className="bg-white/5 rounded-lg p-2 flex flex-col items-center justify-center border border-white/5">
+                                                            <FileText className="w-3 h-3 text-gray-400 mb-1" />
+                                                            <span className="text-xs font-medium text-gray-300">
+                                                                {chat.pages}
+                                                            </span>
+                                                        </div>
+                                                        <div
+                                                            className="bg-white/5 rounded-lg p-2 flex flex-col items-center justify-center border border-white/5"
+                                                            title="Tokens used"
+                                                        >
+                                                            <Database className="w-3 h-3 text-gray-400 mb-1" />
+                                                            <span className="text-xs font-medium text-gray-300">
+                                                                {formatTokens(
+                                                                    chat.tokens,
+                                                                )}
+                                                            </span>
+                                                        </div>
+                                                        <div className="bg-white/5 rounded-lg p-2 flex flex-col items-center justify-center border border-white/5">
+                                                            <Clock className="w-3 h-3 text-gray-400 mb-1" />
+                                                            <span className="text-xs font-medium text-gray-300 truncate w-full text-center">
+                                                                {chat.createdAt}
+                                                            </span>
+                                                        </div>
                                                     </div>
-                                                    <div
-                                                        className="bg-white/5 rounded-lg p-2 flex flex-col items-center justify-center border border-white/5"
-                                                        title="Tokens used"
-                                                    >
-                                                        <Database className="w-3 h-3 text-gray-400 mb-1" />
-                                                        <span className="text-xs font-medium text-gray-300">
-                                                            {formatTokens(
-                                                                chat.tokens,
-                                                            )}
-                                                        </span>
-                                                    </div>
-                                                    <div className="bg-white/5 rounded-lg p-2 flex flex-col items-center justify-center border border-white/5">
-                                                        <Clock className="w-3 h-3 text-gray-400 mb-1" />
-                                                        <span className="text-xs font-medium text-gray-300 truncate w-full text-center">
-                                                            {chat.createdAt}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            )}
+                                                )}
 
                                             <div className="mt-auto flex items-center gap-3 pt-4 border-t border-white/5">
                                                 {liveStatus === "ready" && (
@@ -787,7 +803,6 @@ const Dashboard = () => {
                                     automatically.
                                 </p>
                             </div>
-
                         </div>
 
                         {/* Modal Footer */}
@@ -803,7 +818,9 @@ const Dashboard = () => {
                                 disabled={isStartDisabled || isCreating}
                                 className="px-5 py-2 rounded-lg bg-accent-blue hover:bg-accent-blue/90 disabled:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors shadow-lg shadow-accent-blue/20"
                             >
-                                {isCreating ? "Starting..." : "Start Processing"}
+                                {isCreating
+                                    ? "Starting..."
+                                    : "Start Processing"}
                             </button>
                         </div>
                     </div>

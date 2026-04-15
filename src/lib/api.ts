@@ -87,15 +87,21 @@ const apiRequest = async <T>(path: string, init?: RequestInit): Promise<T> => {
 };
 
 export const getUserProfile = () =>
-    apiRequest<{ id: string; fullname?: string | null; username?: string | null; email?: string | null }>(
-        "/user/profile",
-        { method: "GET" },
-    );
+    apiRequest<{
+        id: string;
+        fullname?: string | null;
+        username?: string | null;
+        email?: string | null;
+    }>("/user/profile", { method: "GET" });
 
 export const getApiKeys = () =>
     apiRequest<{ apiKeys: ApiKeyItem[] }>("/apikey/list", { method: "GET" });
 
-export const createApiKey = (payload: { key: string; name: string; provider: Provider }) =>
+export const createApiKey = (payload: {
+    key: string;
+    name: string;
+    provider: Provider;
+}) =>
     apiRequest("/apikey/add", {
         method: "POST",
         body: JSON.stringify(payload),
@@ -120,18 +126,20 @@ export const deleteChat = (chatId: string) =>
     apiRequest(`/chat/${chatId}`, { method: "DELETE" });
 
 export const getChatStatus = (chatId: string) =>
-    apiRequest<{ progress: { status: string; progress: number } }>(`/chat/status/${chatId}`, {
-        method: "GET",
-    });
+    apiRequest<{ progress: { status: string; progress: number } }>(
+        `/chat/status/${chatId}`,
+        {
+            method: "GET",
+        },
+    );
 
 export const getChatDetails = (chatId: string) =>
     apiRequest<{ chat: ChatItem }>(`/chat/${chatId}`, { method: "GET" });
 
 export const getPagesIndexed = (chatId: string) =>
-    apiRequest<{ pagesIndexed: Array<{ pageUrl: string; title?: string | null }> }>(
-        `/chat/pages-indexed/${chatId}`,
-        { method: "GET" },
-    );
+    apiRequest<{
+        pagesIndexed: Array<{ pageUrl: string; title?: string | null }>;
+    }>(`/chat/pages-indexed/${chatId}`, { method: "GET" });
 
 export const getAvailableModels = () =>
     apiRequest<{ models: string[] }>("/message/models", { method: "GET" });
@@ -142,9 +150,12 @@ export const getChatMessages = (chatId: string) =>
     });
 
 export const getMessageSources = (messageId: string) =>
-    apiRequest<{ messageSources: ChatMessageSourceItem[] }>(`/message/sources/${messageId}`, {
-        method: "GET",
-    });
+    apiRequest<{ messageSources: ChatMessageSourceItem[] }>(
+        `/message/sources/${messageId}`,
+        {
+            method: "GET",
+        },
+    );
 
 export const sendMessageStream = async (payload: {
     userPrompt: string;
@@ -167,7 +178,9 @@ export const sendMessageStream = async (payload: {
     });
 
     if (!response.ok || !response.body) {
-        const payload = (await response.json().catch(() => ({}))) as ApiEnvelope<unknown>;
+        const payload = (await response
+            .json()
+            .catch(() => ({}))) as ApiEnvelope<unknown>;
         if (response.status === 401 || response.status === 403) {
             forceSignOut();
         }
@@ -196,10 +209,9 @@ export const sendMessageStream = async (payload: {
 };
 
 export const getLifetimeTokens = () =>
-    apiRequest<{ _sum: { inputTokens: number | null; outputTokens: number | null } }>(
-        "/usage/lifetime-tokens",
-        { method: "GET" },
-    );
+    apiRequest<{
+        _sum: { inputTokens: number | null; outputTokens: number | null };
+    }>("/usage/lifetime-tokens", { method: "GET" });
 
 export const getTokensByGroup = (groupBy: "day" | "week" | "month" | "year") =>
     apiRequest<
@@ -214,20 +226,16 @@ export const getTokensByGroup = (groupBy: "day" | "week" | "month" | "year") =>
                 }>;
             }
         >
-    >(
-        `/usage/tokens/${groupBy}`,
-        { method: "GET" },
-    );
+    >(`/usage/tokens/${groupBy}`, { method: "GET" });
 
 export const getRecentChats = () =>
     apiRequest<ChatItem[]>("/chat/recent", { method: "GET" });
 
-export const getTopChatsByUsage = () => 
+export const getTopChatsByUsage = () =>
     apiRequest<
         Array<{
             chatId: string;
             _sum: { inputTokens: number | null; outputTokens: number | null };
-            name?: string | null
+            name?: string | null;
         }>
     >("/usage/top-chats", { method: "GET" });
-    

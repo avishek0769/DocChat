@@ -247,7 +247,8 @@ const LandingPage = () => {
                         You ask questions. It gives answers with sources.
                     </p>
                     <p className="text-center text-gray-500 text-sm">
-                        First-time ingestion runs in the background. If the same docs URL is already indexed, chat creation is instant.
+                        First-time ingestion runs in the background. If the same
+                        docs URL is already indexed, chat creation is instant.
                     </p>
                 </div>
             </section>
@@ -355,7 +356,9 @@ const LandingPage = () => {
                     Built for developer documentation workflows
                 </h2>
                 <div className="text-gray-400 mb-8 max-w-2xl mx-auto">
-                    Ingest docs once, ask naturally, and keep references attached to every answer. Bring your own API keys or use the included model access.
+                    Ingest docs once, ask naturally, and keep references
+                    attached to every answer. Bring your own API keys or use the
+                    included model access.
                 </div>
                 <div className="flex flex-wrap justify-center gap-4 text-sm font-medium text-gray-300">
                     <span className="px-4 py-2 rounded-full glass border border-white/10">
@@ -382,9 +385,12 @@ const LandingPage = () => {
                     <p className="text-xs uppercase tracking-[0.22em] text-red-300/70 mb-3">
                         Know Before You Start
                     </p>
-                    <h3 className="text-3xl font-bold mb-4">Current Limitations</h3>
+                    <h3 className="text-3xl font-bold mb-4">
+                        Current Limitations
+                    </h3>
                     <p className="text-gray-400 max-w-2xl mx-auto">
-                        DocChat is fast for most documentation sites, but these are the practical constraints right now.
+                        DocChat is fast for most documentation sites, but these
+                        are the practical constraints right now.
                     </p>
                 </div>
 
@@ -401,7 +407,9 @@ const LandingPage = () => {
                                 key={idx}
                                 className="grid md:grid-cols-2 items-center gap-4 md:gap-10"
                             >
-                                <div className={`hidden md:block ${idx % 2 === 0 ? "" : "order-2"}`} />
+                                <div
+                                    className={`hidden md:block ${idx % 2 === 0 ? "" : "order-2"}`}
+                                />
                                 <div
                                     className={`relative ml-8 md:ml-0 glass rounded-xl border border-white/10 p-5 text-sm text-gray-300 ${idx % 2 === 0 ? "md:mr-8" : "md:ml-8 md:order-1"}`}
                                 >
@@ -435,7 +443,9 @@ const LandingPage = () => {
                                 Open source and built in public
                             </h3>
                             <p className="text-gray-300 mb-6 max-w-2xl">
-                                DocChat is fully open source. If you want to fix bugs, improve crawling quality, or ship new ideas, contributions are welcome.
+                                DocChat is fully open source. If you want to fix
+                                bugs, improve crawling quality, or ship new
+                                ideas, contributions are welcome.
                             </p>
                             <div className="flex flex-wrap gap-3 text-sm">
                                 <span className="px-3 py-1.5 rounded-full border border-white/15 bg-white/5 text-gray-300">

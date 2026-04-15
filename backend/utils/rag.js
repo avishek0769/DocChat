@@ -26,7 +26,7 @@ async function scrapeTitle(url) {
 async function scrapeWebpage(url = "", rootUrl = "") {
     const data = await (await fetch(url)).text();
     const $ = cheerio.load(data);
-    
+
     const rootHostname = new URL(rootUrl).hostname;
 
     const internalLinks = extractHrefsFromScripts($, rootUrl, rootHostname);
@@ -41,8 +41,11 @@ async function scrapeWebpage(url = "", rootUrl = "") {
 
         try {
             const resolved = new URL(href, url);
-            
-            if (resolved.hostname === rootHostname && resolved.protocol.startsWith('http')) {
+
+            if (
+                resolved.hostname === rootHostname &&
+                resolved.protocol.startsWith("http")
+            ) {
                 const normalized = normalizeUrl(resolved.toString());
                 if (isValidDocUrl(normalized, rootUrl)) {
                     internalLinks.add(normalized);
@@ -56,10 +59,9 @@ async function scrapeWebpage(url = "", rootUrl = "") {
     return {
         body: bodyElem,
         title,
-        internalLinks: Array.from(internalLinks)
+        internalLinks: Array.from(internalLinks),
     };
 }
-
 
 function cleanText(text) {
     return text
@@ -99,7 +101,10 @@ function isValidDocUrl(url, rootUrl = "") {
 }
 
 function extractHrefsFromScripts($, rootUrl, rootHostname) {
-    const scriptsText = $("script").map((_, el) => $(el).html()).get().join("\n");
+    const scriptsText = $("script")
+        .map((_, el) => $(el).html())
+        .get()
+        .join("\n");
     const hrefs = new Set();
     const regex = /\\"href\\"\s*:\s*\\"([^\\"]+)\\"/g;
 
@@ -122,5 +127,10 @@ function extractHrefsFromScripts($, rootUrl, rootHostname) {
     return hrefs;
 }
 
-
-export { normalizeUrl, isValidDocUrl, scrapeWebpage, scrapeTitle, generateVectorEmbeddings };
+export {
+    normalizeUrl,
+    isValidDocUrl,
+    scrapeWebpage,
+    scrapeTitle,
+    generateVectorEmbeddings,
+};

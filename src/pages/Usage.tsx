@@ -2,16 +2,16 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { Sidebar } from "../components/Sidebar";
 import { Zap, TrendingUp, Key, Calendar, MessageSquare } from "lucide-react";
 import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend
-} from 'chart.js';
-import type { TooltipItem } from 'chart.js';
-import { Bar } from 'react-chartjs-2';
+    Chart as ChartJS,
+    CategoryScale,
+    LinearScale,
+    BarElement,
+    Title,
+    Tooltip,
+    Legend,
+} from "chart.js";
+import type { TooltipItem } from "chart.js";
+import { Bar } from "react-chartjs-2";
 import {
     getApiKeyCount,
     getLifetimeTokens,
@@ -20,12 +20,12 @@ import {
 } from "../lib/api";
 
 ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend
+    CategoryScale,
+    LinearScale,
+    BarElement,
+    Title,
+    Tooltip,
+    Legend,
 );
 
 type UsagePoint = {
@@ -106,7 +106,9 @@ export const Usage = () => {
     const [usagePoints, setUsagePoints] = useState<UsagePoint[]>([]);
     const [lifetimeTotal, setLifetimeTotal] = useState(0);
     const [apiKeyCount, setApiKeyCount] = useState(0);
-    const [topChats, setTopChats] = useState<Array<{ name: string; tokens: number; color: string }>>([]);
+    const [topChats, setTopChats] = useState<
+        Array<{ name: string; tokens: number; color: string }>
+    >([]);
     const [error, setError] = useState("");
     const requestIdRef = useRef(0);
 
@@ -125,12 +127,13 @@ export const Usage = () => {
             setError("");
             setUsagePoints(getPlaceholderUsagePoints(timeframe));
             try {
-                const [grouped, lifetime, keys, topChatsByUsage] = await Promise.all([
-                    getTokensByGroup(timeframe),
-                    getLifetimeTokens(),
-                    getApiKeyCount(),
-                    getTopChatsByUsage(),
-                ]);
+                const [grouped, lifetime, keys, topChatsByUsage] =
+                    await Promise.all([
+                        getTokensByGroup(timeframe),
+                        getLifetimeTokens(),
+                        getApiKeyCount(),
+                        getTopChatsByUsage(),
+                    ]);
 
                 if (requestId !== requestIdRef.current) return;
 
@@ -169,14 +172,16 @@ export const Usage = () => {
             } catch (err) {
                 if (requestId !== requestIdRef.current) return;
                 setError(
-                    err instanceof Error ? err.message : "Failed to load usage data.",
+                    err instanceof Error
+                        ? err.message
+                        : "Failed to load usage data.",
                 );
             }
         };
 
         loadUsage();
     }, [timeframe]);
-    
+
     // Chart.js Data & Options configurations
     const chartData = useMemo(() => {
         const labels = usagePoints.map((d) =>
@@ -222,94 +227,98 @@ export const Usage = () => {
         return { labels, datasets };
     }, [usagePoints]);
 
-    const chartOptions = useMemo(() => ({
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: {
-                position: "bottom" as const,
-                labels: {
-                    color: "#9ca3af",
+    const chartOptions = useMemo(
+        () => ({
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: "bottom" as const,
+                    labels: {
+                        color: "#9ca3af",
+                        usePointStyle: true,
+                        padding: 24,
+                        font: {
+                            family: "ui-sans-serif, system-ui, sans-serif",
+                            size: 13,
+                        },
+                    },
+                },
+                tooltip: {
+                    backgroundColor: "#1a1a24",
+                    titleColor: "#f3f4f6",
+                    bodyColor: "#d1d5db",
+                    borderColor: "rgba(255,255,255,0.1)",
+                    borderWidth: 1,
+                    padding: 12,
+                    boxPadding: 6,
                     usePointStyle: true,
-                    padding: 24,
-                    font: {
-                        family: "ui-sans-serif, system-ui, sans-serif",
-                        size: 13,
+                    callbacks: {
+                        label: function (context: TooltipItem<"bar">) {
+                            let label = context.dataset.label || "";
+                            if (label) {
+                                label += ": ";
+                            }
+                            if (context.parsed.y !== null) {
+                                label +=
+                                    new Intl.NumberFormat("en-US", {
+                                        notation: "compact",
+                                        compactDisplay: "short",
+                                    }).format(context.parsed.y) + " Tokens";
+                            }
+                            return label;
+                        },
                     },
                 },
             },
-            tooltip: {
-                backgroundColor: "#1a1a24",
-                titleColor: "#f3f4f6",
-                bodyColor: "#d1d5db",
-                borderColor: "rgba(255,255,255,0.1)",
-                borderWidth: 1,
-                padding: 12,
-                boxPadding: 6,
-                usePointStyle: true,
-                callbacks: {
-                    label: function(context: TooltipItem<"bar">) {
-                        let label = context.dataset.label || '';
-                        if (label) {
-                            label += ': ';
-                        }
-                        if (context.parsed.y !== null) {
-                            label += new Intl.NumberFormat('en-US', {
-                                notation: "compact",
-                                compactDisplay: "short"
-                            }).format(context.parsed.y) + ' Tokens';
-                        }
-                        return label;
-                    }
-                }
-            },
-        },
-        scales: {
-            x: {
-                stacked: true,
-                grid: {
-                    color: "rgba(255, 255, 255, 0)",
-                    drawBorder: false,
-                },
-                ticks: {
-                    color: "#6b7280",
-                    font: {
-                        family: "ui-sans-serif, system-ui, sans-serif",
-                    }
-                },
-                border: {
-                    display: false
-                }
-            },
-            y: {
-                stacked: true,
-                grid: {
-                    color: "rgba(255, 255, 255, 0.05)",
-                    drawBorder: false,
-                },
-                ticks: {
-                    color: "#6b7280", // gray-500
-                    font: {
-                        family: "ui-sans-serif, system-ui, sans-serif",
+            scales: {
+                x: {
+                    stacked: true,
+                    grid: {
+                        color: "rgba(255, 255, 255, 0)",
+                        drawBorder: false,
                     },
-                    callback: function(value: string | number) {
-                        const num = Number(value);
-                        if (num >= 1000000) return (num / 1000000) + "M";
-                        if (num >= 1000) return (num / 1000) + "k";
-                        return num;
+                    ticks: {
+                        color: "#6b7280",
+                        font: {
+                            family: "ui-sans-serif, system-ui, sans-serif",
+                        },
                     },
-                    maxTicksLimit: 6,
+                    border: {
+                        display: false,
+                    },
                 },
-                border: {
-                    display: false
-                }
+                y: {
+                    stacked: true,
+                    grid: {
+                        color: "rgba(255, 255, 255, 0.05)",
+                        drawBorder: false,
+                    },
+                    ticks: {
+                        color: "#6b7280", // gray-500
+                        font: {
+                            family: "ui-sans-serif, system-ui, sans-serif",
+                        },
+                        callback: function (value: string | number) {
+                            const num = Number(value);
+                            if (num >= 1000000) return num / 1000000 + "M";
+                            if (num >= 1000) return num / 1000 + "k";
+                            return num;
+                        },
+                        maxTicksLimit: 6,
+                    },
+                    border: {
+                        display: false,
+                    },
+                },
             },
-        },
-        interaction: {
-            mode: 'index' as const,
-            intersect: false,
-        },
-    }), []);
+            interaction: {
+                mode: "index" as const,
+                intersect: false,
+            },
+        }),
+        [],
+    );
     return (
         <div className="min-h-screen bg-[#0b0b0f] text-gray-50 flex font-sans selection:bg-accent-purple/30">
             <Sidebar />
@@ -318,17 +327,27 @@ export const Usage = () => {
                 <div className="max-w-5xl mx-auto space-y-10">
                     <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-6">
                         <div>
-                            <h1 className="text-3xl font-bold mb-2">Usage Metrics</h1>
+                            <h1 className="text-3xl font-bold mb-2">
+                                Usage Metrics
+                            </h1>
                             <p className="text-gray-400 text-sm">
-                                Track your token consumption across different models and API keys.
+                                Track your token consumption across different
+                                models and API keys.
                             </p>
                             <p className="text-sm text-gray-400 mt-3">
-                                <strong>Usage calculation:</strong> We also add token usage from the free default models for your usage tracking.
+                                <strong>Usage calculation:</strong> We also add
+                                token usage from the free default models for
+                                your usage tracking.
                             </p>
                         </div>
                         <div className="flex items-center gap-3 bg-white/5 border border-white/10 px-4 py-2 rounded-lg">
                             <Calendar className="w-4 h-4 text-gray-400" />
-                            <span className="text-sm font-medium text-gray-200">Current Cycle: <strong className="text-white">{cycleLabel}</strong></span>
+                            <span className="text-sm font-medium text-gray-200">
+                                Current Cycle:{" "}
+                                <strong className="text-white">
+                                    {cycleLabel}
+                                </strong>
+                            </span>
                         </div>
                     </header>
 
@@ -342,32 +361,41 @@ export const Usage = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                         <div className="p-6 rounded-xl bg-white/2 border border-white/5 relative overflow-hidden group hover:border-white/10 transition-colors">
                             <div className="flex justify-between items-start mb-6">
-                                <p className="text-sm font-medium text-gray-400">Total Tokens (Lifetime)</p>
+                                <p className="text-sm font-medium text-gray-400">
+                                    Total Tokens (Lifetime)
+                                </p>
                                 <div className="p-2.5 rounded-lg bg-green-500/10 border border-green-500/20 text-green-400">
                                     <Zap className="w-5 h-5" />
                                 </div>
                             </div>
                             <div>
-                                <h3 className="text-3xl font-bold text-white mb-2">{formatTokens(lifetimeTotal)}</h3>
-                                <p className="text-xs text-gray-500 font-medium">Lifetime token usage</p>
+                                <h3 className="text-3xl font-bold text-white mb-2">
+                                    {formatTokens(lifetimeTotal)}
+                                </h3>
+                                <p className="text-xs text-gray-500 font-medium">
+                                    Lifetime token usage
+                                </p>
                             </div>
                         </div>
 
                         <div className="p-6 rounded-xl bg-white/2 border border-white/5 relative overflow-hidden group hover:border-white/10 transition-colors">
                             <div className="flex justify-between items-start mb-6">
-                                <p className="text-sm font-medium text-gray-400">Active API Keys</p>
+                                <p className="text-sm font-medium text-gray-400">
+                                    Active API Keys
+                                </p>
                                 <div className="p-2.5 rounded-lg bg-accent-blue/10 border border-accent-blue/20 text-accent-blue">
                                     <Key className="w-5 h-5" />
                                 </div>
                             </div>
                             <div>
-                                <h3 className="text-3xl font-bold text-white mb-2">{apiKeyCount}</h3>
+                                <h3 className="text-3xl font-bold text-white mb-2">
+                                    {apiKeyCount}
+                                </h3>
                                 <p className="text-xs text-gray-500 font-medium">
                                     Active keys in your account
                                 </p>
                             </div>
                         </div>
-
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -378,15 +406,22 @@ export const Usage = () => {
                                     <TrendingUp className="w-5 h-5 text-accent-blue" />
                                     Token Usage
                                 </h3>
-                                
+
                                 <div className="flex bg-[#111] border border-white/10 rounded-lg p-1">
-                                    {(["day", "week", "month", "year"] as const).map((t) => (
+                                    {(
+                                        [
+                                            "day",
+                                            "week",
+                                            "month",
+                                            "year",
+                                        ] as const
+                                    ).map((t) => (
                                         <button
                                             key={t}
                                             onClick={() => setTimeframe(t)}
                                             className={`px-3 py-1.5 text-xs font-medium rounded-md capitalize transition-colors ${
-                                                timeframe === t 
-                                                    ? "bg-white/10 text-white" 
+                                                timeframe === t
+                                                    ? "bg-white/10 text-white"
                                                     : "text-gray-400 hover:text-gray-200 hover:bg-white/5"
                                             }`}
                                         >
@@ -395,11 +430,10 @@ export const Usage = () => {
                                     ))}
                                 </div>
                             </div>
-                            
+
                             <div className="flex-1 w-full min-h-75">
                                 <Bar data={chartData} options={chartOptions} />
                             </div>
-                            
                         </div>
 
                         {/* Top Chats Breakdown */}
@@ -413,13 +447,25 @@ export const Usage = () => {
                                 {topChats.map((chat, i) => (
                                     <div key={i} className="space-y-2.5">
                                         <div className="flex justify-between items-center text-sm">
-                                            <span className="font-medium text-gray-200 truncate pr-2" title={chat.name}>{chat.name}</span>
-                                            <span className="text-gray-300 font-mono font-medium shrink-0">{(chat.tokens / 1000).toFixed(0)}k</span>
+                                            <span
+                                                className="font-medium text-gray-200 truncate pr-2"
+                                                title={chat.name}
+                                            >
+                                                {chat.name}
+                                            </span>
+                                            <span className="text-gray-300 font-mono font-medium shrink-0">
+                                                {(chat.tokens / 1000).toFixed(
+                                                    0,
+                                                )}
+                                                k
+                                            </span>
                                         </div>
                                         <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden border border-white/5">
-                                            <div 
-                                                className={`h-full ${chat.color} rounded-full`} 
-                                                style={{ width: `${Math.min(100, (chat.tokens / Math.max(1, topChats[0]?.tokens || 1)) * 100)}%` }}
+                                            <div
+                                                className={`h-full ${chat.color} rounded-full`}
+                                                style={{
+                                                    width: `${Math.min(100, (chat.tokens / Math.max(1, topChats[0]?.tokens || 1)) * 100)}%`,
+                                                }}
                                             />
                                         </div>
                                     </div>

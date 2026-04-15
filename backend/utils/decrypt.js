@@ -10,7 +10,7 @@ export function decryptApiKey(encryptedApiKey, iv, authTag) {
     decipher.setAuthTag(Buffer.from(authTag, "base64"));
 
     let decipherText = decipher.update(encryptedApiKey, "base64", "utf-8");
-    decipherText += decipher.final("utf-8")
+    decipherText += decipher.final("utf-8");
 
     return decipherText;
 }

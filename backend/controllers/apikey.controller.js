@@ -77,7 +77,10 @@ const addApiKey = asyncHandler(async (req, res) => {
     });
 
     if (apiKey) {
-        throw new ApiError(400, `An API key for provider ${provider} already exists. Please remove it first if you want to add a new one.`);
+        throw new ApiError(
+            400,
+            `An API key for provider ${provider} already exists. Please remove it first if you want to add a new one.`,
+        );
     }
 
     const { cipherText, tag, iv } = encryptApiKey(key);
@@ -92,7 +95,7 @@ const addApiKey = asyncHandler(async (req, res) => {
             provider: provider,
         },
     });
-    
+
     res.status(201).json(
         new ApiResponse(200, {}, "API key added successfully"),
     );
@@ -195,7 +198,7 @@ const getApiKey = asyncHandler(async (req, res) => {
 
 const totalNumberOfApiKeys = asyncHandler(async (req, res) => {
     const count = await prisma.apiKey.count({
-        where: { userId: req.user.id }
+        where: { userId: req.user.id },
     });
 
     res.status(200).json(
@@ -207,4 +210,10 @@ const totalNumberOfApiKeys = asyncHandler(async (req, res) => {
     );
 });
 
-export { addApiKey, listApiKeys, removeApiKey, getApiKey, totalNumberOfApiKeys };
+export {
+    addApiKey,
+    listApiKeys,
+    removeApiKey,
+    getApiKey,
+    totalNumberOfApiKeys,
+};

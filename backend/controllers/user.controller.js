@@ -312,7 +312,11 @@ const sendResetCode = asyncHandler(async (req, res) => {
     });
 
     res.status(200).json(
-        new ApiResponse(200, { emailSent: true }, "Reset code sent successfully !!"),
+        new ApiResponse(
+            200,
+            { emailSent: true },
+            "Reset code sent successfully !!",
+        ),
     );
 });
 
@@ -354,5 +358,5 @@ export {
     verifyEmail,
     currentUserProfile,
     resetPassword,
-    sendResetCode
+    sendResetCode,
 };

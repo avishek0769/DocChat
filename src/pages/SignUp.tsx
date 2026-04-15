@@ -1,13 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import {
-    Terminal,
-    Eye,
-    EyeOff,
-    ArrowRight,
-    Check,
-} from "lucide-react";
+import { Terminal, Eye, EyeOff, ArrowRight, Check } from "lucide-react";
 import {
     registerUser,
     sendVerificationCode,
@@ -118,9 +112,7 @@ const SignUp = () => {
             setMessage("Email verified successfully.");
         } catch (err) {
             setError(
-                err instanceof Error
-                    ? err.message
-                    : "Verification failed.",
+                err instanceof Error ? err.message : "Verification failed.",
             );
         } finally {
             setIsVerifyingCode(false);
@@ -249,7 +241,9 @@ const SignUp = () => {
                                 <button
                                     type="button"
                                     onClick={handleVerifyCode}
-                                    disabled={isVerifyingCode || isEmailVerified}
+                                    disabled={
+                                        isVerifyingCode || isEmailVerified
+                                    }
                                     className="px-3 py-2 rounded-lg bg-accent-blue hover:bg-blue-600 disabled:opacity-50 text-xs font-medium"
                                 >
                                     {isVerifyingCode
