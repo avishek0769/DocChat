@@ -4,4 +4,4 @@ node_modules
 
 /generated/prisma
 
-python-service/venv/
+temp/

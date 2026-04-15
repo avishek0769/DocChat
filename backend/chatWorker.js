@@ -6,6 +6,16 @@ import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { v4 as uuidv4 } from "uuid";
 import prisma from "./utils/prismaClient.js";
+import { PageIndexClient } from "@pageindex/sdk";
+import PDFDocument from "pdfkit";
+import fs from "fs/promises";
+import fsSync from "fs";
+
+const doc = new PDFDocument();
+
+const pageindex = new PageIndexClient({
+    apiKey: process.env.PAGEINDEX_API_KEY,
+});
 
 const client = new QdrantClient({
     url: process.env.QDRANT_URL,
@@ -21,6 +31,17 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId) 
     const totalLinks = allLinks.length;
 
     console.log("Total unique links found:", totalLinks);
+
+    await redis.setex(
+        chatId,
+        3600,
+        JSON.stringify({
+            status: "PROCESSING",
+            current: 0,
+            total: totalLinks,
+            progress: 0,
+        }),
+    );
 
     const collections = await client.getCollections();
     if (!collections.collections.some((c) => c.name === collectionName)) {
@@ -95,7 +116,7 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId) 
                 }
 
                 await redis.setex(
-                    collectionName,
+                    chatId,
                     3600,
                     JSON.stringify({
                         status: "PROCESSING",
@@ -107,12 +128,108 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId) 
             }
         } catch (err) {
             console.error(`Failed link ${link}:`, err.message);
+            await redis.setex(chatId, 3600, JSON.stringify({ status: "FAILED" }));
             continue;
         }
     }
 }
 
-async function processVectorLess(docsRootUrl, chatId, chatSourceId) {}
+async function processVectorLess(docsRootUrl, chatId, chatSourceId) {
+    try {
+        await redis.setex(chatId, 3600, JSON.stringify({ status: "PROCESSING", progress: 0 }));
+
+        const rootUrl = normalizeUrl(docsRootUrl);
+        console.log("Scraping root:", rootUrl);
+
+        const { internalLinks } = await scrapeWebpage(rootUrl, rootUrl);
+        let allLinks = internalLinks.slice(0, 3); // slice 3 - Just for development, slice 300 for production
+        const totalLinks = allLinks.length;
+
+        console.log("Total unique links found:", totalLinks);
+
+        let batchLinks = allLinks.slice(0, 5);
+        let allData = "";
+        let i = 0;
+
+        while (batchLinks.length > 0) {
+            batchLinks = allLinks.slice(i, i + 5);
+            const results = await Promise.all(
+                batchLinks.map(async (link) => {
+                    if (!isValidDocUrl(link, rootUrl)) return "";
+                    try {
+                        const { title, body } = await scrapeWebpage(link, rootUrl);
+                        return `Title: ${title}\n ${body}\n\n`;
+                    } catch (error) {
+                        console.error(`Failed: ${link}`, error.message);
+                        return "";
+                    }
+                }),
+            );
+
+            allData += results.join("");
+            i += 5;
+        }
+
+        if (!allData.trim()) {
+            throw new Error("No data scraped. PDF would be empty.");
+        }
+
+        const filePath = `./temp/${chatSourceId}.pdf`;
+        const writeStream = fsSync.createWriteStream(filePath);
+
+        await new Promise((resolve, reject) => {
+            doc.pipe(writeStream);
+            doc.text(allData);
+            doc.end();
+
+            writeStream.on("finish", resolve);
+            writeStream.on("error", reject);
+        });
+
+        console.log("Data converted and stream flushed");
+
+        const file = await fs.readFile(`./temp/${chatSourceId}.pdf`);
+        const result = await pageindex.api.submitDocument(file, `${chatSourceId}.pdf`);
+        console.log("Result:", result);
+
+        let docTree = null;
+
+        let attempts = 0;
+        const maxAttempts = 20;
+        while (attempts < maxAttempts) {
+            docTree = await pageindex.api.getTree(result.doc_id, { nodeSummary: true });
+            if (docTree.status === "completed") break;
+            if (docTree.status === "failed") throw new Error("Document processing failed");
+
+            attempts++;
+            await new Promise((resolve) => setTimeout(resolve, 3500));
+        }
+        if (attempts >= maxAttempts) throw new Error("Polling timeout");
+
+        await redis.setex(chatId, 3600, JSON.stringify({ status: "READY", progress: 100 }));
+
+        console.log("Tree Status:", docTree.status);
+
+        await prisma.chat.update({
+            where: { id: chatId },
+            data: {
+                collectionName: result.doc_id,
+                status: "READY",
+                chatSources: {
+                    update: {
+                        where: { id: chatSourceId },
+                        data: { collectionName: result.doc_id },
+                    },
+                },
+            },
+        });
+
+        return;
+    } catch (error) {
+        console.error("Error VectorLess:", error);
+        await redis.setex(chatId, 3600, JSON.stringify({ status: "FAILED" }));
+    }
+}
 
 const worker = new Worker(
     "chatCreation",

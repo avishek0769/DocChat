@@ -147,10 +147,10 @@ const createChat = asyncHandler(async (req, res) => {
         chatCreationQueue.add(
             `${chat.id}-job`,
             {
-                chatId: chat.id,
+                chatId: chat.id.toString(),
                 docsUrl,
                 collectionName: chat.collectionName,
-                chatSourceId: chat.chatSources[0].id,
+                chatSourceId: chat.chatSources[0].id.toString(),
                 isVectorLess: isVectorLessChat,
             },
             { jobId: chat.id },
@@ -168,11 +168,11 @@ const progressStatus = asyncHandler(async (req, res) => {
     const chat = await prisma.chat.findUnique({
         where: { id: chatId },
     });
-
-    const redisData = await redis.get(chat.collectionName);
+    
+    const redisData = await redis.get(chat.id.toString());
     const progress = redisData ? JSON.parse(redisData) : { status: "QUEUED", progress: 0 };
 
-    res.status(200).json(new ApiResponse(200, { progress: progress }, "Progress fetched successfully"));
+    res.status(200).json(new ApiResponse(200, { progress }, "Progress fetched successfully"));
 });
 
 const listAllChats = asyncHandler(async (req, res) => {
