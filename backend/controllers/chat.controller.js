@@ -2,7 +2,7 @@ import prisma from "../utils/prismaClient.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
-import { scrapeWebpage } from "../utils/rag.js";
+import { scrapeWebpage } from "../utils/ragUtilities.js";
 import { Queue } from "bullmq";
 import redis from "../utils/redis.js";
 

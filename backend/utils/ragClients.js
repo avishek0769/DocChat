@@ -1,3 +1,4 @@
+import { PageIndexClient } from "@pageindex/sdk";
 import { QdrantClient } from "@qdrant/js-client-rest";
 
 const qdrant = new QdrantClient({
@@ -5,4 +6,8 @@ const qdrant = new QdrantClient({
     apiKey: process.env.QDRANT_API_KEY,
 });
 
-export default qdrant;
+const pageindex = new PageIndexClient({
+    apiKey: process.env.PAGEINDEX_API_KEY,
+});
+
+export { qdrant, pageindex };

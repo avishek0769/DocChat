@@ -1,21 +1,21 @@
 import "dotenv/config";
 import { Worker } from "bullmq";
 import redis from "./utils/redis.js";
-import { normalizeUrl, isValidDocUrl, scrapeWebpage, generateVectorEmbeddings } from "./utils/rag.js";
+import {
+    normalizeUrl,
+    isValidDocUrl,
+    scrapeWebpage,
+    generateVectorEmbeddings,
+} from "./utils/ragUtilities.js";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
-import qdrant from "./utils/qdrant.js";
+import { pageindex, qdrant } from "./utils/ragClients.js";
 import { v4 as uuidv4 } from "uuid";
 import prisma from "./utils/prismaClient.js";
-import { PageIndexClient } from "@pageindex/sdk";
 import PDFDocument from "pdfkit";
 import fs from "fs/promises";
 import fsSync from "fs";
 
 const doc = new PDFDocument();
-
-const pageindex = new PageIndexClient({
-    apiKey: process.env.PAGEINDEX_API_KEY,
-});
 
 async function processVector(docsRootUrl, chatId, collectionName, chatSourceId) {
     const rootUrl = normalizeUrl(docsRootUrl);
@@ -137,7 +137,7 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId) {
         console.log("Scraping root:", rootUrl);
 
         const { internalLinks } = await scrapeWebpage(rootUrl, rootUrl);
-        let allLinks = internalLinks.slice(0, 3); // slice 3 - Just for development, slice 300 for production
+        let allLinks = internalLinks.slice(0, 2); // slice 3 - Just for development, slice 300 for production
         const totalLinks = allLinks.length;
 
         console.log("Total unique links found:", totalLinks);

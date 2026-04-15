@@ -4,9 +4,9 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
 import { LLM_MODELS, PROVIDERS_BASE_URLS } from "../utils/constants.js";
 import OpenAI from "openai";
-import qdrant from "../utils/qdrant.js";
+import { qdrant, pageindex } from "../utils/ragClients.js";
 import { decryptApiKey } from "../utils/decrypt.js";
-import { generateVectorEmbeddings } from "../utils/rag.js";
+import { generateVectorEmbeddings } from "../utils/ragUtilities.js";
 import { MemoryClient } from "mem0ai";
 
 const memory = new MemoryClient({ apiKey: process.env.MEM0_API_KEY });
@@ -95,9 +95,13 @@ const sendMessage = asyncHandler(async (req, res) => {
             with_payload: true,
             score_threshold: 0.35,
         });
-    }
-    else {
-        
+    } else {
+        const docTree = await pageindex.api.getTree(chat.collectionName, { nodeSummary: true });
+        console.log(docTree);
+
+        return res
+            .status(200)
+            .json(new ApiResponse(200, { docTree }, "Sources retrieved successfully."));
     }
 
     // Dynamic System Instructions
