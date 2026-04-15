@@ -83,14 +83,16 @@ const expectation = asyncHandler(async (req, res) => {
     }
 });
 
-const createChatVector = asyncHandler(async (req, res) => {
-    let { name, docsUrl } = req.body;
+const createChat = asyncHandler(async (req, res) => {
+    let { name, docsUrl, isVectorLess } = req.body;
+    const isVectorLessChat = Boolean(isVectorLess)
     const { internalLinks, title } = await scrapeWebpage(docsUrl, docsUrl);
     name = name || title || "Untitled Chat";
 
     const existingChatSource = await prisma.chatSource.findFirst({
         where: {
             documentationUrl: docsUrl,
+            isVectorLess: isVectorLessChat,
         },
         include: {
             chats: { take: 1 },
@@ -122,17 +124,18 @@ const createChatVector = asyncHandler(async (req, res) => {
                 ),
             );
     } else {
-        const collectionName = `${name.replace(/\s+/g, "-")}-${Date.now()}`;
+        const collectionName = !isVectorLessChat ? `${name.replace(/\s+/g, "-")}-${Date.now()}` : null;
         const chat = await prisma.chat.create({
             data: {
                 name,
-                collectionName,
+                collectionName: collectionName,
                 chatSources: {
                     create: {
                         totalPages: internalLinks.length,
                         heading: name,
                         documentationUrl: docsUrl,
-                        collectionName,
+                        collectionName: collectionName,
+                        isVectorLess: isVectorLessChat,
                     },
                 },
                 status: "QUEUED",
@@ -150,11 +153,12 @@ const createChatVector = asyncHandler(async (req, res) => {
                 docsUrl,
                 collectionName: chat.collectionName,
                 chatSourceId: chat.chatSources[0].id,
+                isVectorLess: isVectorLessChat,
             },
             { jobId: chat.id },
         );
 
-        res.status(200).json(
+        return res.status(200).json(
             new ApiResponse(
                 200,
                 { chatId: chat.id },
@@ -163,10 +167,6 @@ const createChatVector = asyncHandler(async (req, res) => {
         );
     }
 });
-
-const createChatVectorLess = asyncHandler(async (req, res) => {
-    
-})
 
 const progressStatus = asyncHandler(async (req, res) => {
     const { chatId } = req.params;
@@ -418,8 +418,7 @@ const deleteChat = asyncHandler(async (req, res) => {
 
 export {
     expectation,
-    createChatVector,
-    createChatVectorLess,
+    createChat,
     progressStatus,
     listAllChats,
     chatDetails,

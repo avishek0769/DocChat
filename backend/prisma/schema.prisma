@@ -42,7 +42,7 @@ model Chat {
     userId         String        @map("user_id")
     status         ChatStatus    @default(QUEUED)
     createdAt      DateTime      @default(now()) @map("created_at")
-    collectionName String        @map("collection_name")
+    collectionName String?       @map("collection_name")
     createdBy      User          @relation(fields: [userId], references: [id])
     chatSources    ChatSource[]  @relation("ChatToChatSource")
     messages       ChatMessage[]
@@ -52,11 +52,12 @@ model Chat {
 model ChatSource {
     id               String         @id @unique @default(uuid())
     heading          String
+    isVectorLess     Boolean        @default(false) @map("is_vector_less")
     documentationUrl String         @map("documentation_url")
     totalPages       Int?           @map("total_pages")
     pagesIndexed     DocumentPage[]
     chats            Chat[]         @relation("ChatToChatSource")
-    collectionName   String         @default("") @map("collection_name")
+    collectionName   String?        @default("") @map("collection_name")
     createdAt        DateTime       @default(now()) @map("created_at")
 }
 

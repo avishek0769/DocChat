@@ -3,8 +3,7 @@ import { verifyStrictJWT } from "../middlewares/auth.middleware.js";
 import {
     cancelProcessing,
     chatDetails,
-    createChatVector,
-    createChatVectorLess,
+    createChat,
     deleteChat,
     expectation,
     listAllChats,
@@ -16,8 +15,7 @@ import {
 const chatRouter = Router();
 
 chatRouter.route("/expectation").get(verifyStrictJWT, expectation);
-chatRouter.route("/vector/create").post(verifyStrictJWT, createChatVector);
-chatRouter.route("/vector-less/create").post(verifyStrictJWT, createChatVectorLess);
+chatRouter.route("/create").post(verifyStrictJWT, createChat);
 chatRouter.route("/status/:chatId").get(verifyStrictJWT, progressStatus);
 chatRouter.route("/list").get(verifyStrictJWT, listAllChats);
 chatRouter.route("/recent").get(verifyStrictJWT, recentChats);

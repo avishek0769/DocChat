@@ -1,12 +1,7 @@
 import "dotenv/config";
 import { Worker } from "bullmq";
 import redis from "./utils/redis.js";
-import {
-    normalizeUrl,
-    isValidDocUrl,
-    scrapeWebpage,
-    generateVectorEmbeddings,
-} from "./utils/rag.js";
+import { normalizeUrl, isValidDocUrl, scrapeWebpage, generateVectorEmbeddings } from "./utils/rag.js";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { v4 as uuidv4 } from "uuid";
@@ -17,7 +12,7 @@ const client = new QdrantClient({
     apiKey: process.env.QDRANT_API_KEY,
 });
 
-async function ingestAll(docsRootUrl, chatId, collectionName, chatSourceId) {
+async function processVector(docsRootUrl, chatId, collectionName, chatSourceId) {
     const rootUrl = normalizeUrl(docsRootUrl);
     console.log("Scraping root:", rootUrl);
 
@@ -76,9 +71,7 @@ async function ingestAll(docsRootUrl, chatId, collectionName, chatSourceId) {
 
             if (pageCount >= 3 || index === totalLinks - 1) {
                 if (batchPoints.length > 0) {
-                    console.log(
-                        `Upserting batch of ${batchPoints.length} points...`,
-                    );
+                    console.log(`Upserting batch of ${batchPoints.length} points...`);
                     await client.upsert(collectionName, {
                         wait: true,
                         points: batchPoints,
@@ -93,10 +86,7 @@ async function ingestAll(docsRootUrl, chatId, collectionName, chatSourceId) {
                             })),
                         })
                         .catch((err) => {
-                            console.error(
-                                "Failed to update indexed pages:",
-                                err.message,
-                            );
+                            console.error("Failed to update indexed pages:", err.message);
                         });
 
                     batchPoints = [];
@@ -122,11 +112,17 @@ async function ingestAll(docsRootUrl, chatId, collectionName, chatSourceId) {
     }
 }
 
+async function processVectorLess(docsRootUrl, chatId, chatSourceId) {}
+
 const worker = new Worker(
     "chatCreation",
     async (job) => {
-        const { chatId, docsUrl, collectionName, chatSourceId } = job.data;
-        await ingestAll(docsUrl, chatId, collectionName, chatSourceId);
+        const { chatId, docsUrl, collectionName, chatSourceId, isVectorLess } = job.data;
+        if (!isVectorLess) {
+            await processVector(docsUrl, chatId, collectionName, chatSourceId);
+        } else {
+            await processVectorLess(docsUrl, chatId, chatSourceId);
+        }
     },
     {
         connection: redis,
@@ -137,11 +133,13 @@ const worker = new Worker(
 
 worker.on("completed", async (job) => {
     console.log(`Job ${job.id} completed!`);
-    await redis.setex(
-        job.data.collectionName,
-        3600,
-        JSON.stringify({ status: "READY", progress: 100 }),
-    );
+    if (!job.data.isVectorLess) {
+        await redis.setex(
+            job.data.collectionName,
+            3600,
+            JSON.stringify({ status: "READY", progress: 100 }),
+        );
+    }
 
     await prisma.chat
         .update({
