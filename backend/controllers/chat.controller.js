@@ -83,7 +83,7 @@ const expectation = asyncHandler(async (req, res) => {
     }
 });
 
-const createChat = asyncHandler(async (req, res) => {
+const createChatVector = asyncHandler(async (req, res) => {
     let { name, docsUrl } = req.body;
     const { internalLinks, title } = await scrapeWebpage(docsUrl, docsUrl);
     name = name || title || "Untitled Chat";
@@ -163,6 +163,10 @@ const createChat = asyncHandler(async (req, res) => {
         );
     }
 });
+
+const createChatVectorLess = asyncHandler(async (req, res) => {
+    
+})
 
 const progressStatus = asyncHandler(async (req, res) => {
     const { chatId } = req.params;
@@ -414,7 +418,8 @@ const deleteChat = asyncHandler(async (req, res) => {
 
 export {
     expectation,
-    createChat,
+    createChatVector,
+    createChatVectorLess,
     progressStatus,
     listAllChats,
     chatDetails,
