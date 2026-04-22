@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Terminal, Eye, EyeOff, ArrowRight } from "lucide-react";
+import { Eye, EyeOff, ArrowRight } from "lucide-react";
 import { resetPassword, sendPasswordResetCode, signIn } from "../lib/auth";
 
 const SignIn = () => {
@@ -99,8 +99,11 @@ const SignIn = () => {
                 {/* Logo */}
                 <div className="flex items-center justify-center gap-2 mb-10">
                     <Link to="/" className="flex items-center gap-2 group">
-                        <Terminal className="w-7 h-7 text-accent-blue group-hover:text-accent-purple transition-colors" />
-                        <span className="font-semibold text-2xl tracking-tight">DocChat</span>
+                        <img
+                            src="/docchat-logo.png"
+                            alt="DocChat"
+                            className="h-16 w-auto transition-opacity group-hover:opacity-90"
+                        />
                     </Link>
                 </div>
 

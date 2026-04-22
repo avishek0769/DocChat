@@ -1,7 +1,6 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import {
-    Terminal,
     LayoutDashboard,
     MessageSquare,
     Settings as SettingsIcon,
@@ -74,10 +73,11 @@ export const Sidebar = ({ isCollapsed = false }: SidebarProps) => {
             )}
         >
             <div className={clsx("p-6 flex items-center gap-2", isCollapsed && "justify-center px-0")}>
-                <Terminal className="w-6 h-6 text-accent-blue shrink-0" />
-                {!isCollapsed && (
-                    <span className="font-semibold text-xl tracking-tight text-white">DocChat</span>
-                )}
+                <img
+                    src="/docchat-logo.png"
+                    alt="DocChat"
+                    className={clsx("w-auto shrink-0", isCollapsed ? "h-16" : "h-10")}
+                />
             </div>
 
             <nav className="flex-1 px-4 space-y-1">

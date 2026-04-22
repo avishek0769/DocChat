@@ -97,11 +97,13 @@ const sendMessage = asyncHandler(async (req, res) => {
         });
     } else {
         const docTree = await pageindex.api.getTree(chat.collectionName, { nodeSummary: true });
+        const document = await pageindex.api.getDocument(chat.collectionName);
         console.log(docTree);
+        console.log(document);
 
         return res
             .status(200)
-            .json(new ApiResponse(200, { docTree }, "Sources retrieved successfully."));
+            .json(new ApiResponse(200, { docTree, document }, "Sources retrieved successfully."));
     }
 
     // Dynamic System Instructions

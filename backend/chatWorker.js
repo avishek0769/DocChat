@@ -204,7 +204,8 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId) {
         await redis.setex(chatId, 3600, JSON.stringify({ status: "READY", progress: 100 }));
 
         console.log("Tree Status:", docTree.status);
-
+        await fs.unlink(`./temp/${chatSourceId}.pdf`);
+        
         await prisma.chat.update({
             where: { id: chatId },
             data: {

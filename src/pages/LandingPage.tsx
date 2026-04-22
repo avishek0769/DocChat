@@ -3,7 +3,6 @@ import { motion } from "framer-motion";
 import demoImage from "../components/image.png";
 import {
     MessageSquare,
-    Terminal,
     Zap,
     Target,
     Layers,
@@ -35,8 +34,7 @@ const LandingPage = () => {
             {/* Navigation */}
             <nav className="relative z-10 w-full max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                    <Terminal className="w-6 h-6 text-accent-blue" />
-                    <span className="font-semibold text-xl tracking-tight">DocChat</span>
+                    <img src="/docchat-logo.png" alt="DocChat" className="h-16 w-auto" />
                 </div>
                 <div className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-400">
                     <a href="#problem" className="hover:text-white transition-colors">
@@ -425,8 +423,7 @@ const LandingPage = () => {
             <footer className="relative z-10 border-t border-white/10 bg-[#0a0a0c] py-8 px-6">
                 <div className="max-w-4xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
                     <div className="flex items-center gap-2 mb-4">
-                        <Terminal className="w-5 h-5 text-accent-blue" />
-                        <span className="font-semibold text-sm">DocChat</span>
+                        <img src="/docchat-logo.png" alt="DocChat" className="h-16 w-auto" />
                     </div>
                     <div className="flex gap-6 text-sm text-gray-500">
                         <a
