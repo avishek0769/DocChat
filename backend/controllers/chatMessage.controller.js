@@ -4,7 +4,7 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
 import { LLM_MODELS, PROVIDERS_BASE_URLS } from "../utils/constants.js";
 import OpenAI from "openai";
-import { qdrant, pageindex } from "../utils/ragClients.js";
+import { qdrant, treeindex } from "../utils/ragClients.js";
 import { decryptApiKey } from "../utils/decrypt.js";
 import { generateVectorEmbeddings } from "../utils/ragUtilities.js";
 import { MemoryClient } from "mem0ai";
@@ -53,7 +53,7 @@ const sendMessage = asyncHandler(async (req, res) => {
     let apiKeyId = null;
 
     if (provider == "DEFAULT") {
-        if (model === "default-1") modelId = "qwen/qwen3.6-plus:free";
+        if (model === "default-1") modelId = "openai/gpt-oss-120b:free";
         else if (model === "default-2") modelId = "nvidia/nemotron-3-super-120b-a12b:free";
         else throw new ApiError(400, "Invalid model selection for default provider.");
 
@@ -87,6 +87,7 @@ const sendMessage = asyncHandler(async (req, res) => {
     }
 
     let relevantSources = [];
+    let relevantNodes = [];
     if (!chat.chatSources[0].isVectorLess) {
         const userPromptEmbeddings = await generateVectorEmbeddings(userPrompt);
         relevantSources = await qdrant.query(chat.collectionName, {
@@ -96,19 +97,23 @@ const sendMessage = asyncHandler(async (req, res) => {
             score_threshold: 0.35,
         });
     } else {
-        const docTree = await pageindex.api.getTree(chat.collectionName, { nodeSummary: true });
-        const document = await pageindex.api.getDocument(chat.collectionName);
-        console.log(docTree);
-        console.log(document);
+        const docTree = await prisma.documentTree.findUnique({
+            where: { id: chat.collectionName },
+        });
+        treeindex.loadData(docTree.sourceData);
+        treeindex.loadTree(docTree.treeData);
+
+        const relevantNodeIds = await treeindex.retrieveRelevantNodes(userPrompt);
+        relevantNodes = treeindex.findNodes(relevantNodeIds);
 
         return res
             .status(200)
-            .json(new ApiResponse(200, { docTree, document }, "Sources retrieved successfully."));
+            .json(new ApiResponse(200, { docTree: docTree.treeData, relevantNodes }, "Sources retrieved successfully."));
     }
 
     // Dynamic System Instructions
     let systemInstructions = "You are a helpful assistant for answering questions. \n";
-    if (relevantSources.points?.length) {
+    if (relevantSources.points?.length || relevantNodes.length) {
         systemInstructions +=
             "Use the provided documentation sources to answer. If the answer isn't in the sources, say you don't know. Be concise, use Markdown, and wrap code in triple backticks.";
     } else {
@@ -116,11 +121,15 @@ const sendMessage = asyncHandler(async (req, res) => {
     }
 
     // Source Data (if any)
-    let sourceContext = "";
+    let sourceContext = "\n--- DOCUMENTATION SOURCES ---\n";
     if (relevantSources.points?.length) {
-        sourceContext = "\n--- DOCUMENTATION SOURCES ---\n";
         relevantSources.points.forEach((point, index) => {
-            sourceContext += `Source ${index + 1}:\n${point.payload.body}\n\n`;
+            sourceContext += `Source ${index + 1}:\n${point.payload.body}\n`;
+        });
+    }
+    else if (relevantNodes.length) {
+        relevantNodes.forEach(({ data }, index) => {
+            sourceContext += `Source ${index + 1}:\n${data}\n`;
         });
     }
 
@@ -153,11 +162,12 @@ const sendMessage = asyncHandler(async (req, res) => {
     });
     messages.forEach((msg) => {
         if (msg.userPrompt) messagesForLLM.push({ role: "user", content: msg.userPrompt });
-        if (msg.llmResponse)
+        if (msg.llmResponse) {
             messagesForLLM.push({
                 role: "assistant",
                 content: msg.llmResponse,
             });
+        }
     });
     messagesForLLM.push({ role: "user", content: userPrompt });
 
@@ -167,7 +177,6 @@ const sendMessage = asyncHandler(async (req, res) => {
         messages: messagesForLLM,
         stream: true,
         stream_options: { include_usage: true },
-        max_completion_tokens: 2000,
     });
 
     res.setHeader("Content-Type", "text/event-stream");
@@ -227,6 +236,16 @@ const sendMessage = asyncHandler(async (req, res) => {
                     pageUrl: point.payload.url,
                     chatMessageId: chatMessage.id,
                     score: Math.round(point.score * 100),
+                })),
+            });
+        }
+        else if (relevantNodes.length) {
+            await prisma.chatMessageSource.createMany({
+                data: relevantNodes.map((node) => ({
+                    chunkText: node.data,
+                    heading: "",
+                    pageUrl: "",
+                    chatMessageId: chatMessage.id,
                 })),
             });
         }
