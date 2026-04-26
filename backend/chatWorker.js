@@ -8,14 +8,9 @@ import {
     generateVectorEmbeddings,
 } from "./utils/ragUtilities.js";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
-import { pageindex, qdrant } from "./utils/ragClients.js";
+import { treeindex, qdrant } from "./utils/ragClients.js";
 import { v4 as uuidv4 } from "uuid";
 import prisma from "./utils/prismaClient.js";
-import PDFDocument from "pdfkit";
-import fs from "fs/promises";
-import fsSync from "fs";
-
-const doc = new PDFDocument();
 
 async function processVector(docsRootUrl, chatId, collectionName, chatSourceId) {
     const rootUrl = normalizeUrl(docsRootUrl);
@@ -137,7 +132,7 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId) {
         console.log("Scraping root:", rootUrl);
 
         const { internalLinks } = await scrapeWebpage(rootUrl, rootUrl);
-        let allLinks = internalLinks.slice(0, 2); // slice 3 - Just for development, slice 300 for production
+        let allLinks = internalLinks.slice(0, 3); // slice 3 - Just for development, slice 300 for production
         const totalLinks = allLinks.length;
 
         console.log("Total unique links found:", totalLinks);
@@ -166,55 +161,31 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId) {
         }
 
         if (!allData.trim()) {
-            throw new Error("No data scraped. PDF would be empty.");
+            throw new Error("No data scraped.");
         }
 
-        const filePath = `./temp/${chatSourceId}.pdf`;
-        const writeStream = fsSync.createWriteStream(filePath);
+        treeindex.loadData(allData)
+        const tree = await treeindex.generateTree()
+        console.log("Generated Tree Length:", tree.length);
 
-        await new Promise((resolve, reject) => {
-            doc.pipe(writeStream);
-            doc.text(allData);
-            doc.end();
-
-            writeStream.on("finish", resolve);
-            writeStream.on("error", reject);
+        const docTree = await prisma.documentTree.create({
+            data: {
+                chatSourceId,
+                treeData: tree
+            },
         });
 
-        console.log("Data converted and stream flushed");
-
-        const file = await fs.readFile(`./temp/${chatSourceId}.pdf`);
-        const result = await pageindex.api.submitDocument(file, `${chatSourceId}.pdf`);
-        console.log("Result:", result);
-
-        let docTree = null;
-
-        let attempts = 0;
-        const maxAttempts = 20;
-        while (attempts < maxAttempts) {
-            docTree = await pageindex.api.getTree(result.doc_id, { nodeSummary: true });
-            if (docTree.status === "completed") break;
-            if (docTree.status === "failed") throw new Error("Document processing failed");
-
-            attempts++;
-            await new Promise((resolve) => setTimeout(resolve, 3500));
-        }
-        if (attempts >= maxAttempts) throw new Error("Polling timeout");
-
         await redis.setex(chatId, 3600, JSON.stringify({ status: "READY", progress: 100 }));
-
-        console.log("Tree Status:", docTree.status);
-        await fs.unlink(`./temp/${chatSourceId}.pdf`);
         
         await prisma.chat.update({
             where: { id: chatId },
             data: {
-                collectionName: result.doc_id,
+                collectionName: docTree.id,
                 status: "READY",
                 chatSources: {
                     update: {
                         where: { id: chatSourceId },
-                        data: { collectionName: result.doc_id },
+                        data: { collectionName: docTree.id },
                     },
                 },
             },

@@ -58,6 +58,7 @@ model ChatSource {
     pagesIndexed     DocumentPage[]
     chats            Chat[]         @relation("ChatToChatSource")
     collectionName   String?        @default("") @map("collection_name")
+    documentTree     DocumentTree?
     createdAt        DateTime       @default(now()) @map("created_at")
 }
 
@@ -66,6 +67,14 @@ model DocumentPage {
     heading      String
     pageUrl      String     @map("page_url")
     chatSourceId String     @map("chat_source_id")
+    chatSource   ChatSource @relation(fields: [chatSourceId], references: [id])
+}
+
+model DocumentTree {
+    id           String     @id @unique @default(uuid())
+    chatSourceId String     @unique @map("chat_source_id")
+    treeData     Json       @map("tree_data")
+    createdAt    DateTime   @default(now()) @map("created_at")
     chatSource   ChatSource @relation(fields: [chatSourceId], references: [id])
 }
 
