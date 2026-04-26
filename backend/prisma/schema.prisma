@@ -73,6 +73,7 @@ model DocumentPage {
 model DocumentTree {
     id           String     @id @unique @default(uuid())
     chatSourceId String     @unique @map("chat_source_id")
+    sourceData   String     @map("source_data")
     treeData     Json       @map("tree_data")
     createdAt    DateTime   @default(now()) @map("created_at")
     chatSource   ChatSource @relation(fields: [chatSourceId], references: [id])

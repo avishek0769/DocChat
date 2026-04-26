@@ -164,19 +164,20 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId) {
             throw new Error("No data scraped.");
         }
 
-        treeindex.loadData(allData)
-        const tree = await treeindex.generateTree()
+        treeindex.loadData(allData);
+        const tree = await treeindex.generateTree();
         console.log("Generated Tree Length:", tree.length);
 
         const docTree = await prisma.documentTree.create({
             data: {
                 chatSourceId,
-                treeData: tree
+                treeData: tree,
+                sourceData: allData,
             },
         });
 
         await redis.setex(chatId, 3600, JSON.stringify({ status: "READY", progress: 100 }));
-        
+
         await prisma.chat.update({
             where: { id: chatId },
             data: {
