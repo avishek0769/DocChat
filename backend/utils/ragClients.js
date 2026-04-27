@@ -1,4 +1,4 @@
-import { PageIndexClient } from "@pageindex/sdk";
+import { TreeIndex } from "treeindex";
 import { QdrantClient } from "@qdrant/js-client-rest";
 
 const qdrant = new QdrantClient({
@@ -6,8 +6,10 @@ const qdrant = new QdrantClient({
     apiKey: process.env.QDRANT_API_KEY,
 });
 
-const pageindex = new PageIndexClient({
-    apiKey: process.env.PAGEINDEX_API_KEY,
+const treeindex = new TreeIndex({
+    baseURL: "https://openrouter.ai/api/v1",
+    apiKey: process.env.TREEINDEX_API_KEY,
+    model: process.env.MODEL,
 });
 
-export { qdrant, pageindex };
+export { qdrant, treeindex };

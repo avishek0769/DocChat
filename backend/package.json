@@ -14,7 +14,6 @@
     "dependencies": {
         "@langchain/core": "^1.1.36",
         "@langchain/textsplitters": "^1.0.1",
-        "@pageindex/sdk": "^0.8.0",
         "@prisma/adapter-pg": "^7.5.0",
         "@prisma/client": "^7.5.0",
         "@prisma/client-runtime-utils": "^7.5.0",
@@ -30,10 +29,10 @@
         "jsonwebtoken": "^9.0.3",
         "mem0ai": "^2.4.4",
         "openai": "^6.33.0",
-        "pdfkit": "^0.18.0",
         "pg": "^8.20.0",
         "prisma": "^7.5.0",
         "resend": "^6.9.4",
+        "treeindex": "^1.0.0",
         "uuid": "^13.0.0"
     }
 }
