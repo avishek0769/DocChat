@@ -108,13 +108,15 @@ git push origin <your-branch-name>
 - Better chunking strategies (especially code-aware splitting)
 - Crawling improvements (depth control, filtering)
 - Bug fixes
-- Documentation improvements (not simple grammar, typo fixes. Proper restructuring, better explanations, etc.)
+- Documentation improvements (not minor typo/grammar-only changes; focus on structure, clarity, and better explanations)
 - API and backend optimizations
 
 ---
 
 ## PR Guidelines
 
+- Comment on the issue you want to work on and wait until it is assigned before starting.
+- PRs without prior issue discussion/assignment may be closed.
 - Keep each PR focused on one issue.
 - Start with a short summary of what changed and why.
 - Link the assigned issue.
@@ -143,10 +145,9 @@ If you are new, look for issues labeled `good first issue`.
 ---
 
 ## Need Help?
-
-- Open an issue: https://github.com/avishek0769/DocChat/issues
+- Open an issue: [GitHub Issues](https://github.com/avishek0769/DocChat/issues)
 - Join Discord: [Discord Server](https://discord.gg/t6B7YDAk8y)
 
 ---
 
-Thanks for contributing.
+Thanks for contributing and helping improve DocChat.
