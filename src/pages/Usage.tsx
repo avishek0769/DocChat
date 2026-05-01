@@ -37,7 +37,7 @@ const MODEL_COLOR_PALETTE = [
 ];
 
 const modelDisplayName = (model: string) => {
-    if (model === "default-1") return "Qwen 3.6 plus";
+    if (model === "default-1") return "GPT - OSS";
     if (model === "default-2") return "Nemotron 3 Super";
     return model;
 };

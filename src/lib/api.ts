@@ -29,6 +29,7 @@ export type ChatItem = {
         id: string;
         documentationUrl: string;
         totalPages: number;
+        isVectorLess?: boolean;
         _count?: { pagesIndexed: number };
         pagesIndexed?: Array<{ pageUrl: string; title?: string | null }>;
     }>;
@@ -107,7 +108,11 @@ export const getApiKeyCount = () => apiRequest<{ count: number }>("/apikey/count
 
 export const getChats = () => apiRequest<ChatItem[]>("/chat/list", { method: "GET" });
 
-export const createChat = (payload: { name?: string; docsUrl: string }) =>
+export const createChat = (payload: {
+    name?: string;
+    docsUrl: string;
+    isVectorLess?: boolean;
+}) =>
     apiRequest<{ chatId?: string; id?: string }>("/chat/create", {
         method: "POST",
         body: JSON.stringify(payload),

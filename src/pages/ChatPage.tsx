@@ -75,7 +75,7 @@ type ModelOption = {
 const toModelDisplayName = (model?: string) => {
     if (!model) return "Default Hosted Model";
 
-    if (model === "default-1") return "Qwen 3.6 plus";
+    if (model === "default-1") return "GPT - OSS";
     if (model === "default-2") return "Nemotron 3 Super";
 
     return model;
@@ -164,7 +164,7 @@ export const ChatPage = () => {
                 {
                     provider: "DEFAULT",
                     model: "default-1",
-                    label: `Default (Fast) - Qwen 3.6 plus`,
+                    label: `Default (Fast) - GPT - OSS`,
                 },
                 {
                     provider: "DEFAULT",
@@ -296,7 +296,7 @@ export const ChatPage = () => {
             modelOptions[0] || {
                 provider: "DEFAULT",
                 model: "default-1",
-                label: `Default (Fast) - Qwen 3.6 plus`,
+                label: `Default (Fast) - GPT - OSS`,
             };
 
         const newUserMessage: Message = {
@@ -867,7 +867,7 @@ export const ChatPage = () => {
     );
 };
 
-// --- Helper Components ---
+// Helper Components
 
 const highlightCode = (language: string, code: string) => {
     try {

@@ -28,6 +28,7 @@ interface Chat {
     id: string;
     title: string;
     urls: string[];
+    isVectorLess: boolean;
     status: string;
     pages: number;
     totalPages: number;
@@ -55,6 +56,7 @@ const mapBackendChat = (chat: ChatItem): Chat => {
         id: chat.id,
         title: chat.name,
         urls: (chat.chatSources || []).map((s) => s.documentationUrl),
+        isVectorLess: Boolean(source?.isVectorLess),
         status: String(chat.status || "QUEUED").toLowerCase(),
         pages: pagesIndexed,
         totalPages: source?.totalPages || pagesIndexed || 0,
@@ -96,6 +98,7 @@ const Dashboard = () => {
     // New Chat Form State
     const [chatName, setChatName] = useState("");
     const [chatUrl, setChatUrl] = useState("");
+    const [isVectorLess, setIsVectorLess] = useState(false);
 
     // Delete Confirmation
     const [deleteTarget, setDeleteTarget] = useState<Chat | null>(null);
@@ -239,10 +242,15 @@ const Dashboard = () => {
         setIsCreating(true);
         setError("");
         try {
-            await createChat({ name: chatName || undefined, docsUrl: chatUrl });
+            await createChat({
+                name: chatName || undefined,
+                docsUrl: chatUrl,
+                isVectorLess,
+            });
             setIsModalOpen(false);
             setChatName("");
             setChatUrl("");
+            setIsVectorLess(false);
             showToast("Chat created and processing started.");
             await loadDashboardData();
         } catch (err) {
@@ -272,6 +280,7 @@ const Dashboard = () => {
             await createChat({
                 name: chat.title,
                 docsUrl: chat.urls[0] || chatUrl,
+                isVectorLess: chat.isVectorLess,
             });
             showToast(`Retrying "${chat.title}"...`);
             await loadDashboardData();
@@ -289,12 +298,12 @@ const Dashboard = () => {
         return tokens.toString();
     };
 
-    const getStatusBadge = (status: string) => {
+    const getStatusBadge = (isVectorLess: boolean, status: string) => {
         switch (status) {
             case "ready":
                 return (
                     <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-green-500/10 border border-green-500/20 text-xs font-medium text-green-400">
-                        <CheckCircle2 className="w-3 h-3" /> Ready
+                        {isVectorLess? "Vectorless" : "Vector"}
                     </div>
                 );
             case "processing":
@@ -473,7 +482,7 @@ const Dashboard = () => {
                                                     </div>
                                                 </div>
                                                 <div className="shrink-0">
-                                                    {getStatusBadge(liveStatus)}
+                                                    {getStatusBadge(chat.isVectorLess,liveStatus)}
                                                 </div>
                                             </div>
 
@@ -719,6 +728,41 @@ const Dashboard = () => {
                                 <p className="text-xs text-gray-500">
                                     We'll scrape this page and sub-pages automatically.
                                 </p>
+                            </div>
+
+                            {/* Ingestion Mode */}
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-gray-300">Ingestion Mode</label>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsVectorLess(false)}
+                                        className={`rounded-lg border px-3 py-2.5 text-left transition-colors ${
+                                            !isVectorLess
+                                                ? "border-accent-blue/60 bg-accent-blue/10"
+                                                : "border-white/10 bg-white/5 hover:bg-white/10"
+                                        }`}
+                                    >
+                                        <p className="text-sm font-medium text-white">Vector</p>
+                                        <p className="text-xs text-gray-400 mt-0.5">
+                                            Embeddings-based retrieval for semantic matching.
+                                        </p>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsVectorLess(true)}
+                                        className={`rounded-lg border px-3 py-2.5 text-left transition-colors ${
+                                            isVectorLess
+                                                ? "border-accent-blue/60 bg-accent-blue/10"
+                                                : "border-white/10 bg-white/5 hover:bg-white/10"
+                                        }`}
+                                    >
+                                        <p className="text-sm font-medium text-white">Vectorless</p>
+                                        <p className="text-xs text-gray-400 mt-0.5">
+                                            Tree based retrieval without embeddings.
+                                        </p>
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
