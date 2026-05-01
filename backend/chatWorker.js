@@ -132,7 +132,7 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId) {
         console.log("Scraping root:", rootUrl);
 
         const { internalLinks } = await scrapeWebpage(rootUrl, rootUrl);
-        let allLinks = internalLinks.slice(0, 3); // slice 3 - Just for development, slice 300 for production
+        let allLinks = internalLinks.slice(0, 300); // slice 3 - Just for development, slice 300 for production
         const totalLinks = allLinks.length;
 
         console.log("Total unique links found:", totalLinks);

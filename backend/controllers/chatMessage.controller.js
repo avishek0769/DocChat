@@ -104,11 +104,12 @@ const sendMessage = asyncHandler(async (req, res) => {
         treeindex.loadTree(docTree.treeData);
 
         const relevantNodeIds = await treeindex.retrieveRelevantNodes(userPrompt);
+        if(relevantNodeIds.length == 0) {
+            res.write("No relevant sources found, for this query");
+            res.end();
+            return;
+        }
         relevantNodes = treeindex.findNodes(relevantNodeIds);
-
-        return res
-            .status(200)
-            .json(new ApiResponse(200, { docTree: docTree.treeData, relevantNodes }, "Sources retrieved successfully."));
     }
 
     // Dynamic System Instructions
