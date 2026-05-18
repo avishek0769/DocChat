@@ -1,9 +1,9 @@
 import { z } from "zod";
 
-const email = z.string().email("Invalid email address").trim();
+const email = z.string().trim().email("Invalid email address");
 const password = z.string().min(6, "Password must be at least 6 characters");
 const chatId = z.string().uuid("Invalid chat ID");
-const url = z.string().url("Invalid URL").trim();
+const url = z.string().trim().url("Invalid URL");
 
 export const sendVerificationCodeSchema = {
     body: z.object({
@@ -34,7 +34,7 @@ export const userLogInSchema = {
         password,
     }).refine((data) => data.username || data.email, {
         message: "Username or email is required",
-        path: ["username"],
+        path: [],
     }),
 };
 
@@ -83,7 +83,29 @@ export const createChatSchema = {
         isVectorLess: z
             .union([z.boolean(), z.string(), z.number()])
             .optional()
-            .transform((v) => Boolean(v)),
+            .transform((v, ctx) => {
+                if (v === undefined) return undefined;
+                if (typeof v === "boolean") return v;
+
+                if (typeof v === "number") {
+                    if (v === 1) return true;
+                    if (v === 0) return false;
+                }
+
+                if (typeof v === "string") {
+                    const normalized = v.trim().toLowerCase();
+
+                    if (["true", "1", "yes", "on"].includes(normalized)) return true;
+                    if (["false", "0", "no", "off"].includes(normalized)) return false;
+                }
+
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: "isVectorLess must be a boolean or a supported boolean-like value",
+                });
+
+                return z.NEVER;
+            }),
     }),
 };
 
