@@ -195,6 +195,34 @@ export const sendMessageStream = async (payload: {
     return text;
 };
 
+export const exportChatMessages = async (chatId: string): Promise<void> => {
+    const token = getAccessToken();
+    const headers = new Headers();
+    if (token) {
+        headers.set("Authorization", `Bearer ${token}`);
+    }
+
+    const response = await fetch(`${API_BASE_URL}/message/export/${chatId}`, {
+        method: "GET",
+        headers,
+        credentials: "include",
+    });
+
+    if (!response.ok) {
+        throw new Error("Failed to export chat");
+    }
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `chat-export-${chatId}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+};
+
 export const getLifetimeTokens = () =>
     apiRequest<{
         _sum: { inputTokens: number | null; outputTokens: number | null };

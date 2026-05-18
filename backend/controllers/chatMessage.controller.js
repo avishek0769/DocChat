@@ -271,6 +271,70 @@ const sendMessage = asyncHandler(async (req, res) => {
 });
 
 // NOTE: No relation between ChatMessage and Chat in the current schema
+const exportChatMessages = asyncHandler(async (req, res) => {
+    const { chatId } = req.params;
+
+    const chat = await prisma.chat.findUnique({
+        where: { id: chatId },
+    });
+
+    if (!chat || chat.userId !== req.user.id) {
+        throw new ApiError(404, "Chat not found.");
+    }
+
+    const messages = await prisma.chatMessage.findMany({
+        where: { chatId },
+        orderBy: { createdAt: "asc" },
+    });
+
+    const escapeForPlainText = (text) => text || "";
+
+    const chatName = chat.name || "Untitled Chat";
+    const exportDate = new Date();
+    const header = [
+        "DocChat Conversation Export",
+        "===========================",
+        `Chat: ${chatName}`,
+        `Chat ID: ${chatId}`,
+        `Exported: ${exportDate.toLocaleString()}`,
+        `Total Messages: ${messages.length * 2}`,
+        "",
+    ].join("\n");
+
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="chat-export-${chatId}.txt"`);
+    res.setHeader("X-Accel-Buffering", "no");
+
+    res.write(header);
+
+    for (const msg of messages) {
+        const msgNumber = messages.indexOf(msg) + 1;
+
+        const userBlock = [
+            "",
+            `--- Message ${msgNumber} ---`,
+            `[User] - ${new Date(msg.createdAt).toLocaleString()}`,
+            "",
+            escapeForPlainText(msg.userPrompt),
+            "",
+        ].join("\n");
+        res.write(userBlock);
+
+        const assistantBlock = [
+            `--- Message ${msgNumber} ---`,
+            `[Assistant] - ${new Date(msg.createdAt).toLocaleString()}`,
+            `Model: ${msg.llmModel || "Unknown"}`,
+            "",
+            escapeForPlainText(msg.llmResponse),
+            "",
+        ].join("\n");
+        res.write(assistantBlock);
+    }
+
+    res.write("\n--- End of Conversation ---\n");
+    res.end();
+});
+
 const getChatMessages = asyncHandler(async (req, res) => {
     const { chatId } = req.params;
 
@@ -317,4 +381,4 @@ const getChatMessageSources = asyncHandler(async (req, res) => {
         .json(new ApiResponse(200, { messageSources }, "Chat message sources retrieved successfully."));
 });
 
-export { sendMessage, getAvailableModels, getChatMessages, getChatMessageSources };
+export { sendMessage, getAvailableModels, getChatMessages, getChatMessageSources, exportChatMessages };

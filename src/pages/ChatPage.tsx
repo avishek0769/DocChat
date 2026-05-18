@@ -39,6 +39,7 @@ import {
     X,
     Loader2,
     Database,
+    Download,
     Link as LinkIcon,
 } from "lucide-react";
 import clsx from "clsx";
@@ -53,6 +54,7 @@ import {
     getMessageSources,
     getPagesIndexed,
     sendMessageStream,
+    exportChatMessages,
 } from "../lib/api";
 
 type CurrentLink = {
@@ -118,9 +120,22 @@ export const ChatPage = () => {
     const [isSourcesLoading, setIsSourcesLoading] = useState(false);
     const [sourceFetchAttempted, setSourceFetchAttempted] = useState(false);
 
+    const [isExporting, setIsExporting] = useState(false);
     const [isIndexedModalOpen, setIsIndexedModalOpen] = useState(false);
     const [currentLinks, setCurrentLinks] = useState<CurrentLink[]>([]);
     const [indexedPages, setIndexedPages] = useState<IndexedPage[]>([]);
+
+    const handleExport = async () => {
+        if (isExporting) return;
+        setIsExporting(true);
+        try {
+            await exportChatMessages(chatId);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to export chat.");
+        } finally {
+            setIsExporting(false);
+        }
+    };
 
     const loadChatPage = async () => {
         if (!chatId) return;
@@ -570,6 +585,14 @@ export const ChatPage = () => {
                                     <ChevronRight className="w-3.5 h-3.5 text-gray-500 absolute right-3 pointer-events-none rotate-90" />
                                 </div>
                             </div>
+                            <button
+                                onClick={handleExport}
+                                disabled={isExporting}
+                                className="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border border-white/10 bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 flex items-center gap-2 disabled:opacity-50"
+                            >
+                                <Download className="w-4 h-4" />
+                                <span className="hidden sm:inline">{isExporting ? "Exporting..." : "Export"}</span>
+                            </button>
                             <button
                                 onClick={() => setRightPanelOpen(!rightPanelOpen)}
                                 className={clsx(
