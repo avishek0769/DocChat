@@ -20,14 +20,6 @@ const totalTokensUsedInLifetime = asyncHandler(async (req, res) => {
 const tokensUsedByGroup = asyncHandler(async (req, res) => {
     const { groupBy } = req.params;
 
-    const allowedGroups = ["day", "week", "month", "year"];
-    if (!allowedGroups.includes(groupBy)) {
-        throw new ApiError(
-            400,
-            `Invalid groupBy parameter. Allowed values are: ${allowedGroups.join(", ")}`,
-        );
-    }
-
     const usageByGroup = await prisma.$queryRaw`
         SELECT 
             DATE_TRUNC(${Prisma.raw(`'${groupBy}'`)}, u."timestamp") AS period,

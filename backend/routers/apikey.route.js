@@ -1,5 +1,7 @@
 import { Router } from "express";
 import { verifyStrictJWT } from "../middlewares/auth.middleware.js";
+import validate from "../middlewares/validate.middleware.js";
+import { addApiKeySchema, apiKeyIdParamSchema } from "../utils/validationSchemas.js";
 import {
     addApiKey,
     listApiKeys,
@@ -10,10 +12,10 @@ import {
 
 const apikeyRouter = Router();
 
-apikeyRouter.route("/add").post(verifyStrictJWT, addApiKey);
+apikeyRouter.route("/add").post(verifyStrictJWT, validate(addApiKeySchema), addApiKey);
 apikeyRouter.route("/list").get(verifyStrictJWT, listApiKeys);
 apikeyRouter.route("/count").get(verifyStrictJWT, totalNumberOfApiKeys);
-apikeyRouter.route("/:id").delete(verifyStrictJWT, removeApiKey);
-apikeyRouter.route("/:id").get(verifyStrictJWT, getApiKey);
+apikeyRouter.route("/:id").delete(verifyStrictJWT, validate(apiKeyIdParamSchema), removeApiKey);
+apikeyRouter.route("/:id").get(verifyStrictJWT, validate(apiKeyIdParamSchema), getApiKey);
 
 export default apikeyRouter;

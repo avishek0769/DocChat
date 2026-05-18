@@ -10,10 +10,10 @@ importers:
     dependencies:
       '@langchain/core':
         specifier: ^1.1.36
-        version: 1.1.36(openai@6.33.0(ws@8.20.0)(zod@3.25.76))(ws@8.20.0)
+        version: 1.1.36(openai@6.33.0(ws@8.20.0)(zod@4.4.3))(ws@8.20.0)
       '@langchain/textsplitters':
         specifier: ^1.0.1
-        version: 1.0.1(@langchain/core@1.1.36(openai@6.33.0(ws@8.20.0)(zod@3.25.76))(ws@8.20.0))
+        version: 1.0.1(@langchain/core@1.1.36(openai@6.33.0(ws@8.20.0)(zod@4.4.3))(ws@8.20.0))
       '@prisma/adapter-pg':
         specifier: ^7.5.0
         version: 7.5.0
@@ -55,10 +55,10 @@ importers:
         version: 9.0.3
       mem0ai:
         specifier: ^2.4.4
-        version: 2.4.4(@anthropic-ai/sdk@0.40.1)(@azure/identity@4.13.1)(@azure/search-documents@12.2.0)(@cloudflare/workers-types@4.20260329.1)(@google/genai@1.47.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76)))(@langchain/core@1.1.36(openai@6.33.0(ws@8.20.0)(zod@3.25.76))(ws@8.20.0))(@mistralai/mistralai@1.15.1)(@qdrant/js-client-rest@1.17.0(typescript@6.0.2))(@supabase/supabase-js@2.101.0)(@types/jest@29.5.14)(@types/pg@8.11.0)(better-sqlite3@12.8.0)(cloudflare@4.5.0)(groq-sdk@0.3.0)(neo4j-driver@5.28.3)(ollama@0.5.18)(pg@8.20.0)(redis@4.7.1)(ws@8.20.0)
+        version: 2.4.4(@anthropic-ai/sdk@0.40.1)(@azure/identity@4.13.1)(@azure/search-documents@12.2.0)(@cloudflare/workers-types@4.20260329.1)(@google/genai@1.47.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)))(@langchain/core@1.1.36(openai@6.33.0(ws@8.20.0)(zod@4.4.3))(ws@8.20.0))(@mistralai/mistralai@1.15.1)(@qdrant/js-client-rest@1.17.0(typescript@6.0.2))(@supabase/supabase-js@2.101.0)(@types/jest@29.5.14)(@types/pg@8.11.0)(better-sqlite3@12.8.0)(cloudflare@4.5.0)(groq-sdk@0.3.0)(neo4j-driver@5.28.3)(ollama@0.5.18)(pg@8.20.0)(redis@4.7.1)(ws@8.20.0)
       openai:
         specifier: ^6.33.0
-        version: 6.33.0(ws@8.20.0)(zod@3.25.76)
+        version: 6.33.0(ws@8.20.0)(zod@4.4.3)
       pg:
         specifier: ^8.20.0
         version: 8.20.0
@@ -70,10 +70,13 @@ importers:
         version: 6.9.4
       treeindex:
         specifier: ^1.0.0
-        version: 1.0.0(ws@8.20.0)(zod@3.25.76)
+        version: 1.0.0(ws@8.20.0)(zod@4.4.3)
       uuid:
         specifier: ^13.0.0
         version: 13.0.0
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
 
 packages:
 
@@ -1938,6 +1941,7 @@ packages:
 
   uuid@8.3.2:
     resolution: {integrity: sha512-+NYs2QeMWy+GWFOEm9xnn6HCDp0l7QBD7ml8zLUmJ+93Q5NF0NocErnwkTkXVFNiX3/fpC6afS8Dhb/gz7R7eg==}
+    deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
     hasBin: true
 
   uuid@9.0.1:
@@ -2026,6 +2030,9 @@ packages:
 
   zod@4.3.6:
     resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
+
+  zod@4.4.3:
+    resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
 
 snapshots:
 
@@ -2186,14 +2193,14 @@ snapshots:
 
   '@electric-sql/pglite@0.3.15': {}
 
-  '@google/genai@1.47.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))':
+  '@google/genai@1.47.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))':
     dependencies:
       google-auth-library: 10.6.2
       p-retry: 4.6.2
       protobufjs: 7.5.4
       ws: 8.20.0
     optionalDependencies:
-      '@modelcontextprotocol/sdk': 1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76)
+      '@modelcontextprotocol/sdk': 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
     transitivePeerDependencies:
       - bufferutil
       - supports-color
@@ -2222,7 +2229,7 @@ snapshots:
       '@types/yargs': 17.0.35
       chalk: 4.1.2
 
-  '@langchain/core@1.1.36(openai@6.33.0(ws@8.20.0)(zod@3.25.76))(ws@8.20.0)':
+  '@langchain/core@1.1.36(openai@6.33.0(ws@8.20.0)(zod@4.4.3))(ws@8.20.0)':
     dependencies:
       '@cfworker/json-schema': 4.1.1
       '@standard-schema/spec': 1.1.0
@@ -2230,11 +2237,11 @@ snapshots:
       camelcase: 6.3.0
       decamelize: 1.2.0
       js-tiktoken: 1.0.21
-      langsmith: 0.5.15(openai@6.33.0(ws@8.20.0)(zod@3.25.76))(ws@8.20.0)
+      langsmith: 0.5.15(openai@6.33.0(ws@8.20.0)(zod@4.4.3))(ws@8.20.0)
       mustache: 4.2.0
       p-queue: 6.6.2
       uuid: 11.1.0
-      zod: 4.3.6
+      zod: 4.4.3
     transitivePeerDependencies:
       - '@opentelemetry/api'
       - '@opentelemetry/exporter-trace-otlp-proto'
@@ -2242,9 +2249,9 @@ snapshots:
       - openai
       - ws
 
-  '@langchain/textsplitters@1.0.1(@langchain/core@1.1.36(openai@6.33.0(ws@8.20.0)(zod@3.25.76))(ws@8.20.0))':
+  '@langchain/textsplitters@1.0.1(@langchain/core@1.1.36(openai@6.33.0(ws@8.20.0)(zod@4.4.3))(ws@8.20.0))':
     dependencies:
-      '@langchain/core': 1.1.36(openai@6.33.0(ws@8.20.0)(zod@3.25.76))(ws@8.20.0)
+      '@langchain/core': 1.1.36(openai@6.33.0(ws@8.20.0)(zod@4.4.3))(ws@8.20.0)
       js-tiktoken: 1.0.21
 
   '@mistralai/mistralai@1.15.1':
@@ -2256,7 +2263,7 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  '@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76)':
+  '@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)':
     dependencies:
       '@hono/node-server': 1.19.9(hono@4.11.4)
       ajv: 8.18.0
@@ -2273,8 +2280,8 @@ snapshots:
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
       raw-body: 3.0.2
-      zod: 3.25.76
-      zod-to-json-schema: 3.25.2(zod@3.25.76)
+      zod: 4.4.3
+      zod-to-json-schema: 3.25.2(zod@4.4.3)
     optionalDependencies:
       '@cfworker/json-schema': 4.1.1
     transitivePeerDependencies:
@@ -3375,7 +3382,7 @@ snapshots:
       jwa: 2.0.1
       safe-buffer: 5.2.1
 
-  langsmith@0.5.15(openai@6.33.0(ws@8.20.0)(zod@3.25.76))(ws@8.20.0):
+  langsmith@0.5.15(openai@6.33.0(ws@8.20.0)(zod@4.4.3))(ws@8.20.0):
     dependencies:
       '@types/uuid': 10.0.0
       chalk: 5.6.2
@@ -3384,7 +3391,7 @@ snapshots:
       semver: 7.7.4
       uuid: 10.0.0
     optionalDependencies:
-      openai: 6.33.0(ws@8.20.0)(zod@3.25.76)
+      openai: 6.33.0(ws@8.20.0)(zod@4.4.3)
       ws: 8.20.0
 
   lilconfig@2.1.0: {}
@@ -3425,14 +3432,14 @@ snapshots:
 
   media-typer@1.1.0: {}
 
-  mem0ai@2.4.4(@anthropic-ai/sdk@0.40.1)(@azure/identity@4.13.1)(@azure/search-documents@12.2.0)(@cloudflare/workers-types@4.20260329.1)(@google/genai@1.47.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76)))(@langchain/core@1.1.36(openai@6.33.0(ws@8.20.0)(zod@3.25.76))(ws@8.20.0))(@mistralai/mistralai@1.15.1)(@qdrant/js-client-rest@1.17.0(typescript@6.0.2))(@supabase/supabase-js@2.101.0)(@types/jest@29.5.14)(@types/pg@8.11.0)(better-sqlite3@12.8.0)(cloudflare@4.5.0)(groq-sdk@0.3.0)(neo4j-driver@5.28.3)(ollama@0.5.18)(pg@8.20.0)(redis@4.7.1)(ws@8.20.0):
+  mem0ai@2.4.4(@anthropic-ai/sdk@0.40.1)(@azure/identity@4.13.1)(@azure/search-documents@12.2.0)(@cloudflare/workers-types@4.20260329.1)(@google/genai@1.47.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)))(@langchain/core@1.1.36(openai@6.33.0(ws@8.20.0)(zod@4.4.3))(ws@8.20.0))(@mistralai/mistralai@1.15.1)(@qdrant/js-client-rest@1.17.0(typescript@6.0.2))(@supabase/supabase-js@2.101.0)(@types/jest@29.5.14)(@types/pg@8.11.0)(better-sqlite3@12.8.0)(cloudflare@4.5.0)(groq-sdk@0.3.0)(neo4j-driver@5.28.3)(ollama@0.5.18)(pg@8.20.0)(redis@4.7.1)(ws@8.20.0):
     dependencies:
       '@anthropic-ai/sdk': 0.40.1
       '@azure/identity': 4.13.1
       '@azure/search-documents': 12.2.0
       '@cloudflare/workers-types': 4.20260329.1
-      '@google/genai': 1.47.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))
-      '@langchain/core': 1.1.36(openai@6.33.0(ws@8.20.0)(zod@3.25.76))(ws@8.20.0)
+      '@google/genai': 1.47.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))
+      '@langchain/core': 1.1.36(openai@6.33.0(ws@8.20.0)(zod@4.4.3))(ws@8.20.0)
       '@mistralai/mistralai': 1.15.1
       '@qdrant/js-client-rest': 1.17.0(typescript@6.0.2)
       '@supabase/supabase-js': 2.101.0
@@ -3614,15 +3621,15 @@ snapshots:
     transitivePeerDependencies:
       - encoding
 
-  openai@6.33.0(ws@8.20.0)(zod@3.25.76):
+  openai@6.33.0(ws@8.20.0)(zod@4.4.3):
     optionalDependencies:
       ws: 8.20.0
-      zod: 3.25.76
+      zod: 4.4.3
 
-  openai@6.34.0(ws@8.20.0)(zod@3.25.76):
+  openai@6.34.0(ws@8.20.0)(zod@4.4.3):
     optionalDependencies:
       ws: 8.20.0
-      zod: 3.25.76
+      zod: 4.4.3
 
   p-finally@1.0.0: {}
 
@@ -4057,9 +4064,9 @@ snapshots:
 
   tr46@0.0.3: {}
 
-  treeindex@1.0.0(ws@8.20.0)(zod@3.25.76):
+  treeindex@1.0.0(ws@8.20.0)(zod@4.4.3):
     dependencies:
-      openai: 6.34.0(ws@8.20.0)(zod@3.25.76)
+      openai: 6.34.0(ws@8.20.0)(zod@4.4.3)
     transitivePeerDependencies:
       - ws
       - zod
@@ -4146,15 +4153,17 @@ snapshots:
       grammex: 3.1.12
       graphmatch: 1.1.1
 
-  zod-to-json-schema@3.25.2(zod@3.25.76):
-    dependencies:
-      zod: 3.25.76
-    optional: true
-
   zod-to-json-schema@3.25.2(zod@4.3.6):
     dependencies:
       zod: 4.3.6
 
+  zod-to-json-schema@3.25.2(zod@4.4.3):
+    dependencies:
+      zod: 4.4.3
+    optional: true
+
   zod@3.25.76: {}
 
   zod@4.3.6: {}
+
+  zod@4.4.3: {}

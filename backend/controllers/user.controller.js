@@ -117,10 +117,6 @@ const verifyEmail = asyncHandler(async (req, res) => {
 const userRegister = asyncHandler(async (req, res) => {
     const { fullname, username, email, password } = req.body;
 
-    if ([fullname, username, email, password].some((field) => !field || field.trim() === "")) {
-        throw new ApiError(400, "All fields are required");
-    }
-
     const existingUser = await prisma.user.findFirst({
         where: { email },
     });
@@ -153,9 +149,6 @@ const userRegister = asyncHandler(async (req, res) => {
 
 const userLogIn = asyncHandler(async (req, res) => {
     const { username, email, password } = req.body;
-    if (!username && !email) {
-        throw new ApiError(404, "Username or email is required");
-    }
 
     const user = await prisma.user.findFirst({
         where: {
@@ -166,8 +159,6 @@ const userLogIn = asyncHandler(async (req, res) => {
     if (!user) {
         throw new ApiError(404, "Username or email does not exist");
     }
-
-    if (!password) throw new ApiError(400, "Password is required");
 
     const isPasswordValid = await isPasswordCorrect(password, user.password);
     if (!isPasswordValid) throw new ApiError(401, "Password is incorrect !");

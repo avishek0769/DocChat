@@ -60,9 +60,6 @@ async function checkApiKeyValidity(provider, apikey) {
 
 const addApiKey = asyncHandler(async (req, res) => {
     const { key, name, provider } = req.body;
-    if (!key || !provider) {
-        throw new ApiError(400, "API key and provider are required");
-    }
 
     const isValid = await checkApiKeyValidity(provider, key);
     if (!isValid) {
