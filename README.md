@@ -168,6 +168,8 @@ pnpm dlx prisma migrate dev --name init
 pnpm dlx prisma generate
 docker compose up -d # Optional: Start Qdrant vector DB / Redis / Ollama - locally using Docker  
 pnpm run dev # Start the backend server
+
+node chatWorker.js # Optional: Start the background worker for processing chat creation and ingestion tasks
 ```
 
 ---
