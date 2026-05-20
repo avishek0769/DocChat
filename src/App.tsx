@@ -14,7 +14,14 @@ function App() {
     return (
         <BrowserRouter>
             <Routes>
-                <Route path="/" element={<LandingPage />} />
+                <Route
+                    path="/"
+                    element={
+                        <PublicOnlyRoute>
+                            <LandingPage />
+                        </PublicOnlyRoute>
+                    }
+                />
                 <Route
                     path="/dashboard"
                     element={
