@@ -25,6 +25,7 @@ export type ChatItem = {
     status: "QUEUED" | "PROCESSING" | "READY" | "FAILED";
     createdAt: string;
     updatedAt: string;
+    shareToken?: string | null;
     chatSources: Array<{
         id: string;
         documentationUrl: string;
@@ -253,3 +254,15 @@ export const getTopChatsByUsage = () =>
             name?: string | null;
         }>
     >("/usage/top-chats", { method: "GET" });
+
+export const toggleChatShare = (chatId: string) =>
+    apiRequest<ChatItem>(`/chat/${chatId}/share`, { method: "POST" });
+
+export const getSharedChatDetails = (shareToken: string) =>
+    apiRequest<{ chat: ChatItem }>(`/chat/shared/${shareToken}`, { method: "GET" });
+
+export const getSharedChatMessages = (shareToken: string) =>
+    apiRequest<{ messages: ChatMessageItem[] }>(`/message/shared/${shareToken}/messages`, { method: "GET" });
+
+export const forkSharedChat = (shareToken: string) =>
+    apiRequest<{ chatId: string }>(`/chat/shared/${shareToken}/fork`, { method: "POST" });
