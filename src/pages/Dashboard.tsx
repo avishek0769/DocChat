@@ -21,6 +21,7 @@ import {
     getChatStatus,
     getLifetimeTokens,
     getRecentChats,
+    invalidatePagesIndexed,
     type ChatItem,
 } from "../lib/api";
 
@@ -175,6 +176,18 @@ const Dashboard = () => {
 
         if (!updates.length) {
             return;
+        }
+
+        for (const update of updates) {
+            if (update.status !== "ready") continue;
+            const prevStatus = normalizeStatus(
+                chatProgressRef.current[update.id]?.status ||
+                    chatsRef.current.find((c) => c.id === update.id)?.status ||
+                    "",
+            );
+            if (prevStatus !== "ready") {
+                invalidatePagesIndexed(update.id);
+            }
         }
 
         setChatProgress((prev) => {
