@@ -131,18 +131,23 @@ export const ChatPage = () => {
     const [shareToken, setShareToken] = useState<string | null>(null);
     const [shareModalOpen, setShareModalOpen] = useState(false);
 
-    const handleShare = async () => {
+    const handleShare = () => {
+        setShareModalOpen(true);
+    };
+
+    const handleToggleShare = async () => {
         setIsSharing(true);
         try {
             const res = await toggleChatShare(chatId);
             setShareToken(res.shareToken || null);
-            setShareModalOpen(true);
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to toggle share.");
         } finally {
             setIsSharing(false);
         }
     };
+
+    const [linkCopied, setLinkCopied] = useState(false);
 
     const handleExport = async () => {
         if (isExporting) return;
@@ -806,18 +811,27 @@ export const ChatPage = () => {
                                                     <button
                                                         onClick={() => {
                                                             navigator.clipboard.writeText(`${window.location.origin}/shared/${shareToken}`);
-                                                            alert("Link copied to clipboard!");
+                                                            setLinkCopied(true);
+                                                            setTimeout(() => setLinkCopied(false), 2000);
                                                         }}
-                                                        className="p-2 rounded-lg bg-accent-blue/10 text-accent-blue hover:bg-accent-blue/20 transition-colors"
+                                                        className="p-2 rounded-lg bg-accent-blue/10 text-accent-blue hover:bg-accent-blue/20 transition-colors flex items-center gap-1"
                                                     >
-                                                        <Copy className="w-4 h-4" />
+                                                        {linkCopied ? (
+                                                            <>
+                                                                <Check className="w-4 h-4 text-green-400" />
+                                                                <span className="text-sm font-medium text-green-400">Copied</span>
+                                                            </>
+                                                        ) : (
+                                                            <Copy className="w-4 h-4" />
+                                                        )}
                                                     </button>
                                                 </div>
                                                 <button
-                                                    onClick={handleShare}
-                                                    className="w-full py-2.5 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors text-sm font-medium"
+                                                    onClick={handleToggleShare}
+                                                    disabled={isSharing}
+                                                    className="w-full py-2.5 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors text-sm font-medium disabled:opacity-50"
                                                 >
-                                                    Revoke Link
+                                                    {isSharing ? "Revoking..." : "Revoke Link"}
                                                 </button>
                                             </>
                                         ) : (
@@ -826,10 +840,11 @@ export const ChatPage = () => {
                                                     Generate a link to share this conversation with others.
                                                 </p>
                                                 <button
-                                                    onClick={handleShare}
-                                                    className="w-full py-2.5 rounded-lg bg-accent-blue text-white hover:bg-blue-600 transition-colors text-sm font-medium"
+                                                    onClick={handleToggleShare}
+                                                    disabled={isSharing}
+                                                    className="w-full py-2.5 rounded-lg bg-accent-blue text-white hover:bg-blue-600 transition-colors text-sm font-medium disabled:opacity-50"
                                                 >
-                                                    Create Share Link
+                                                    {isSharing ? "Creating..." : "Create Share Link"}
                                                 </button>
                                             </>
                                         )}

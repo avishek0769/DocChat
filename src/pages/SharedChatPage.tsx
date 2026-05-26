@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sidebar } from "../components/Sidebar";
 
 export interface Source {
     id: string;
@@ -24,7 +23,6 @@ export interface Message {
 }
 
 import {
-    Send,
     FileText,
     ChevronLeft,
     ChevronRight,
@@ -39,8 +37,6 @@ import {
     X,
     Loader2,
     Database,
-    Download,
-    Link as LinkIcon,
 } from "lucide-react";
 import clsx from "clsx";
 import hljs from "highlight.js";
@@ -94,9 +90,6 @@ export const SharedChatPage = () => {
         lastUpdated: "-",
         status: "ready",
     });
-    const [modelOptions, setModelOptions] = useState<ModelOption[]>([]);
-    const [selectedModel, setSelectedModel] = useState("");
-    const [isPageLoading, setIsPageLoading] = useState(true);
     const [isMessagesLoading, setIsMessagesLoading] = useState(true);
     const [error, setError] = useState("");
 
@@ -111,15 +104,11 @@ export const SharedChatPage = () => {
     const [rightPanelOpen, setRightPanelOpen] = useState(false);
 
     // Chat state
-    const [input, setInput] = useState("");
     const [messages, setMessages] = useState<Message[]>([]);
-    const [isTyping, setIsTyping] = useState(false);
-    const [isAwaitingFirstChunk, setIsAwaitingFirstChunk] = useState(false);
     const [selectedSources, setSelectedSources] = useState<Source[]>([]);
     const [isSourcesLoading, setIsSourcesLoading] = useState(false);
     const [sourceFetchAttempted, setSourceFetchAttempted] = useState(false);
 
-    const [isExporting, setIsExporting] = useState(false);
     const [isIndexedModalOpen, setIsIndexedModalOpen] = useState(false);
     const [currentLinks, setCurrentLinks] = useState<CurrentLink[]>([]);
     const [indexedPages, setIndexedPages] = useState<IndexedPage[]>([]);
@@ -143,7 +132,6 @@ export const SharedChatPage = () => {
 
     const loadChatPage = async () => {
         if (!shareToken) return;
-        setIsPageLoading(true);
         setIsMessagesLoading(true);
         setError("");
         try {
@@ -174,9 +162,6 @@ export const SharedChatPage = () => {
             );
             setIndexedPages(chat?.chatSources?.[0]?.pages || []);
 
-            const options: ModelOption[] = [];
-            setModelOptions(options);
-
             const messageList = messageData.messages || [];
             const messagePairs: Message[] = [];
             for (const msg of messageList) {
@@ -203,8 +188,6 @@ export const SharedChatPage = () => {
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to load chat data.");
             setIsMessagesLoading(false);
-        } finally {
-            setIsPageLoading(false);
         }
     };
 
@@ -217,7 +200,7 @@ export const SharedChatPage = () => {
     // Scroll to bottom on new message
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, [messages, isTyping]);
+    }, [messages]);
 
     const handleViewSources = async (message: Message) => {
         setRightPanelOpen(true);
@@ -261,10 +244,6 @@ export const SharedChatPage = () => {
 
     return (
         <div className="h-screen bg-[#0b0b0f] text-gray-50 flex overflow-hidden font-sans selection:bg-accent-purple/30">
-            <div className="hidden lg:block z-50">
-                <Sidebar isCollapsed={true} />
-            </div>
-
             <main className="flex-1 flex w-full relative h-full">
                 <AnimatePresence initial={false}>
                     {leftPanelOpen && (
