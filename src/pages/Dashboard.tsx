@@ -23,6 +23,7 @@ import {
     getRecentChats,
     type ChatItem,
 } from "../lib/api";
+import { formatTokens } from "../lib/format";
 
 interface Chat {
     id: string;
@@ -128,7 +129,10 @@ const Dashboard = () => {
     }, []);
 
     useEffect(() => {
-        loadDashboardData();
+        const fetchData = async () => {
+            await loadDashboardData();
+        };
+        fetchData();
     }, [loadDashboardData]);
 
     useEffect(() => {
@@ -295,13 +299,6 @@ const Dashboard = () => {
 
     // Disabled state for the Start Processing button
     const isStartDisabled = !chatUrl;
-
-    const formatTokens = (tokens: number) => {
-        if (tokens >= 1000000) return (tokens / 1000000).toFixed(1) + "M";
-        if (tokens >= 1000) return (tokens / 1000).toFixed(1) + "k";
-        return tokens.toString();
-    };
-
     const getStatusBadge = (isVectorLess: boolean, status: string) => {
         switch (status) {
             case "ready":

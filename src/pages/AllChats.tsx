@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { Sidebar } from "../components/Sidebar";
 import { deleteChat, getChats, type ChatItem } from "../lib/api";
+import { formatTokens } from "../lib/format";
 
 type ChatRow = {
     id: string;
@@ -50,12 +51,6 @@ const mapChat = (chat: ChatItem): ChatRow => {
         tokens: chat.totalUsage?.total || 0,
         createdAt: fromNow(chat.createdAt),
     };
-};
-
-const formatTokens = (tokens: number) => {
-    if (tokens >= 1000000) return (tokens / 1000000).toFixed(1) + "M";
-    if (tokens >= 1000) return (tokens / 1000).toFixed(1) + "k";
-    return tokens.toString();
 };
 
 const AllChats = () => {
