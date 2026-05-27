@@ -537,6 +537,7 @@ export const ChatPage = () => {
 
                 {/* Left Toggle Button */}
                 <button
+                    aria-label="Toggle-sidebar"
                     onClick={() => setLeftPanelOpen(!leftPanelOpen)}
                     className="absolute -left-px top-1/2 -translate-y-1/2 z-30 w-5 h-12 bg-[#1a1a24] border border-white/10 rounded-r-lg flex items-center justify-center hover:bg-[#252535] transition-colors shadow-lg"
                     style={{ left: leftPanelOpen ? 279 : -1 }}
@@ -554,6 +555,7 @@ export const ChatPage = () => {
                     <header className="h-16 flex items-center justify-between px-6 border-b border-white/5 shrink-0 bg-[#0b0b0f]/90 backdrop-blur-sm z-10 sticky top-0">
                         <div className="flex items-center gap-3">
                             <button
+                                aria-label="Back to dashboard"
                                 onClick={() => navigate("/dashboard")}
                                 className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/5 transition-colors text-gray-400 hover:text-white lg:hidden"
                             >
@@ -586,6 +588,7 @@ export const ChatPage = () => {
                                 </div>
                             </div>
                             <button
+                                aria-label="Export chat"
                                 onClick={handleExport}
                                 disabled={isExporting}
                                 className="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border border-white/10 bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 flex items-center gap-2 disabled:opacity-50"
@@ -594,6 +597,7 @@ export const ChatPage = () => {
                                 <span className="hidden sm:inline">{isExporting ? "Exporting..." : "Export"}</span>
                             </button>
                             <button
+                                aria-label="Toggle right panel"
                                 onClick={() => setRightPanelOpen(!rightPanelOpen)}
                                 className={clsx(
                                     "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border flex items-center gap-2",
@@ -649,6 +653,7 @@ export const ChatPage = () => {
                                             "How to handle errors?",
                                         ].map((suggestion) => (
                                             <button
+                                                aria-label="use suggestion"
                                                 key={suggestion}
                                                 onClick={() => {
                                                     setInput(suggestion);
@@ -708,6 +713,7 @@ export const ChatPage = () => {
                                 />
                                 <div className="absolute right-3 bottom-3 flex items-center gap-2">
                                     <button
+                                        aria-label="Send message"
                                         type="submit"
                                         disabled={!input.trim() || isTyping}
                                         className="w-8 h-8 rounded-xl bg-accent-blue text-white flex items-center justify-center hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-accent-blue/20"
@@ -727,6 +733,7 @@ export const ChatPage = () => {
 
                 {/* Right Toggle Button */}
                 <button
+                    aria-label="Toggle right panel"
                     onClick={() => setRightPanelOpen(!rightPanelOpen)}
                     className="absolute -right-px top-1/2 -translate-y-1/2 z-30 w-5 h-12 bg-[#1a1a24] border border-white/10 rounded-l-lg items-center justify-center hover:bg-[#252535] transition-colors shadow-lg hidden sm:flex"
                     style={{ right: rightPanelOpen ? 319 : -1 }}
@@ -874,6 +881,7 @@ export const ChatPage = () => {
                             <div className="p-6 border-b border-white/10 flex items-center justify-between">
                                 <h2 className="text-xl font-semibold text-white">Indexed Pages</h2>
                                 <button
+                                    aria-label="close indexed modal"
                                     onClick={() => setIsIndexedModalOpen(false)}
                                     className="p-2 -mr-2 text-gray-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors"
                                 >
@@ -1082,6 +1090,7 @@ const ChatMessage = ({
                 {isAi && !message.isStreaming && (
                     <div className="flex items-center gap-2 opacity-100 transition-opacity mt-1">
                         <button
+                            
                             onClick={handleCopy}
                             className="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-1.5 text-sm font-medium"
                         >
@@ -1096,6 +1105,7 @@ const ChatMessage = ({
                         <>
                             <div className="w-px h-3 bg-white/10" />
                             <button
+                                
                                 onClick={() => onViewSources(message)}
                                 className="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-1.5 text-sm font-medium"
                             >

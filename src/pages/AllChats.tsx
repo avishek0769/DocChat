@@ -255,9 +255,11 @@ const AllChats = () => {
                                                 Open
                                             </button>
                                             <button
+                                                aria-label="Delete chat"
                                                 onClick={() => handleDelete(chat.id)}
                                                 className="p-1.5 rounded-md text-gray-500 hover:text-red-400 hover:bg-red-400/10 transition-colors"
                                             >
+
                                                 <Trash2 className="w-4 h-4" />
                                             </button>
                                         </div>
