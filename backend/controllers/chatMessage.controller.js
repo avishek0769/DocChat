@@ -31,6 +31,7 @@ const getAvailableModels = asyncHandler(async (req, res) => {
     apikeys.map((key) => {
         models.push(...LLM_MODELS[key.provider]);
     });
+    Array.from(new Set(models)).sort()
 
     return res
         .status(200)
