@@ -1,4 +1,4 @@
-const MAX_CACHE_SIZE = 200;
+const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 
 interface CacheEntry<T> {
     value: T;
@@ -8,7 +8,6 @@ interface CacheEntry<T> {
 const store = new Map<string, CacheEntry<unknown>>();
 
 function sweepExpired(): void {
-    if (store.size < MAX_CACHE_SIZE) return;
     const now = Date.now();
     for (const [key, entry] of store) {
         if (now > entry.expiresAt) {
@@ -16,6 +15,22 @@ function sweepExpired(): void {
         }
     }
 }
+
+let sweepTimer: ReturnType<typeof setInterval> | null = null;
+
+function startSweepTimer(): void {
+    if (sweepTimer !== null) return;
+    sweepTimer = setInterval(sweepExpired, SWEEP_INTERVAL_MS);
+}
+
+function stopSweepTimer(): void {
+    if (sweepTimer !== null) {
+        clearInterval(sweepTimer);
+        sweepTimer = null;
+    }
+}
+
+startSweepTimer();
 
 export function getFromCache<T>(key: string): T | null {
     const entry = store.get(key) as CacheEntry<T> | undefined;
@@ -29,12 +44,13 @@ export function getFromCache<T>(key: string): T | null {
 
 export function setInCache<T>(key: string, value: T, ttlMs: number): void {
     if (!Number.isFinite(ttlMs) || ttlMs <= 0) return;
-    sweepExpired();
     store.set(key, { value, expiresAt: Date.now() + ttlMs });
 }
 
 export function clearCache(): void {
+    stopSweepTimer();
     store.clear();
+    startSweepTimer();
 }
 
 export function removeFromCache(key: string): void {
