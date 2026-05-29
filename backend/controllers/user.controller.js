@@ -7,7 +7,7 @@ import bcrypt from "bcrypt";
 import redis from "../utils/redis.js";
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 const AccessOptions = {
     httpOnly: true,
@@ -83,6 +83,10 @@ const sendVerificationCode = asyncHandler(async (req, res) => {
     const code = Math.floor(Math.random() * 99999 + 10000);
     await redis.set(email, code, "EX", 3 * 60);
 
+    if (!resend) {
+        throw new ApiError(500, "Email service is not configured. Set RESEND_API_KEY.");
+    }
+
     await resend.emails.send({
         from: "DocChat <onboarding@avishekadhikary.tech>",
         to: email,
@@ -121,6 +125,10 @@ const userRegister = asyncHandler(async (req, res) => {
         where: { email },
     });
 
+    if (!existingUser) {
+        throw new ApiError(400, "Email not verified. Request a verification code first.");
+    }
+    
     if (!existingUser.isVerified) {
         throw new ApiError(400, "User not verified");
     }
