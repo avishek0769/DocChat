@@ -17,14 +17,44 @@ async function generateVectorEmbeddings(text) {
     return response.data[0].embedding;
 }
 
+const MAX_PAYLOAD_SIZE = 5 * 1024 * 1024; // 5MB limit
+
+async function safeFetchText(url) {
+    const response = await fetch(url);
+    if (!response.ok) {
+        throw new Error(`HTTP Error: ${response.status}`);
+    }
+
+    const contentType = response.headers.get("content-type") || "";
+    if (contentType && !contentType.includes("text/") && !contentType.includes("application/xml") && !contentType.includes("application/xhtml+xml")) {
+        throw new Error("Invalid content type. Only text-based documents are allowed.");
+    }
+
+    const chunks = [];
+    let size = 0;
+    
+    // In Node.js, fetch response.body is an async iterable of Uint8Arrays
+    if (response.body) {
+        for await (const chunk of response.body) {
+            size += chunk.length;
+            if (size > MAX_PAYLOAD_SIZE) {
+                throw new Error("Payload too large. Exceeded 5MB limit.");
+            }
+            chunks.push(chunk);
+        }
+    }
+    
+    return Buffer.concat(chunks).toString("utf-8");
+}
+
 async function scrapeTitle(url) {
-    const data = await (await fetch(url)).text();
+    const data = await safeFetchText(url);
     const $ = cheerio.load(data);
     return $("title").text();
 }
 
 async function scrapeWebpage(url = "", rootUrl = "") {
-    const data = await (await fetch(url)).text();
+    const data = await safeFetchText(url);
     const $ = cheerio.load(data);
 
     const rootHostname = new URL(rootUrl).hostname;
