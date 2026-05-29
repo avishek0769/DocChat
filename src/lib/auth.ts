@@ -58,7 +58,13 @@ const isAccessTokenExpired = (token: string) => {
 };
 
 const getStoredSession = (): AuthSession | null => {
-    const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+    let raw: string | null = null;
+    try {
+        raw = localStorage.getItem(AUTH_STORAGE_KEY);
+    } catch {
+        return null; // Ignore quota or security errors
+    }
+    
     if (!raw) return null;
 
     try {
@@ -67,23 +73,31 @@ const getStoredSession = (): AuthSession | null => {
 
         // Guard against stale or manually edited localStorage entries.
         if (!hasToken) {
-            localStorage.removeItem(AUTH_STORAGE_KEY);
+            try { localStorage.removeItem(AUTH_STORAGE_KEY); } catch {}
             return null;
         }
 
         return parsed as AuthSession;
     } catch {
-        localStorage.removeItem(AUTH_STORAGE_KEY);
+        try { localStorage.removeItem(AUTH_STORAGE_KEY); } catch {}
         return null;
     }
 };
 
 export const setAuthSession = (session: AuthSession) => {
-    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+    try {
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+    } catch {
+        // Ignore quota or security errors
+    }
 };
 
 export const clearAuthSession = () => {
-    localStorage.removeItem(AUTH_STORAGE_KEY);
+    try {
+        localStorage.removeItem(AUTH_STORAGE_KEY);
+    } catch {
+        // Ignore quota or security errors
+    }
 };
 
 export const forceSignOut = (redirectTo = "/signin") => {
