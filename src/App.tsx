@@ -33,10 +33,13 @@ function App() {
                 />
                 <Route
                     path="/chat/:id"
+                    // element={
+                    //     <ProtectedRoute>
+                    //         <ChatPage />
+                    //     </ProtectedRoute>
+                    // }
                     element={
-                        <ProtectedRoute>
-                            <ChatPage />
-                        </ProtectedRoute>
+                        <ChatPage/>
                     }
                 />
                 <Route

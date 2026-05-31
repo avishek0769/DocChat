@@ -26,6 +26,7 @@ export interface Message {
 import {
     Send,
     FileText,
+    Menu,
     ChevronLeft,
     ChevronRight,
     Copy,
@@ -110,6 +111,8 @@ export const ChatPage = () => {
     // Layout configuration
     const [leftPanelOpen, setLeftPanelOpen] = useState(true);
     const [rightPanelOpen, setRightPanelOpen] = useState(false);
+    const [isMobile, setIsMobile] = useState(false);
+    const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
     // Chat state
     const [input, setInput] = useState("");
@@ -234,6 +237,31 @@ export const ChatPage = () => {
     useEffect(() => {
         loadChatPage();
     }, [chatId]);
+
+    useEffect(() => {
+        const mediaQuery = window.matchMedia("(max-width: 639px)");
+
+        const updateMobileState = (event: MediaQueryList | MediaQueryListEvent) => {
+            const mobile = "matches" in event ? event.matches : mediaQuery.matches;
+            setIsMobile(mobile);
+            if (mobile) {
+                setLeftPanelOpen(false);
+                setRightPanelOpen(false);
+            } else {
+                setMobileNavOpen(false);
+            }
+        };
+
+        updateMobileState(mediaQuery);
+
+        if (typeof mediaQuery.addEventListener === "function") {
+            mediaQuery.addEventListener("change", updateMobileState);
+            return () => mediaQuery.removeEventListener("change", updateMobileState);
+        }
+
+        mediaQuery.addListener(updateMobileState);
+        return () => mediaQuery.removeListener(updateMobileState);
+    }, []);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -441,10 +469,34 @@ export const ChatPage = () => {
                 <Sidebar isCollapsed={true} />
             </div>
 
-            <main className="flex-1 flex w-full relative h-full">
+            {/* Mobile App Navigation Drawer */}
+            <AnimatePresence>
+                {isMobile && mobileNavOpen && (
+                    <>
+                        <motion.button
+                            type="button"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setMobileNavOpen(false)}
+                            className="lg:hidden fixed inset-0 bg-black/50 z-50"
+                        />
+                        <motion.div
+                            initial={{ x: "-100%", opacity: 0.5 }}
+                            animate={{ x: 0, opacity: 1 }}
+                            exit={{ x: "-100%", opacity: 0.5 }}
+                            className="lg:hidden fixed inset-y-0 left-0 z-60"
+                        >
+                            <Sidebar isCollapsed={true} />
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
+
+            <main className="flex-1 flex w-full min-w-0 relative h-full overflow-hidden">
                 {/* 1. Left Panel (Docs) */}
                 <AnimatePresence initial={false}>
-                    {leftPanelOpen && (
+                    {leftPanelOpen && !isMobile && (
                         <motion.div
                             initial={{ width: 0, opacity: 0 }}
                             animate={{ width: 280, opacity: 1 }}
@@ -538,7 +590,7 @@ export const ChatPage = () => {
                 {/* Left Toggle Button */}
                 <button
                     onClick={() => setLeftPanelOpen(!leftPanelOpen)}
-                    className="absolute -left-px top-1/2 -translate-y-1/2 z-30 w-5 h-12 bg-[#1a1a24] border border-white/10 rounded-r-lg flex items-center justify-center hover:bg-[#252535] transition-colors shadow-lg"
+                    className="absolute -left-px top-1/2 -translate-y-1/2 z-30 w-5 h-12 bg-[#1a1a24] border border-white/10 rounded-r-lg items-center justify-center hover:bg-[#252535] transition-colors shadow-lg hidden sm:flex"
                     style={{ left: leftPanelOpen ? 279 : -1 }}
                 >
                     {leftPanelOpen ? (
@@ -549,10 +601,17 @@ export const ChatPage = () => {
                 </button>
 
                 {/* 2. Main Chat Area */}
-                <div className="flex-1 flex flex-col relative h-full bg-[#0b0b0f]">
+                <div className="flex-1 min-w-0 flex flex-col relative h-full bg-[#0b0b0f] overflow-hidden">
                     {/* Header */}
-                    <header className="h-16 flex items-center justify-between px-6 border-b border-white/5 shrink-0 bg-[#0b0b0f]/90 backdrop-blur-sm z-10 sticky top-0">
-                        <div className="flex items-center gap-3">
+                    <header className="h-16 flex items-center justify-between px-3 sm:px-6 border-b border-white/5 shrink-0 bg-[#0b0b0f]/90 backdrop-blur-sm z-10 sticky top-0 gap-2">
+                        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                            <button
+                                onClick={() => setMobileNavOpen(true)}
+                                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/5 transition-colors text-gray-400 hover:text-white lg:hidden"
+                                aria-label="Open menu"
+                            >
+                                <Menu className="w-4 h-4" />
+                            </button>
                             <button
                                 onClick={() => navigate("/dashboard")}
                                 className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/5 transition-colors text-gray-400 hover:text-white lg:hidden"
@@ -560,12 +619,12 @@ export const ChatPage = () => {
                                 <ArrowLeft className="w-4 h-4" />
                             </button>
                             <div>
-                                <h1 className="text-lg font-semibold text-white flex items-center gap-2">
+                                <h1 className="text-sm sm:text-lg font-semibold text-white flex items-center gap-2 truncate max-w-[42vw] sm:max-w-none">
                                     {docInfo.title}
                                 </h1>
                             </div>
                         </div>
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                             <div className="hidden sm:flex items-center mr-2">
                                 <div className="relative inline-flex items-center gap-2 rounded-xl border border-white/15 bg-linear-to-r from-white/5 to-white/2 px-2.5 py-1.5 shadow-inner shadow-black/30">
                                     <span className="text-[11px] tracking-wide uppercase text-gray-500 font-semibold">
@@ -588,15 +647,18 @@ export const ChatPage = () => {
                             <button
                                 onClick={handleExport}
                                 disabled={isExporting}
-                                className="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border border-white/10 bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 flex items-center gap-2 disabled:opacity-50"
+                                className="px-2 sm:px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border border-white/10 bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 flex items-center gap-1.5 sm:gap-2 disabled:opacity-50"
                             >
                                 <Download className="w-4 h-4" />
                                 <span className="hidden sm:inline">{isExporting ? "Exporting..." : "Export"}</span>
                             </button>
                             <button
-                                onClick={() => setRightPanelOpen(!rightPanelOpen)}
+                                onClick={() => {
+                                    setLeftPanelOpen(false);
+                                    setRightPanelOpen(!rightPanelOpen);
+                                }}
                                 className={clsx(
-                                    "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border flex items-center gap-2",
+                                    "px-2 sm:px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border flex items-center gap-1.5 sm:gap-2",
                                     rightPanelOpen
                                         ? "bg-accent-blue/10 border-accent-blue/20 text-accent-blue"
                                         : "bg-white/5 border-white/10 text-gray-400 hover:text-white hover:bg-white/10",
@@ -621,7 +683,7 @@ export const ChatPage = () => {
                     )}
 
                     {/* Chat Messages */}
-                    <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8 custom-scrollbar scroll-smooth">
+                    <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-3 py-4 sm:px-6 sm:py-6 lg:px-8 custom-scrollbar scroll-smooth">
                         <div className="max-w-3xl mx-auto space-y-8 pb-10">
                             {isMessagesLoading ? (
                                 <div className="flex flex-col items-center justify-center h-full min-h-[50vh] text-center space-y-3 text-gray-400">
@@ -687,7 +749,7 @@ export const ChatPage = () => {
                     </div>
 
                     {/* Input Area */}
-                    <div className="p-4 sm:p-6 bg-linear-to-t from-[#0b0b0f] via-[#0b0b0f]/95 to-transparent shrink-0">
+                    <div className="p-3 sm:p-6 bg-linear-to-t from-[#0b0b0f] via-[#0b0b0f]/95 to-transparent shrink-0">
                         <div className="max-w-3xl mx-auto relative">
                             <form
                                 onSubmit={handleSend}
@@ -699,7 +761,7 @@ export const ChatPage = () => {
                                     onChange={(e) => setInput(e.target.value)}
                                     onKeyDown={handleKeyDown}
                                     placeholder="Ask something about the docs..."
-                                    className="w-full bg-transparent px-5 py-4 pr-14 text-sm text-white placeholder-gray-500 focus:outline-none resize-none custom-scrollbar"
+                                    className="w-full bg-transparent px-4 sm:px-5 py-4 pr-14 text-sm text-white placeholder-gray-500 focus:outline-none resize-none custom-scrollbar"
                                     rows={1}
                                     style={{
                                         minHeight: "56px",
@@ -738,9 +800,51 @@ export const ChatPage = () => {
                     )}
                 </button>
 
+                {/* Mobile Left Toggle Handle */}
+                {isMobile && !mobileNavOpen && (
+                    <button
+                        onClick={() => {
+                            if (!leftPanelOpen) {
+                                setRightPanelOpen(false);
+                            }
+                            setLeftPanelOpen((prev) => !prev);
+                        }}
+                        className="sm:hidden absolute -left-px top-1/2 -translate-y-1/2 z-30 w-5 h-12 bg-[#1a1a24] border border-white/10 rounded-r-lg flex items-center justify-center hover:bg-[#252535] transition-colors shadow-lg"
+                        style={{ left: leftPanelOpen ? "min(85vw, 320px)" : -1 }}
+                        aria-label={leftPanelOpen ? "Close chat info" : "Open chat info"}
+                    >
+                        {leftPanelOpen ? (
+                            <ChevronLeft className="w-4 h-4 text-gray-400" />
+                        ) : (
+                            <ChevronRight className="w-4 h-4 text-gray-400" />
+                        )}
+                    </button>
+                )}
+
+                {/* Mobile Right Toggle Handle */}
+                {isMobile && !mobileNavOpen && (
+                    <button
+                        onClick={() => {
+                            if (!rightPanelOpen) {
+                                setLeftPanelOpen(false);
+                            }
+                            setRightPanelOpen((prev) => !prev);
+                        }}
+                        className="sm:hidden absolute -right-px top-1/2 -translate-y-1/2 z-30 w-5 h-12 bg-[#1a1a24] border border-white/10 rounded-l-lg flex items-center justify-center hover:bg-[#252535] transition-colors shadow-lg"
+                        style={{ right: rightPanelOpen ? "min(85vw, 320px)" : -1 }}
+                        aria-label={rightPanelOpen ? "Close sources" : "Open sources"}
+                    >
+                        {rightPanelOpen ? (
+                            <ChevronRight className="w-4 h-4 text-gray-400" />
+                        ) : (
+                            <ChevronLeft className="w-4 h-4 text-gray-400" />
+                        )}
+                    </button>
+                )}
+
                 {/* 3. Right Panel (Sources) */}
                 <AnimatePresence initial={false}>
-                    {rightPanelOpen && (
+                    {rightPanelOpen && !isMobile && (
                         <motion.div
                             initial={{ width: 0, opacity: 0 }}
                             animate={{ width: 320, opacity: 1 }}
@@ -852,12 +956,250 @@ export const ChatPage = () => {
                         </motion.div>
                     )}
                 </AnimatePresence>
+
+                {/* Mobile Left Sheet (Chat Info) */}
+                <AnimatePresence>
+                    {isMobile && leftPanelOpen && (
+                        <>
+                            <motion.button
+                                type="button"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                onClick={() => setLeftPanelOpen(false)}
+                                className="sm:hidden absolute inset-0 bg-black/50 backdrop-blur-[1px] z-40"
+                            />
+                            <motion.div
+                                initial={{ x: "-100%", opacity: 0.5 }}
+                                animate={{ x: 0, opacity: 1 }}
+                                exit={{ x: "-100%", opacity: 0.5 }}
+                                className="sm:hidden absolute left-0 top-0 h-full w-[85vw] max-w-[320px] border-r border-white/10 bg-[#0b0b0f] z-50 flex flex-col"
+                            >
+                                <div className="p-4 border-b border-white/10 flex items-center justify-between">
+                                    <h3 className="text-sm font-semibold text-white">Chat information</h3>
+                                    <button
+                                        onClick={() => setLeftPanelOpen(false)}
+                                        className="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-white/10"
+                                    >
+                                        <X className="w-4 h-4" />
+                                    </button>
+                                </div>
+                                <div className="p-4 border-b border-white/10">
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div className="bg-white/5 border border-white/10 rounded-lg p-3">
+                                            <div className="text-sm text-gray-500 mb-1 flex items-center gap-1">
+                                                <FileText className="w-3 h-3" />
+                                                Indexed
+                                            </div>
+                                            <div className="font-medium text-sm text-gray-200">
+                                                {docInfo.pages} pages
+                                            </div>
+                                        </div>
+                                        <div className="bg-white/5 border border-white/10 rounded-lg p-3">
+                                            <div className="text-sm text-gray-500 mb-1 flex items-center gap-1">
+                                                <Clock className="w-3 h-3" />
+                                                Updated
+                                            </div>
+                                            <div className="font-medium text-sm text-gray-200 truncate">
+                                                {docInfo.lastUpdated}
+                                            </div>
+                                        </div>
+                                        <div className="col-span-2 bg-white/5 border border-white/10 rounded-lg p-3 flex items-center justify-between">
+                                            <div className="text-sm text-gray-500 flex items-center gap-1">
+                                                <Database className="w-3 h-3 text-accent-blue" />
+                                                Total Tokens
+                                            </div>
+                                            <div className="font-medium text-sm text-gray-200 bg-white/5 px-2 py-0.5 rounded border border-white/5 font-mono">
+                                                {formatTokens(docInfo.tokensUsed)}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            setLeftPanelOpen(false);
+                                            setIsIndexedModalOpen(true);
+                                        }}
+                                        className="w-full py-2.5 mt-3 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-sm font-semibold transition-all flex items-center justify-center gap-2 text-gray-200"
+                                    >
+                                        <FileText className="w-4 h-4 text-accent-blue" />
+                                        Show all pages
+                                    </button>
+                                </div>
+                                <div className="flex-1 overflow-y-auto p-4">
+                                    <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">
+                                        Current Links
+                                    </h4>
+                                    <div className="space-y-2">
+                                        {currentLinks.length > 0 ? (
+                                            currentLinks.map((page, i) => (
+                                                <div
+                                                    key={i}
+                                                    className="px-3 py-2 rounded-lg text-sm border border-white/10 bg-white/5"
+                                                >
+                                                    <span className="block text-gray-300 wrap-break-word">
+                                                        {page.title}
+                                                    </span>
+                                                    <a
+                                                        href={page.url}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="text-sm opacity-70 mt-1 font-mono hover:text-accent-blue hover:underline block break-all"
+                                                    >
+                                                        {page.url}
+                                                    </a>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <div className="px-3 py-2 rounded-lg text-sm border border-white/10 bg-white/5 text-gray-400">
+                                                No documentation source links found.
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </motion.div>
+                        </>
+                    )}
+                </AnimatePresence>
+
+                {/* Mobile Right Sheet (Sources) */}
+                <AnimatePresence>
+                    {isMobile && rightPanelOpen && (
+                        <>
+                            <motion.button
+                                type="button"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                onClick={() => setRightPanelOpen(false)}
+                                className="sm:hidden absolute inset-0 bg-black/50 backdrop-blur-[1px] z-40"
+                            />
+                            <motion.div
+                                initial={{ x: "100%", opacity: 0.5 }}
+                                animate={{ x: 0, opacity: 1 }}
+                                exit={{ x: "100%", opacity: 0.5 }}
+                                className="sm:hidden absolute right-0 top-0 h-full w-[85vw] max-w-[320px] border-l border-white/10 bg-[#0b0b0f] z-50 flex flex-col"
+                            >
+                                <div className="p-4 border-b border-white/10 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <Search className="w-4 h-4 text-accent-blue" />
+                                        <h2 className="font-semibold text-gray-200">Sources Retrieved</h2>
+                                    </div>
+                                    <button
+                                        onClick={() => setRightPanelOpen(false)}
+                                        className="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-white/10"
+                                    >
+                                        <X className="w-4 h-4" />
+                                    </button>
+                                </div>
+
+                                <div className="px-4 pt-3">
+                                    <span className="text-sm font-mono text-gray-500 bg-white/5 px-2 py-0.5 rounded-full inline-block">
+                                        {selectedSources.length} found
+                                    </span>
+                                </div>
+
+                                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                                    {isSourcesLoading ? (
+                                        <div className="flex flex-col items-center justify-center h-40 text-gray-400 gap-3">
+                                            <Loader2 className="w-6 h-6 animate-spin text-accent-blue" />
+                                            <span className="text-sm">Fetching source chunks...</span>
+                                        </div>
+                                    ) : selectedSources.length === 0 ? (
+                                        <div className="text-center text-gray-500 text-sm py-10">
+                                            {sourceFetchAttempted
+                                                ? "No source found for this message."
+                                                : "No sources fetched yet. Ask a question to see references."}
+                                        </div>
+                                    ) : (
+                                        selectedSources.map((source, idx) => (
+                                            <div
+                                                key={source.id}
+                                                className="bg-white/3 border border-white/10 rounded-xl overflow-hidden"
+                                            >
+                                                <div className="p-3 border-b border-white/5 bg-white/5 flex items-start justify-between gap-2">
+                                                    <div className="flex items-center gap-2 overflow-hidden min-w-0">
+                                                        <div className="w-5 h-5 rounded-md bg-accent-blue/10 border border-accent-blue/20 flex items-center justify-center text-sm font-bold text-accent-blue shrink-0">
+                                                            {idx + 1}
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <h4 className="text-sm font-medium text-gray-200 truncate">
+                                                                {source.title}
+                                                            </h4>
+                                                            {source.url ? (
+                                                                <a
+                                                                    href={source.url}
+                                                                    target="_blank"
+                                                                    rel="noreferrer"
+                                                                    className="text-sm text-gray-500 hover:text-accent-blue truncate block"
+                                                                >
+                                                                    {(() => {
+                                                                        try {
+                                                                            return new URL(source.url).pathname;
+                                                                        } catch {
+                                                                            return source.url;
+                                                                        }
+                                                                    })()}
+                                                                </a>
+                                                            ) : (
+                                                                <span className="text-sm text-gray-500 truncate block">
+                                                                    Source URL unavailable
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-sm font-mono text-green-400/80 bg-green-500/10 px-1.5 py-0.5 rounded shrink-0">
+                                                        {source.relevance ?? "--"}%
+                                                    </div>
+                                                </div>
+                                                <div className="p-3 text-sm text-gray-400 leading-relaxed max-h-40 overflow-y-auto custom-scrollbar relative">
+                                                    <div className="absolute top-0 left-0 w-1 h-full bg-accent-blue/30 rounded-full"></div>
+                                                    <div className="pl-3 relative z-10">
+                                                        {source.snippet
+                                                            .split("\n")
+                                                            .map((line: string, i: number) => (
+                                                                <p
+                                                                    key={i}
+                                                                    className={clsx(
+                                                                        line.startsWith("```")
+                                                                            ? "font-mono text-sm text-gray-300 my-1 bg-white/5 p-1 rounded"
+                                                                            : "wrap-break-word",
+                                                                    )}
+                                                                >
+                                                                    {line}
+                                                                </p>
+                                                            ))}
+                                                        {source.url ? (
+                                                            <a
+                                                                href={source.url}
+                                                                target="_blank"
+                                                                rel="noreferrer"
+                                                                className="flex items-center gap-1.5 mt-3 text-accent-blue hover:underline font-mono text-sm opacity-80 decoration-accent-blue/50 break-all"
+                                                            >
+                                                                <LinkIcon className="w-3.5 h-3.5" />
+                                                                {source.url}
+                                                            </a>
+                                                        ) : (
+                                                            <span className="flex items-center gap-1.5 mt-3 text-gray-500 font-mono text-sm">
+                                                                <LinkIcon className="w-3.5 h-3.5" />
+                                                                No source URL for this chunk
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </motion.div>
+                        </>
+                    )}
+                </AnimatePresence>
             </main>
 
             {/* Indexed Modal */}
             <AnimatePresence>
                 {isIndexedModalOpen && (
-                    <div className="fixed inset-0 z-100 flex items-center justify-center p-4">
+                    <div className="fixed inset-0 z-100 flex items-center justify-center p-2 sm:p-4">
                         <motion.div
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
@@ -869,10 +1211,10 @@ export const ChatPage = () => {
                             initial={{ scale: 0.95, opacity: 0, y: 10 }}
                             animate={{ scale: 1, opacity: 1, y: 0 }}
                             exit={{ scale: 0.95, opacity: 0, y: 10 }}
-                            className="bg-[#1a1a24] border border-white/10 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col relative z-10"
+                            className="bg-[#1a1a24] border border-white/10 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col relative z-10"
                         >
-                            <div className="p-6 border-b border-white/10 flex items-center justify-between">
-                                <h2 className="text-xl font-semibold text-white">Indexed Pages</h2>
+                            <div className="p-4 sm:p-6 border-b border-white/10 flex items-center justify-between gap-3">
+                                <h2 className="text-lg sm:text-xl font-semibold text-white">Indexed Pages</h2>
                                 <button
                                     onClick={() => setIsIndexedModalOpen(false)}
                                     className="p-2 -mr-2 text-gray-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors"
@@ -880,7 +1222,7 @@ export const ChatPage = () => {
                                     <X className="w-5 h-5" />
                                 </button>
                             </div>
-                            <div className="flex-1 overflow-y-auto p-6 space-y-3 custom-scrollbar">
+                            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-3 custom-scrollbar">
                                 {indexedPages.map((page, idx) => (
                                     <div
                                         key={`${page.pageUrl}-${idx}`}
@@ -894,7 +1236,7 @@ export const ChatPage = () => {
                                             href={page.pageUrl}
                                             target="_blank"
                                             rel="noreferrer"
-                                            className="text-sm font-mono text-gray-400 hover:text-accent-blue block truncate ml-6"
+                                            className="text-sm font-mono text-gray-400 hover:text-accent-blue block break-all ml-6"
                                         >
                                             {page.pageUrl}
                                         </a>
@@ -967,20 +1309,20 @@ const ChatMessage = ({
             {/* Content Area */}
             <div
                 className={clsx(
-                    "flex flex-col gap-2 max-w-[75%] min-w-0",
+                    "flex flex-col gap-2 max-w-[88%] sm:max-w-[75%] min-w-0",
                     isAi ? "items-start" : "items-end",
                 )}
             >
                 <div
                     className={clsx(
-                        "px-5 py-3.5 rounded-2xl text-sm leading-relaxed overflow-hidden max-w-full",
+                        "px-4 sm:px-5 py-3.5 rounded-2xl text-sm leading-relaxed overflow-hidden max-w-full wrap-break-word",
                         isAi
                             ? "bg-white/5 border border-white/10 rounded-tl-sm text-gray-200"
                             : "bg-linear-to-br from-accent-blue to-blue-600 text-white rounded-tr-sm shadow-xl shadow-accent-blue/20",
                     )}
                 >
                     {isAi ? (
-                        <div className="prose prose-invert text-[15px] max-w-full overflow-hidden">
+                        <div className="prose prose-invert text-[15px] max-w-full overflow-hidden wrap-break-word">
                             <div className="mb-3 inline-flex items-center rounded-md border border-accent-blue/20 bg-accent-blue/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent-blue">
                                 {message.model || "Default Hosted Model"}
                             </div>
