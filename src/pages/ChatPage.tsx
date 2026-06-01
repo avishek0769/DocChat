@@ -654,7 +654,9 @@ export const ChatPage = () => {
                             </button>
                             <button
                                 onClick={() => {
-                                    setLeftPanelOpen(false);
+                                    if (isMobile) {
+                                        setLeftPanelOpen(false);
+                                    }
                                     setRightPanelOpen(!rightPanelOpen);
                                 }}
                                 className={clsx(
