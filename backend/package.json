@@ -4,7 +4,8 @@
     "description": "",
     "main": "index.js",
     "scripts": {
-        "dev": "node --watch index.js"
+        "dev": "node --watch index.js",
+        "lint": "node --check index.js && node --check app.js && node --check chatWorker.js"
     },
     "keywords": [],
     "author": "",
