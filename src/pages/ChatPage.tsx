@@ -414,15 +414,26 @@ export const ChatPage = () => {
                 );
             }
         } catch (err) {
-            if (chunkRafRef.current !== null) {
-                window.cancelAnimationFrame(chunkRafRef.current);
-                chunkRafRef.current = null;
-            }
-            pendingChunkRef.current = "";
-            setIsAwaitingFirstChunk(false);
-            setError(err instanceof Error ? err.message : "Failed to send message.");
-            setMessages((prev) => prev.filter((m) => m.id !== aiId));
-        } finally {
+    if (chunkRafRef.current !== null) {
+        window.cancelAnimationFrame(chunkRafRef.current);
+        chunkRafRef.current = null;
+    }
+    pendingChunkRef.current = "";
+    setIsAwaitingFirstChunk(false);
+
+    const errMsg = err instanceof Error ? err.message : "Failed to send message.";
+
+    // 409 = chat not ready or failed — show inline banner, restore input
+    if (err instanceof Error && (err.message.includes("indexing") || err.message.includes("ingestion"))) {
+        setError(errMsg);
+        setInput(newUserMessage.content);           // restore so user can retry
+        setMessages((prev) => prev.filter((m) => m.id !== aiId || m.id !== newUserMessage.id));
+    } else {
+        setError(errMsg);
+        setMessages((prev) => prev.filter((m) => m.id !== aiId));
+    }
+}
+        finally {
             setIsTyping(false);
         }
     };

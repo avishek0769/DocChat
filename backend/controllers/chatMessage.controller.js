@@ -48,6 +48,19 @@ const sendMessage = asyncHandler(async (req, res) => {
         throw new ApiError(404, "Chat not found.");
     }
 
+    if (chat.status === "QUEUED" || chat.status === "PROCESSING") {
+  throw new ApiError(
+    409,
+    "Chat is still indexing your docs — please try again in a moment."
+  );
+}
+
+if (chat.status === "FAILED") {
+  throw new ApiError(
+    409,
+    "Chat ingestion failed. Please re-ingest the documentation or check the docs URL and try again."
+  );
+}
     let openai;
     let modelId = model;
     let apiKeyId = null;
