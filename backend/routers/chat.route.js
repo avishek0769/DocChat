@@ -16,6 +16,7 @@ import {
     recentChats,
     listAllPagesIndexed,
     progressStatus,
+    recentFailedIngestionRuns,
 } from "../controllers/chat.controller.js";
 
 const chatRouter = Router();
@@ -23,6 +24,7 @@ const chatRouter = Router();
 chatRouter.route("/expectation").get(verifyStrictJWT, validate(expectationQuerySchema), expectation);
 chatRouter.route("/create").post(verifyStrictJWT, validate(createChatSchema), createChat);
 chatRouter.route("/status/:chatId").get(verifyStrictJWT, validate(chatIdParamSchema), progressStatus);
+chatRouter.route("/ingestion-runs/failed").get(verifyStrictJWT, recentFailedIngestionRuns);
 chatRouter.route("/list").get(verifyStrictJWT, listAllChats);
 chatRouter.route("/recent").get(verifyStrictJWT, recentChats);
 chatRouter.route("/:chatId").get(verifyStrictJWT, validate(chatIdParamSchema), chatDetails);

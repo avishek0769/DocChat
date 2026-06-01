@@ -168,11 +168,73 @@ const progressStatus = asyncHandler(async (req, res) => {
     const chat = await prisma.chat.findUnique({
         where: { id: chatId },
     });
+
+    if (!chat) {
+        throw new ApiError(404, "Chat not found");
+    }
+
+    const latestIngestionRun = await prisma.ingestionRun.findFirst({
+        where: { chatId },
+        orderBy: { startedAt: "desc" },
+        select: {
+            id: true,
+            chatId: true,
+            chatSourceId: true,
+            status: true,
+            startedAt: true,
+            finishedAt: true,
+            errorCode: true,
+            errorMessage: true,
+        },
+    });
     
     const redisData = await redis.get(chat.id.toString());
     const progress = redisData ? JSON.parse(redisData) : { status: "QUEUED", progress: 0 };
 
-    res.status(200).json(new ApiResponse(200, { progress }, "Progress fetched successfully"));
+    res.status(200).json(
+        new ApiResponse(
+            200,
+            { progress, latestIngestionRun },
+            "Progress fetched successfully",
+        ),
+    );
+});
+
+const recentFailedIngestionRuns = asyncHandler(async (req, res) => {
+    const limitRaw = Number.parseInt(req.query?.limit, 10);
+    const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 100) : 25;
+
+    const allowAll =
+        process.env.ADMIN_USERNAME &&
+        req.user?.username &&
+        req.user.username === process.env.ADMIN_USERNAME;
+
+    const runs = await prisma.ingestionRun.findMany({
+        where: allowAll
+            ? { status: "FAILED" }
+            : {
+                  status: "FAILED",
+                  chat: {
+                      userId: req.user.id,
+                  },
+              },
+        orderBy: { startedAt: "desc" },
+        take: limit,
+        select: {
+            id: true,
+            chatId: true,
+            chatSourceId: true,
+            status: true,
+            startedAt: true,
+            finishedAt: true,
+            errorCode: true,
+            errorMessage: true,
+            chat: { select: { name: true, userId: true } },
+            chatSource: { select: { heading: true, documentationUrl: true } },
+        },
+    });
+
+    res.status(200).json(new ApiResponse(200, { runs }, "Failed ingestion runs fetched successfully"));
 });
 
 const listAllChats = asyncHandler(async (req, res) => {
@@ -377,6 +439,7 @@ export {
     expectation,
     createChat,
     progressStatus,
+    recentFailedIngestionRuns,
     listAllChats,
     chatDetails,
     cancelProcessing,

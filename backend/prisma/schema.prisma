@@ -14,6 +14,12 @@ enum ChatStatus {
     FAILED
 }
 
+enum IngestionRunStatus {
+    STARTED
+    SUCCESS
+    FAILED
+}
+
 enum Providers {
     OPENAI
     ANTHROPIC
@@ -47,6 +53,7 @@ model Chat {
     chatSources    ChatSource[]  @relation("ChatToChatSource")
     messages       ChatMessage[]
     usageEvents    UsageEvents[]
+    ingestionRuns  IngestionRun[]
 }
 
 model ChatSource {
@@ -60,6 +67,24 @@ model ChatSource {
     collectionName   String?        @default("") @map("collection_name")
     documentTree     DocumentTree?
     createdAt        DateTime       @default(now()) @map("created_at")
+    ingestionRuns    IngestionRun[]
+}
+
+model IngestionRun {
+    id            String             @id @unique @default(uuid())
+    chatId        String             @map("chat_id")
+    chatSourceId  String             @map("chat_source_id")
+    status        IngestionRunStatus @default(STARTED)
+    startedAt     DateTime           @default(now()) @map("started_at")
+    finishedAt    DateTime?          @map("finished_at")
+    errorCode     String?            @map("error_code")
+    errorMessage  String?            @map("error_message")
+    chat          Chat               @relation(fields: [chatId], references: [id], onDelete: Cascade)
+    chatSource    ChatSource         @relation(fields: [chatSourceId], references: [id], onDelete: Cascade)
+
+    @@index([chatId, startedAt])
+    @@index([chatSourceId, startedAt])
+    @@index([status, startedAt])
 }
 
 model DocumentPage {
