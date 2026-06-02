@@ -43,10 +43,14 @@ model Chat {
     status         ChatStatus    @default(QUEUED)
     createdAt      DateTime      @default(now()) @map("created_at")
     collectionName String?       @map("collection_name")
+    shareToken     String?       @unique @map("share_token")
     createdBy      User          @relation(fields: [userId], references: [id])
     chatSources    ChatSource[]  @relation("ChatToChatSource")
     messages       ChatMessage[]
     usageEvents    UsageEvents[]
+
+    @@index([userId, createdAt])
+    @@index([status, createdAt])
 }
 
 model ChatSource {
@@ -89,6 +93,8 @@ model ChatMessage {
     sourceChunks ChatMessageSource[]
     usageEvents  UsageEvents[]
     chat         Chat                @relation(fields: [chatId], references: [id])
+
+    @@index([chatId, createdAt])
 }
 
 model ChatMessageSource {
@@ -127,4 +133,8 @@ model UsageEvents {
     message      ChatMessage? @relation(fields: [messageId], references: [id], onDelete: SetNull)
     user         User         @relation(fields: [userId], references: [id])
     chat         Chat?        @relation(fields: [chatId], references: [id], onDelete: SetNull)
+
+@@index([userId, timestamp])
+@@index([messageId])
+@@index([apikeyId])
 }

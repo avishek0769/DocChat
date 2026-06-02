@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { Sidebar } from "../components/Sidebar";
 import { deleteChat, getChats, type ChatItem } from "../lib/api";
+import { formatTokens } from "../lib/format";
 
 type ChatRow = {
     id: string;
@@ -52,12 +53,6 @@ const mapChat = (chat: ChatItem): ChatRow => {
     };
 };
 
-const formatTokens = (tokens: number) => {
-    if (tokens >= 1000000) return (tokens / 1000000).toFixed(1) + "M";
-    if (tokens >= 1000) return (tokens / 1000).toFixed(1) + "k";
-    return tokens.toString();
-};
-
 const AllChats = () => {
     const navigate = useNavigate();
     const [chats, setChats] = useState<ChatRow[]>([]);
@@ -65,6 +60,11 @@ const AllChats = () => {
     const [filter, setFilter] = useState("all");
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState("");
+
+    // Delete Confirmation State
+    const [deleteTarget, setDeleteTarget] = useState<ChatRow | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [deleteError, setDeleteError] = useState("");
 
     const loadChats = async () => {
         setIsLoading(true);
@@ -80,18 +80,35 @@ const AllChats = () => {
     };
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         loadChats();
     }, []);
 
-    const handleDelete = async (id: string) => {
-        if (confirm("Are you sure you want to delete this chat?")) {
-            try {
-                await deleteChat(id);
-                setChats((prev) => prev.filter((c) => c.id !== id));
-            } catch (err) {
-                setError(err instanceof Error ? err.message : "Failed to delete chat.");
-            }
+    const handleDelete = async () => {
+        if (!deleteTarget) return;
+        setIsDeleting(true);
+        setDeleteError("");
+        setError("");
+        try {
+            await deleteChat(deleteTarget.id);
+            setChats((prev) => prev.filter((c) => c.id !== deleteTarget.id));
+            setDeleteTarget(null);
+        } catch (err) {
+            setDeleteError(err instanceof Error ? err.message : "Failed to delete chat.");
+        } finally {
+            setIsDeleting(false);
         }
+    };
+
+    const openDeleteModal = (chat: ChatRow) => {
+        setDeleteError("");
+        setDeleteTarget(chat);
+    };
+
+    const closeDeleteModal = () => {
+        if (isDeleting) return;
+        setDeleteError("");
+        setDeleteTarget(null);
     };
 
     const filteredChats = chats.filter((chat) => {
@@ -140,7 +157,7 @@ const AllChats = () => {
         <div className="min-h-screen bg-[#0b0b0f] text-gray-50 flex font-sans selection:bg-accent-purple/30">
             <Sidebar />
 
-            <main className="flex-1 p-8 lg:p-12 overflow-y-auto w-full">
+            <main className="flex-1 p-8 lg:p-12 overflow-y-auto w-full relative">
                 <div className="max-w-5xl mx-auto space-y-8">
                     <header>
                         <h1 className="text-3xl font-bold mb-2">All Chats</h1>
@@ -169,6 +186,7 @@ const AllChats = () => {
                         <div className="relative shrink-0">
                             <Filter className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                             <select
+                                title="Filter by Status"
                                 value={filter}
                                 onChange={(e) => setFilter(e.target.value)}
                                 className="bg-[#111] border border-white/10 rounded-lg pl-9 pr-8 py-2.5 text-sm text-white focus:outline-none focus:border-accent-blue/50 appearance-none cursor-pointer"
@@ -255,9 +273,11 @@ const AllChats = () => {
                                                 Open
                                             </button>
                                             <button
-                                                onClick={() => handleDelete(chat.id)}
+                                                title="Delete Chat"
+                                                onClick={() => openDeleteModal(chat)}
                                                 className="p-1.5 rounded-md text-gray-500 hover:text-red-400 hover:bg-red-400/10 transition-colors"
                                             >
+
                                                 <Trash2 className="w-4 h-4" />
                                             </button>
                                         </div>
@@ -272,6 +292,59 @@ const AllChats = () => {
                         )}
                     </div>
                 </div>
+
+                {/* Delete Confirmation Modal */}
+                {deleteTarget && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                        <div
+                            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                            onClick={closeDeleteModal}
+                        />
+                        <div className="relative w-full max-w-sm bg-[#0b0b0f] border border-white/10 rounded-2xl shadow-2xl p-6 text-center">
+                            <div className="w-14 h-14 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-4">
+                                <Trash2 className="w-6 h-6 text-red-400" />
+                            </div>
+                            <h3 className="text-lg font-semibold mb-2">Delete Chat?</h3>
+                            <p className="text-sm text-gray-400 mb-2">
+                                Are you sure you want to delete{" "}
+                                <strong className="text-gray-200">"{deleteTarget.title}"</strong>?
+                            </p>
+                            <p className="text-xs text-gray-500 mb-6">
+                                This will permanently remove all indexed pages and chat history. This action
+                                cannot be undone.
+                            </p>
+                            {deleteError && (
+                                <div className="mb-5 flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-left text-sm text-red-400">
+                                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                                    <span>{deleteError}</span>
+                                </div>
+                            )}
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={closeDeleteModal}
+                                    disabled={isDeleting}
+                                    className="flex-1 px-4 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleDelete}
+                                    disabled={isDeleting}
+                                    className="flex-1 px-4 py-2 rounded-lg text-sm font-medium text-white bg-red-500 hover:bg-red-600 disabled:opacity-60 disabled:cursor-not-allowed transition-colors inline-flex items-center justify-center gap-2"
+                                >
+                                    {isDeleting ? (
+                                        <>
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                            Deleting...
+                                        </>
+                                    ) : (
+                                        "Delete"
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </main>
         </div>
     );

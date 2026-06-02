@@ -121,6 +121,10 @@ const userRegister = asyncHandler(async (req, res) => {
         where: { email },
     });
 
+    if (!existingUser) {
+        throw new ApiError(400, "Email not verified. Request a verification code first.");
+    }
+    
     if (!existingUser.isVerified) {
         throw new ApiError(400, "User not verified");
     }

@@ -12,7 +12,9 @@ import {
 } from "chart.js";
 import type { TooltipItem } from "chart.js";
 import { Bar } from "react-chartjs-2";
-import { getApiKeyCount, getLifetimeTokens, getTopChatsByUsage, getTokensByGroup } from "../lib/api";
+
+import { getApiKeyCount, getLifetimeTokens, getTopChatsByUsage, getTokensByGroup, getUsageBreakdown, type UsageBreakdownItem } from "../lib/api";
+import { formatTokens } from "../lib/format";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
@@ -40,12 +42,6 @@ const modelDisplayName = (model: string) => {
     if (model === "default-1") return "GPT - OSS";
     if (model === "default-2") return "Nemotron 3 Super";
     return model;
-};
-
-const formatTokens = (tokens: number) => {
-    if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(1)}M`;
-    if (tokens >= 1000) return `${(tokens / 1000).toFixed(1)}k`;
-    return `${tokens}`;
 };
 
 const getPlaceholderUsagePoints = (timeframe: Timeframe): UsagePoint[] => {
@@ -96,6 +92,7 @@ export const Usage = () => {
     const [apiKeyCount, setApiKeyCount] = useState(0);
     const [topChats, setTopChats] = useState<Array<{ name: string; tokens: number; color: string }>>([]);
     const [error, setError] = useState("");
+    const [topModels, setTopModels] = useState<UsageBreakdownItem[]>([]);
     const requestIdRef = useRef(0);
 
     const cycleLabel = useMemo(() => {
@@ -112,11 +109,12 @@ export const Usage = () => {
             setError("");
             setUsagePoints(getPlaceholderUsagePoints(timeframe));
             try {
-                const [grouped, lifetime, keys, topChatsByUsage] = await Promise.all([
+                const [grouped, lifetime, keys, topChatsByUsage, breakdown] = await Promise.all([
                     getTokensByGroup(timeframe),
                     getLifetimeTokens(),
                     getApiKeyCount(),
                     getTopChatsByUsage(),
+                    getUsageBreakdown({ limit: 5 }),
                 ]);
 
                 if (requestId !== requestIdRef.current) return;
@@ -144,6 +142,7 @@ export const Usage = () => {
                             idx === 0 ? "bg-accent-blue" : idx === 1 ? "bg-purple-500" : "bg-green-500",
                     }));
                 setTopChats(ranked);
+                setTopModels(breakdown?.data || []);
             } catch (err) {
                 if (requestId !== requestIdRef.current) return;
                 setError(err instanceof Error ? err.message : "Failed to load usage data.");
@@ -254,15 +253,13 @@ export const Usage = () => {
                         drawBorder: false,
                     },
                     ticks: {
-                        color: "#6b7280", // gray-500
+                        color: "#6b7280",
                         font: {
                             family: "ui-sans-serif, system-ui, sans-serif",
                         },
                         callback: function (value: string | number) {
                             const num = Number(value);
-                            if (num >= 1000000) return num / 1000000 + "M";
-                            if (num >= 1000) return num / 1000 + "k";
-                            return num;
+                            return formatTokens(num);
                         },
                         maxTicksLimit: 6,
                     },
@@ -278,6 +275,7 @@ export const Usage = () => {
         }),
         [],
     );
+
     return (
         <div className="min-h-screen bg-[#0b0b0f] text-gray-50 flex font-sans selection:bg-accent-purple/30">
             <Sidebar />
@@ -393,7 +391,7 @@ export const Usage = () => {
                                                 {chat.name}
                                             </span>
                                             <span className="text-gray-300 font-mono font-medium shrink-0">
-                                                {(chat.tokens / 1000).toFixed(0)}k
+                                                {formatTokens(chat.tokens)}
                                             </span>
                                         </div>
                                         <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden border border-white/5">
@@ -409,6 +407,45 @@ export const Usage = () => {
                             </div>
                         </div>
                     </div>
+
+                    {/* Top Models Breakdown */}
+                    <div className="p-6 rounded-xl bg-white/2 border border-white/5">
+                        <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
+                            <Zap className="w-5 h-5 text-accent-blue" />
+                            Top Models by Token Usage
+                        </h3>
+                        {topModels.length === 0 ? (
+                            <p className="text-gray-500 text-sm">No model usage data yet.</p>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="text-gray-400 border-b border-white/5">
+                                            <th className="text-left pb-3 font-medium">Model</th>
+                                            <th className="text-left pb-3 font-medium">Provider</th>
+                                            <th className="text-right pb-3 font-medium">Input</th>
+                                            <th className="text-right pb-3 font-medium">Output</th>
+                                            <th className="text-right pb-3 font-medium">Total</th>
+                                            <th className="text-right pb-3 font-medium">Requests</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-white/5">
+                                        {topModels.map((item, i) => (
+                                            <tr key={i} className="hover:bg-white/2 transition-colors">
+                                                <td className="py-3 font-mono text-gray-200">{modelDisplayName(item.model)}</td>
+                                                <td className="py-3 text-gray-400">{item.provider || "—"}</td>
+                                                <td className="py-3 text-right text-gray-300">{formatTokens(item.totalInputTokens)}</td>
+                                                <td className="py-3 text-right text-gray-300">{formatTokens(item.totalOutputTokens)}</td>
+                                                <td className="py-3 text-right font-semibold text-white">{formatTokens(item.totalTokens)}</td>
+                                                <td className="py-3 text-right text-gray-400">{item.requestCount}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
+
                 </div>
             </main>
         </div>

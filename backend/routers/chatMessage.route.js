@@ -12,6 +12,7 @@ import {
     getChatMessages,
     getChatMessageSources,
     exportChatMessages,
+    getSharedChatMessages,
 } from "../controllers/chatMessage.controller.js";
 
 const chatMessageRouter = Router();
@@ -21,5 +22,8 @@ chatMessageRouter.route("/send").post(verifyStrictJWT, validate(sendMessageSchem
 chatMessageRouter.route("/all/:chatId").get(verifyStrictJWT, validate(chatIdParamSchema), getChatMessages);
 chatMessageRouter.route("/sources/:messageId").get(verifyStrictJWT, validate(messageIdParamSchema), getChatMessageSources);
 chatMessageRouter.route("/export/:chatId").get(verifyStrictJWT, validate(chatIdParamSchema), exportChatMessages);
+
+// Shared Chat Messages Route
+chatMessageRouter.route("/shared/:shareToken/messages").get(getSharedChatMessages);
 
 export default chatMessageRouter;
