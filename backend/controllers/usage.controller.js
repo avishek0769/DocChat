@@ -1,8 +1,7 @@
 import prisma from "../utils/prismaClient.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
-import { ApiError } from "../utils/ApiError.js";
-import { Prisma } from "../generated/prisma/index.js";
+import { validateGroupBy } from "../utils/validationSchemas.js";
 
 const totalTokensUsedInLifetime = asyncHandler(async (req, res) => {
     const usage = await prisma.usageEvents.aggregate({
@@ -19,10 +18,46 @@ const totalTokensUsedInLifetime = asyncHandler(async (req, res) => {
 
 const tokensUsedByGroup = asyncHandler(async (req, res) => {
     const { groupBy } = req.params;
+    const { from, to } = req.query;
+
+    validateGroupBy(groupBy);
+
+    if (from && isNaN(Date.parse(from))) {
+        const err = new Error("Invalid 'from' date");
+        err.status = 400;
+        err.statusCode = 400;
+        throw err;
+    }
+
+    if (to && isNaN(Date.parse(to))) {
+        const err = new Error("Invalid 'to' date");
+        err.status = 400;
+        err.statusCode = 400;
+        throw err;
+    }
+
+    let truncUnit;
+    switch (groupBy) {
+        case "day":
+            truncUnit = "day";
+            break;
+        case "week":
+            truncUnit = "week";
+            break;
+        case "month":
+            truncUnit = "month";
+            break;
+        default: {
+            const err = new Error("Invalid groupBy");
+            err.status = 400;
+            err.statusCode = 400;
+            throw err;
+        }
+    }
 
     const usageByGroup = await prisma.$queryRaw`
         SELECT 
-            DATE_TRUNC(${Prisma.raw(`'${groupBy}'`)}, u."timestamp") AS period,
+            DATE_TRUNC(${truncUnit}, u."timestamp") AS period,
             m."llm_model" AS "model",
             SUM(u."input_tokens") AS "totalInput",
             SUM(u."output_tokens") AS "totalOutput"

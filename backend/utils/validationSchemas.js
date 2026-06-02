@@ -4,6 +4,17 @@ const email = z.string().trim().email("Invalid email address");
 const password = z.string().min(6, "Password must be at least 6 characters");
 const chatId = z.string().uuid("Invalid chat ID");
 const url = z.string().trim().url("Invalid URL");
+export const VALID_GROUP_BY = ["day", "week", "month"];
+
+export function validateGroupBy(value) {
+    if (!VALID_GROUP_BY.includes(value)) {
+        const err = new Error(`Invalid groupBy "${value}". Must be one of: ${VALID_GROUP_BY.join(", ")}`);
+        err.status = 400;
+        err.statusCode = 400;
+        throw err;
+    }
+    return value;
+}
 
 export const sendVerificationCodeSchema = {
     body: z.object({
