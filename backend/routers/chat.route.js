@@ -17,6 +17,9 @@ import {
     listAllPagesIndexed,
     progressStatus,
     recentFailedIngestionRuns,
+    toggleShare,
+    getSharedChatDetails,
+    forkSharedChat,
 } from "../controllers/chat.controller.js";
 
 const chatRouter = Router();
@@ -27,6 +30,12 @@ chatRouter.route("/status/:chatId").get(verifyStrictJWT, validate(chatIdParamSch
 chatRouter.route("/ingestion-runs/failed").get(verifyStrictJWT, recentFailedIngestionRuns);
 chatRouter.route("/list").get(verifyStrictJWT, listAllChats);
 chatRouter.route("/recent").get(verifyStrictJWT, recentChats);
+
+// Shared Chat Routes
+chatRouter.route("/shared/:shareToken").get(getSharedChatDetails);
+chatRouter.route("/shared/:shareToken/fork").post(verifyStrictJWT, forkSharedChat);
+chatRouter.route("/:chatId/share").post(verifyStrictJWT, validate(chatIdParamSchema), toggleShare);
+
 chatRouter.route("/:chatId").get(verifyStrictJWT, validate(chatIdParamSchema), chatDetails);
 chatRouter.route("/pages-indexed/:chatId").get(verifyStrictJWT, validate(chatIdParamSchema), listAllPagesIndexed);
 chatRouter.route("/:chatId").delete(verifyStrictJWT, validate(chatIdParamSchema), deleteChat);

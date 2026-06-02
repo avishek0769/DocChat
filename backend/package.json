@@ -35,5 +35,11 @@
         "treeindex": "^1.0.0",
         "uuid": "^13.0.0",
         "zod": "^4.4.3"
+    },
+    "overrides": {
+        "mem0ai": {
+            "@qdrant/js-client-rest": "$@qdrant/js-client-rest",
+            "pg": "$pg"
+        }
     }
 }
