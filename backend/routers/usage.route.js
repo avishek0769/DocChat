@@ -6,6 +6,7 @@ import {
     tokensUsedByGroup,
     topChatsByTokensUsed,
     totalTokensUsedInLifetime,
+    usageBreakdownByModel,
 } from "../controllers/usage.controller.js";
 
 const usageRouter = Router();
@@ -24,5 +25,6 @@ usageRouter.route("/lifetime-tokens").get(verifyStrictJWT, totalTokensUsedInLife
 usageRouter.route("/group/:groupBy").get(verifyStrictJWT, validateGroupByMiddleware, tokensUsedByGroup);
 usageRouter.route("/tokens/:groupBy").get(verifyStrictJWT, validateGroupByMiddleware, validate(tokensByGroupSchema), tokensUsedByGroup);
 usageRouter.route("/top-chats").get(verifyStrictJWT, topChatsByTokensUsed);
+usageRouter.route("/breakdown").get(verifyStrictJWT, usageBreakdownByModel);
 
 export default usageRouter;

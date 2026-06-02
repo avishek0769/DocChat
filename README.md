@@ -6,6 +6,11 @@ Check out the live website here: [DocChat](https://avishek.short.gy/docchat)
 
 ---
 
+> ### 🌟 Support the Project
+> If **DocChat** makes your life easier, please consider giving this repository a star.
+
+---
+
 ## Overview
 
 This project implements a Retrieval-Augmented Generation (RAG) system designed for documentation. It allows users to convert any documentation website into an interactive chat interface powered by large language models.
