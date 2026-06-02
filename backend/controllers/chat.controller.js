@@ -3,6 +3,7 @@ import asyncHandler from "../utils/asyncHandler.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
 import { scrapeWebpage } from "../utils/ragUtilities.js";
+import { cleanupQdrantCollections } from "../utils/qdrantCleanup.js";
 import { Queue } from "bullmq";
 import redis from "../utils/redis.js";
 import crypto from "crypto";
@@ -236,6 +237,34 @@ const recentFailedIngestionRuns = asyncHandler(async (req, res) => {
     });
 
     res.status(200).json(new ApiResponse(200, { runs }, "Failed ingestion runs fetched successfully"));
+});
+
+const qdrantCleanup = asyncHandler(async (req, res) => {
+    const isAdmin =
+        process.env.ADMIN_USERNAME &&
+        req.user?.username &&
+        req.user.username === process.env.ADMIN_USERNAME;
+
+    if (!isAdmin) {
+        throw new ApiError(403, "Admin privileges required to run Qdrant cleanup.");
+    }
+
+    const { force, minAgeDays } = req.query;
+    const forceExecution = Boolean(force);
+    const cleanupResult = await cleanupQdrantCollections({
+        force: forceExecution,
+        minAgeDays: Number.isFinite(Number(minAgeDays)) ? Number(minAgeDays) : undefined,
+    });
+
+    res.status(200).json(
+        new ApiResponse(
+            200,
+            cleanupResult,
+            forceExecution
+                ? "Qdrant cleanup completed successfully"
+                : "Qdrant cleanup dry-run completed successfully",
+        ),
+    );
 });
 
 const listAllChats = asyncHandler(async (req, res) => {
@@ -552,6 +581,7 @@ export {
     createChat,
     progressStatus,
     recentFailedIngestionRuns,
+    qdrantCleanup,
     listAllChats,
     chatDetails,
     cancelProcessing,
