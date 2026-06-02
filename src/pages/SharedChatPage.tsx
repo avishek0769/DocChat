@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sidebar } from "../components/Sidebar";
 
 export interface Source {
     id: string;
@@ -24,7 +23,6 @@ export interface Message {
 }
 
 import {
-    Send,
     FileText,
     ChevronLeft,
     ChevronRight,
@@ -39,9 +37,6 @@ import {
     X,
     Loader2,
     Database,
-    Download,
-    Link as LinkIcon,
-    Share2,
 } from "lucide-react";
 import clsx from "clsx";
 import hljs from "highlight.js";
@@ -49,15 +44,12 @@ import "highlight.js/styles/atom-one-dark.css";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
-    getApiKeys,
-    getChatDetails,
-    getChatMessages,
+    getSharedChatDetails,
+    getSharedChatMessages,
+    forkSharedChat,
     getMessageSources,
-    getPagesIndexed,
-    sendMessageStream,
-    exportChatMessages,
-    toggleChatShare,
 } from "../lib/api";
+import { useAuth } from "../context/AuthContext";
 
 type CurrentLink = {
     title: string;
@@ -85,9 +77,10 @@ const toModelDisplayName = (model?: string) => {
     return model;
 };
 
-export const ChatPage = () => {
+export const SharedChatPage = () => {
     const navigate = useNavigate();
-    const { id: chatId = "" } = useParams();
+    const { shareToken = "" } = useParams();
+    const { user } = useAuth();
 
     const [docInfo, setDocInfo] = useState({
         title: "Documentation Chat",
@@ -97,9 +90,6 @@ export const ChatPage = () => {
         lastUpdated: "-",
         status: "ready",
     });
-    const [modelOptions, setModelOptions] = useState<ModelOption[]>([]);
-    const [selectedModel, setSelectedModel] = useState("");
-    const [isPageLoading, setIsPageLoading] = useState(true);
     const [isMessagesLoading, setIsMessagesLoading] = useState(true);
     const [error, setError] = useState("");
 
@@ -114,64 +104,40 @@ export const ChatPage = () => {
     const [rightPanelOpen, setRightPanelOpen] = useState(false);
 
     // Chat state
-    const [input, setInput] = useState("");
     const [messages, setMessages] = useState<Message[]>([]);
-    const [isTyping, setIsTyping] = useState(false);
-    const [isAwaitingFirstChunk, setIsAwaitingFirstChunk] = useState(false);
     const [selectedSources, setSelectedSources] = useState<Source[]>([]);
     const [isSourcesLoading, setIsSourcesLoading] = useState(false);
     const [sourceFetchAttempted, setSourceFetchAttempted] = useState(false);
 
-    const [isExporting, setIsExporting] = useState(false);
     const [isIndexedModalOpen, setIsIndexedModalOpen] = useState(false);
     const [currentLinks, setCurrentLinks] = useState<CurrentLink[]>([]);
     const [indexedPages, setIndexedPages] = useState<IndexedPage[]>([]);
+    const [isForking, setIsForking] = useState(false);
 
-    const [isSharing, setIsSharing] = useState(false);
-    const [shareToken, setShareToken] = useState<string | null>(null);
-    const [shareModalOpen, setShareModalOpen] = useState(false);
-
-    const handleShare = () => {
-        setShareModalOpen(true);
-    };
-
-    const handleToggleShare = async () => {
-        setIsSharing(true);
-        try {
-            const res = await toggleChatShare(chatId);
-            setShareToken(res.shareToken || null);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to toggle share.");
-        } finally {
-            setIsSharing(false);
+    const handleContinueChat = async () => {
+        if (!user) {
+            navigate("/signin", { state: { returnTo: `/shared/${shareToken}` } });
+            return;
         }
-    };
 
-    const [linkCopied, setLinkCopied] = useState(false);
-
-    const handleExport = async () => {
-        if (isExporting) return;
-        setIsExporting(true);
+        setIsForking(true);
         try {
-            await exportChatMessages(chatId);
+            const res = await forkSharedChat(shareToken);
+            navigate(`/chat/${res.chatId}`);
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to export chat.");
-        } finally {
-            setIsExporting(false);
+            setError(err instanceof Error ? err.message : "Failed to continue chat.");
+            setIsForking(false);
         }
     };
 
     const loadChatPage = async () => {
-        if (!chatId) return;
-        setIsPageLoading(true);
+        if (!shareToken) return;
         setIsMessagesLoading(true);
         setError("");
         try {
-            const [chatDetails, indexedPageData, apiKeyData, messageData] = await Promise.all([
-                getChatDetails(chatId),
-                getPagesIndexed(chatId),
-                getApiKeys(),
-                getChatMessages(chatId),
+            const [chatDetails, messageData] = await Promise.all([
+                getSharedChatDetails(shareToken),
+                getSharedChatMessages(shareToken),
             ]);
 
             const chat = chatDetails.chat;
@@ -180,15 +146,10 @@ export const ChatPage = () => {
                 ...prev,
                 title: chat?.name || prev.title,
                 url: primarySource?.documentationUrl || prev.url,
-                pages:
-                    primarySource?._count?.pagesIndexed ||
-                    indexedPageData.pagesIndexed.length ||
-                    prev.pages,
+                pages: primarySource?._count?.pagesIndexed || prev.pages,
                 tokensUsed: chat?.totalUsage?.total || 0,
                 lastUpdated: new Date(chat?.updatedAt || Date.now()).toLocaleString(),
             }));
-
-            setShareToken(chat?.shareToken || null);
 
             setCurrentLinks(
                 (chat?.chatSources || [])
@@ -199,32 +160,7 @@ export const ChatPage = () => {
                     }))
                     .filter((link) => Boolean(link.url)),
             );
-            setIndexedPages(indexedPageData.pagesIndexed || []);
-
-            const defaultOptions: ModelOption[] = [
-                {
-                    provider: "DEFAULT",
-                    model: "default-1",
-                    label: `Default (Fast) - GPT - OSS`,
-                },
-                {
-                    provider: "DEFAULT",
-                    model: "default-2",
-                    label: `Default (Best) - Nemotron 3 Super`,
-                },
-            ];
-
-            const dynamicModels = (apiKeyData.apiKeys || []).flatMap((key) =>
-                (key.models || []).map((model) => ({
-                    provider: key.provider,
-                    model,
-                    label: `${model} (${key.provider})`,
-                })),
-            );
-
-            const options = [...defaultOptions, ...dynamicModels];
-            setModelOptions(options);
-            setSelectedModel((prev) => prev || options[0]?.model || "default-1");
+            setIndexedPages(chat?.chatSources?.[0]?.pages || []);
 
             const messageList = messageData.messages || [];
             const messagePairs: Message[] = [];
@@ -252,29 +188,19 @@ export const ChatPage = () => {
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to load chat data.");
             setIsMessagesLoading(false);
-        } finally {
-            setIsPageLoading(false);
         }
     };
 
     useEffect(() => {
         loadChatPage();
-    }, [chatId]);
+    }, [shareToken]);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
-    const textareaRef = useRef<HTMLTextAreaElement>(null);
-    const pendingChunkRef = useRef("");
-    const chunkRafRef = useRef<number | null>(null);
-    const firstChunkReceivedRef = useRef(false);
 
+    // Scroll to bottom on new message
     useEffect(() => {
-        return () => {
-            if (chunkRafRef.current !== null) {
-                window.cancelAnimationFrame(chunkRafRef.current);
-                chunkRafRef.current = null;
-            }
-        };
-    }, []);
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, [messages]);
 
     const handleViewSources = async (message: Message) => {
         setRightPanelOpen(true);
@@ -316,159 +242,9 @@ export const ChatPage = () => {
         }
     };
 
-    // Auto-resize textarea
-    useEffect(() => {
-        if (textareaRef.current) {
-            textareaRef.current.style.height = "auto";
-            textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
-        }
-    }, [input]);
-
-    // Scroll to bottom on new message
-    useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, [messages, isTyping]);
-
-    const handleSend = async (e?: React.FormEvent) => {
-        e?.preventDefault();
-        if (!input.trim() || isTyping) return;
-
-        const selectedOption = modelOptions.find((opt) => opt.model === selectedModel) ||
-            modelOptions[0] || {
-                provider: "DEFAULT",
-                model: "default-1",
-                label: `Default (Fast) - GPT - OSS`,
-            };
-
-        const newUserMessage: Message = {
-            id: Date.now().toString(),
-            role: "user",
-            content: input.trim(),
-            timestamp: new Date(),
-        };
-
-        setMessages((prev) => [...prev, newUserMessage]);
-        setInput("");
-        setIsTyping(true);
-        setIsAwaitingFirstChunk(true);
-        firstChunkReceivedRef.current = false;
-        pendingChunkRef.current = "";
-        setRightPanelOpen(false); // Close sources initially
-
-        // Reset textarea height
-        if (textareaRef.current) {
-            textareaRef.current.style.height = "auto";
-        }
-
-        const aiId = (Date.now() + 1).toString();
-        setMessages((prev) => [
-            ...prev,
-            {
-                id: aiId,
-                role: "ai",
-                content: "",
-                model: selectedOption.model,
-                sources: [],
-                isStreaming: true,
-                timestamp: new Date(),
-            },
-        ]);
-
-        try {
-            const flushPendingChunks = () => {
-                const buffered = pendingChunkRef.current;
-                if (!buffered) return;
-                pendingChunkRef.current = "";
-                setMessages((prev) =>
-                    prev.map((m) => (m.id === aiId ? { ...m, content: `${m.content}${buffered}` } : m)),
-                );
-            };
-
-            const scheduleChunkFlush = () => {
-                if (chunkRafRef.current !== null) return;
-                chunkRafRef.current = window.requestAnimationFrame(() => {
-                    chunkRafRef.current = null;
-                    flushPendingChunks();
-                    if (pendingChunkRef.current) {
-                        scheduleChunkFlush();
-                    }
-                });
-            };
-
-            await sendMessageStream({
-                userPrompt: newUserMessage.content,
-                model: selectedOption.model,
-                provider: selectedOption.provider,
-                chatId,
-                onChunk: (chunk) => {
-                    if (!firstChunkReceivedRef.current) {
-                        firstChunkReceivedRef.current = true;
-                        setIsAwaitingFirstChunk(false);
-                    }
-
-                    pendingChunkRef.current += chunk;
-                    scheduleChunkFlush();
-                },
-            });
-
-            if (chunkRafRef.current !== null) {
-                window.cancelAnimationFrame(chunkRafRef.current);
-                chunkRafRef.current = null;
-            }
-            flushPendingChunks();
-
-            setIsAwaitingFirstChunk(false);
-
-            setMessages((prev) => prev.map((m) => (m.id === aiId ? { ...m, isStreaming: false } : m)));
-
-            const latestMessages = await getChatMessages(chatId);
-            const latestAi = (latestMessages.messages || []).at(-1);
-            if (latestAi) {
-                setMessages((prev) =>
-                    prev.map((m) =>
-                        m.id === aiId
-                            ? {
-                                  ...m,
-                                  messageId: latestAi.id,
-                                  // Keep the exact model selected in UI for message badge text.
-                                  model: selectedOption.label,
-                                  sources: [],
-                                  sourcesLoaded: false,
-                              }
-                            : m,
-                    ),
-                );
-            }
-        } catch (err) {
-            if (chunkRafRef.current !== null) {
-                window.cancelAnimationFrame(chunkRafRef.current);
-                chunkRafRef.current = null;
-            }
-            pendingChunkRef.current = "";
-            setIsAwaitingFirstChunk(false);
-            setError(err instanceof Error ? err.message : "Failed to send message.");
-            setMessages((prev) => prev.filter((m) => m.id !== aiId));
-        } finally {
-            setIsTyping(false);
-        }
-    };
-
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-        if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            handleSend();
-        }
-    };
-
     return (
         <div className="h-screen bg-[#0b0b0f] text-gray-50 flex overflow-hidden font-sans selection:bg-accent-purple/30">
-            {/* App Navigation Sidebar */}
-            <div className="hidden lg:block z-50">
-                <Sidebar isCollapsed={true} />
-            </div>
-
             <main className="flex-1 flex w-full relative h-full">
-                {/* 1. Left Panel (Docs) */}
                 <AnimatePresence initial={false}>
                     {leftPanelOpen && (
                         <motion.div
@@ -484,7 +260,6 @@ export const ChatPage = () => {
                                     </h3>
                                 </div>
 
-                                {/* Stats Cards */}
                                 <div className="grid grid-cols-2 gap-2">
                                     <div className="bg-white/5 border border-white/10 rounded-lg p-3">
                                         <div className="text-sm text-gray-500 mb-1 flex items-center gap-1">
@@ -523,7 +298,6 @@ export const ChatPage = () => {
                                 </button>
                             </div>
 
-                            {/* Scraped Pages List */}
                             <div className="flex-1 overflow-y-auto p-4 w-70">
                                 <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">
                                     Current Links
@@ -561,7 +335,6 @@ export const ChatPage = () => {
                     )}
                 </AnimatePresence>
 
-                {/* Left Toggle Button */}
                 <button
                     onClick={() => setLeftPanelOpen(!leftPanelOpen)}
                     className="absolute -left-px top-1/2 -translate-y-1/2 z-30 w-5 h-12 bg-[#1a1a24] border border-white/10 rounded-r-lg flex items-center justify-center hover:bg-[#252535] transition-colors shadow-lg"
@@ -574,58 +347,30 @@ export const ChatPage = () => {
                     )}
                 </button>
 
-                {/* 2. Main Chat Area */}
                 <div className="flex-1 flex flex-col relative h-full bg-[#0b0b0f]">
-                    {/* Header */}
                     <header className="h-16 flex items-center justify-between px-6 border-b border-white/5 shrink-0 bg-[#0b0b0f]/90 backdrop-blur-sm z-10 sticky top-0">
                         <div className="flex items-center gap-3">
                             <button
-                                onClick={() => navigate("/dashboard")}
-                                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/5 transition-colors text-gray-400 hover:text-white lg:hidden"
+                                onClick={() => navigate("/")}
+                                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/5 transition-colors text-gray-400 hover:text-white"
                             >
                                 <ArrowLeft className="w-4 h-4" />
                             </button>
                             <div>
                                 <h1 className="text-lg font-semibold text-white flex items-center gap-2">
                                     {docInfo.title}
+                                    <span className="text-xs px-2 py-1 rounded bg-accent-blue/10 text-accent-blue border border-accent-blue/20">Shared</span>
                                 </h1>
                             </div>
                         </div>
                         <div className="flex items-center gap-3">
-                            <div className="hidden sm:flex items-center mr-2">
-                                <div className="relative inline-flex items-center gap-2 rounded-xl border border-white/15 bg-linear-to-r from-white/5 to-white/2 px-2.5 py-1.5 shadow-inner shadow-black/30">
-                                    <span className="text-[11px] tracking-wide uppercase text-gray-500 font-semibold">
-                                        Model
-                                    </span>
-                                    <select
-                                        value={selectedModel}
-                                        onChange={(e) => setSelectedModel(e.target.value)}
-                                        className="appearance-none bg-[#12121a] border border-white/10 rounded-lg pl-2.5 pr-7 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-accent-blue/60 focus:ring-2 focus:ring-accent-blue/25 transition-all"
-                                    >
-                                        {modelOptions.map((m) => (
-                                            <option key={`${m.provider}-${m.model}`} value={m.model}>
-                                                {m.label}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <ChevronRight className="w-3.5 h-3.5 text-gray-500 absolute right-3 pointer-events-none rotate-90" />
-                                </div>
-                            </div>
                             <button
-                                onClick={handleExport}
-                                disabled={isExporting}
-                                className="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border border-white/10 bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 flex items-center gap-2 disabled:opacity-50"
+                                onClick={handleContinueChat}
+                                disabled={isForking}
+                                className="px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors bg-accent-blue text-white hover:bg-blue-600 flex items-center gap-2 disabled:opacity-50"
                             >
-                                <Download className="w-4 h-4" />
-                                <span className="hidden sm:inline">{isExporting ? "Exporting..." : "Export"}</span>
-                            </button>
-                            <button
-                                onClick={handleShare}
-                                disabled={isSharing}
-                                className="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border border-white/10 bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 flex items-center gap-2 disabled:opacity-50"
-                            >
-                                <Share2 className="w-4 h-4" />
-                                <span className="hidden sm:inline">{isSharing ? "Sharing..." : "Share"}</span>
+                                <Bot className="w-4 h-4" />
+                                <span className="hidden sm:inline">{isForking ? "Continuing..." : "Continue this chat"}</span>
                             </button>
                             <button
                                 onClick={() => setRightPanelOpen(!rightPanelOpen)}
@@ -648,13 +393,6 @@ export const ChatPage = () => {
                         </div>
                     )}
 
-                    {isPageLoading && (
-                        <div className="mx-4 mt-3 p-3 rounded-lg bg-white/5 border border-white/10 text-gray-300 text-sm">
-                            Loading chat data...
-                        </div>
-                    )}
-
-                    {/* Chat Messages */}
                     <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8 custom-scrollbar scroll-smooth">
                         <div className="max-w-3xl mx-auto space-y-8 pb-10">
                             {isMessagesLoading ? (
@@ -669,29 +407,8 @@ export const ChatPage = () => {
                                     </div>
                                     <div className="space-y-2">
                                         <h2 className="text-2xl font-bold bg-linear-to-r from-white to-gray-400 bg-clip-text text-transparent">
-                                            How can I help you?
+                                            No messages in this chat.
                                         </h2>
-                                        <p className="text-gray-400 text-sm max-w-md mx-auto leading-relaxed">
-                                            Ask me anything about the {docInfo.title}. I can provide code
-                                            examples, explain concepts, and point you to the right pages.
-                                        </p>
-                                    </div>
-                                    <div className="flex flex-wrap items-center justify-center gap-2 pt-4">
-                                        {[
-                                            "How does state work?",
-                                            "Give me a code example",
-                                            "How to handle errors?",
-                                        ].map((suggestion) => (
-                                            <button
-                                                key={suggestion}
-                                                onClick={() => {
-                                                    setInput(suggestion);
-                                                }}
-                                                className="px-4 py-2 rounded-full border border-white/10 bg-white/5 text-sm text-gray-300 hover:bg-white/10 hover:border-white/20 transition-all font-medium"
-                                            >
-                                                {suggestion}
-                                            </button>
-                                        ))}
                                     </div>
                                 </div>
                             ) : (
@@ -703,63 +420,11 @@ export const ChatPage = () => {
                                     />
                                 ))
                             )}
-
-                            {isTyping && isAwaitingFirstChunk && (
-                                <div className="flex gap-4">
-                                    <div className="w-8 h-8 rounded-lg bg-linear-to-br from-accent-blue to-accent-purple flex items-center justify-center shrink-0 shadow-lg shadow-accent-blue/20">
-                                        <Bot className="w-5 h-5 text-white" />
-                                    </div>
-                                    <div className="flex gap-1 py-3 px-4 bg-white/5 border border-white/10 rounded-2xl rounded-tl-sm w-16 items-center justify-center">
-                                        <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-                                        <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-                                        <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"></span>
-                                    </div>
-                                </div>
-                            )}
                             <div ref={messagesEndRef} />
-                        </div>
-                    </div>
-
-                    {/* Input Area */}
-                    <div className="p-4 sm:p-6 bg-linear-to-t from-[#0b0b0f] via-[#0b0b0f]/95 to-transparent shrink-0">
-                        <div className="max-w-3xl mx-auto relative">
-                            <form
-                                onSubmit={handleSend}
-                                className="relative bg-[#1a1a24] border border-white/10 rounded-2xl shadow-2xl overflow-hidden focus-within:border-accent-blue/50 focus-within:ring-1 focus-within:ring-accent-blue/50 transition-all"
-                            >
-                                <textarea
-                                    ref={textareaRef}
-                                    value={input}
-                                    onChange={(e) => setInput(e.target.value)}
-                                    onKeyDown={handleKeyDown}
-                                    placeholder="Ask something about the docs..."
-                                    className="w-full bg-transparent px-5 py-4 pr-14 text-sm text-white placeholder-gray-500 focus:outline-none resize-none custom-scrollbar"
-                                    rows={1}
-                                    style={{
-                                        minHeight: "56px",
-                                        maxHeight: "200px",
-                                    }}
-                                />
-                                <div className="absolute right-3 bottom-3 flex items-center gap-2">
-                                    <button
-                                        type="submit"
-                                        disabled={!input.trim() || isTyping}
-                                        className="w-8 h-8 rounded-xl bg-accent-blue text-white flex items-center justify-center hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-accent-blue/20"
-                                    >
-                                        <Send className="w-4 h-4 ml-px" />
-                                    </button>
-                                </div>
-                            </form>
-                            <div className="text-center mt-3">
-                                <span className="text-sm text-gray-500 font-medium tracking-wide">
-                                    DocChat AI can make mistakes. Verify important information.
-                                </span>
-                            </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Right Toggle Button */}
                 <button
                     onClick={() => setRightPanelOpen(!rightPanelOpen)}
                     className="absolute -right-px top-1/2 -translate-y-1/2 z-30 w-5 h-12 bg-[#1a1a24] border border-white/10 rounded-l-lg items-center justify-center hover:bg-[#252535] transition-colors shadow-lg hidden sm:flex"
@@ -772,90 +437,6 @@ export const ChatPage = () => {
                     )}
                 </button>
 
-                {/* Share Modal */}
-                <AnimatePresence>
-                    {shareModalOpen && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                            <motion.div
-                                initial={{ opacity: 0, scale: 0.95 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                exit={{ opacity: 0, scale: 0.95 }}
-                                className="bg-[#1a1a24] border border-white/10 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl"
-                            >
-                                <div className="p-6">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                                            <Share2 className="w-5 h-5 text-accent-blue" />
-                                            Share Chat
-                                        </h3>
-                                        <button
-                                            onClick={() => setShareModalOpen(false)}
-                                            className="text-gray-400 hover:text-white transition-colors"
-                                        >
-                                            <X className="w-5 h-5" />
-                                        </button>
-                                    </div>
-                                    <div className="space-y-4">
-                                        {shareToken ? (
-                                            <>
-                                                <p className="text-sm text-gray-400">
-                                                    Anyone with this link can view the chat history. They can also continue the chat by creating their own copy.
-                                                </p>
-                                                <div className="flex gap-2 items-center">
-                                                    <input
-                                                        type="text"
-                                                        readOnly
-                                                        value={`${window.location.origin}/shared/${shareToken}`}
-                                                        className="w-full bg-[#0b0b0f] border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-200 font-mono focus:outline-none"
-                                                    />
-                                                    <button
-                                                        onClick={() => {
-                                                            navigator.clipboard.writeText(`${window.location.origin}/shared/${shareToken}`);
-                                                            setLinkCopied(true);
-                                                            setTimeout(() => setLinkCopied(false), 2000);
-                                                        }}
-                                                        className="p-2 rounded-lg bg-accent-blue/10 text-accent-blue hover:bg-accent-blue/20 transition-colors flex items-center gap-1"
-                                                    >
-                                                        {linkCopied ? (
-                                                            <>
-                                                                <Check className="w-4 h-4 text-green-400" />
-                                                                <span className="text-sm font-medium text-green-400">Copied</span>
-                                                            </>
-                                                        ) : (
-                                                            <Copy className="w-4 h-4" />
-                                                        )}
-                                                    </button>
-                                                </div>
-                                                <button
-                                                    onClick={handleToggleShare}
-                                                    disabled={isSharing}
-                                                    className="w-full py-2.5 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors text-sm font-medium disabled:opacity-50"
-                                                >
-                                                    {isSharing ? "Revoking..." : "Revoke Link"}
-                                                </button>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <p className="text-sm text-gray-400">
-                                                    Generate a link to share this conversation with others.
-                                                </p>
-                                                <button
-                                                    onClick={handleToggleShare}
-                                                    disabled={isSharing}
-                                                    className="w-full py-2.5 rounded-lg bg-accent-blue text-white hover:bg-blue-600 transition-colors text-sm font-medium disabled:opacity-50"
-                                                >
-                                                    {isSharing ? "Creating..." : "Create Share Link"}
-                                                </button>
-                                            </>
-                                        )}
-                                    </div>
-                                </div>
-                            </motion.div>
-                        </div>
-                    )}
-                </AnimatePresence>
-
-                {/* 3. Right Panel (Sources) */}
                 <AnimatePresence initial={false}>
                     {rightPanelOpen && (
                         <motion.div
@@ -867,7 +448,7 @@ export const ChatPage = () => {
                             <div className="p-4 border-b border-white/5 w-[320px] flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                     <Search className="w-4 h-4 text-accent-blue" />
-                                    <h2 className="font-semibold text-gray-200">Sources Retreived</h2>
+                                    <h2 className="font-semibold text-gray-200">Sources Retrieved</h2>
                                 </div>
                                 <span className="text-sm font-mono text-gray-500 bg-white/5 px-2 py-0.5 rounded-full">
                                     {selectedSources.length} found
@@ -884,7 +465,7 @@ export const ChatPage = () => {
                                     <div className="text-center text-gray-500 text-sm py-10">
                                         {sourceFetchAttempted
                                             ? "No source found for this message."
-                                            : "No sources fetched yet. Ask a question to see references."}
+                                            : "No sources fetched yet. Select a message to see references."}
                                     </div>
                                 ) : (
                                     selectedSources.map((source, idx) => (
@@ -908,13 +489,7 @@ export const ChatPage = () => {
                                                                 rel="noreferrer"
                                                                 className="text-sm text-gray-500 hover:text-accent-blue truncate block"
                                                             >
-                                                                {(() => {
-                                                                    try {
-                                                                        return new URL(source.url).pathname;
-                                                                    } catch {
-                                                                        return source.url;
-                                                                    }
-                                                                })()}
+                                                                {source.url}
                                                             </a>
                                                         ) : (
                                                             <span className="text-sm text-gray-500 truncate block">
@@ -923,43 +498,10 @@ export const ChatPage = () => {
                                                         )}
                                                     </div>
                                                 </div>
-                                                <div className="text-sm font-mono text-green-400/80 bg-green-500/10 px-1.5 py-0.5 rounded shrink-0">
-                                                    {source.relevance ?? "--"}%
-                                                </div>
                                             </div>
                                             <div className="p-3 text-sm text-gray-400 leading-relaxed max-h-40 overflow-y-auto custom-scrollbar relative">
-                                                <div className="absolute top-0 left-0 w-1 h-full bg-accent-blue/30 rounded-full"></div>
                                                 <div className="pl-3 relative z-10">
-                                                    {source.snippet
-                                                        .split("\n")
-                                                        .map((line: string, i: number) => (
-                                                            <p
-                                                                key={i}
-                                                                className={clsx(
-                                                                    line.startsWith("```")
-                                                                        ? "font-mono text-sm text-gray-300 my-1 bg-white/5 p-1 rounded"
-                                                                        : "",
-                                                                )}
-                                                            >
-                                                                {line}
-                                                            </p>
-                                                        ))}
-                                                    {source.url ? (
-                                                        <a
-                                                            href={source.url}
-                                                            target="_blank"
-                                                            rel="noreferrer"
-                                                            className="flex items-center gap-1.5 mt-3 text-accent-blue hover:underline font-mono text-sm opacity-80 decoration-accent-blue/50"
-                                                        >
-                                                            <LinkIcon className="w-3.5 h-3.5" />
-                                                            {source.url}
-                                                        </a>
-                                                    ) : (
-                                                        <span className="flex items-center gap-1.5 mt-3 text-gray-500 font-mono text-sm">
-                                                            <LinkIcon className="w-3.5 h-3.5" />
-                                                            No source URL for this chunk
-                                                        </span>
-                                                    )}
+                                                    <p>{source.snippet}</p>
                                                 </div>
                                             </div>
                                         </div>
@@ -971,7 +513,6 @@ export const ChatPage = () => {
                 </AnimatePresence>
             </main>
 
-            {/* Indexed Modal */}
             <AnimatePresence>
                 {isIndexedModalOpen && (
                     <div className="fixed inset-0 z-100 flex items-center justify-center p-4">

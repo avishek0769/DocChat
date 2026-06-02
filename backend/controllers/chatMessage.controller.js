@@ -381,4 +381,31 @@ const getChatMessageSources = asyncHandler(async (req, res) => {
         .json(new ApiResponse(200, { messageSources }, "Chat message sources retrieved successfully."));
 });
 
-export { sendMessage, getAvailableModels, getChatMessages, getChatMessageSources, exportChatMessages };
+const getSharedChatMessages = asyncHandler(async (req, res) => {
+    const { shareToken } = req.params;
+
+    const chat = await prisma.chat.findUnique({
+        where: { shareToken },
+    });
+
+    if (!chat) {
+        throw new ApiError(404, "Shared chat not found");
+    }
+
+    const messages = await prisma.chatMessage.findMany({
+        where: { chatId: chat.id },
+        orderBy: { createdAt: "asc" },
+    });
+
+    if (!messages.length) {
+        return res
+            .status(200)
+            .json(new ApiResponse(200, { messages: [] }, "No messages found for this chat."));
+    }
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, { messages: messages }, "Chat messages retrieved successfully."));
+});
+
+export { sendMessage, getAvailableModels, getChatMessages, getChatMessageSources, exportChatMessages, getSharedChatMessages };
