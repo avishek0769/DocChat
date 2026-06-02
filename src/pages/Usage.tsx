@@ -13,6 +13,7 @@ import {
 import type { TooltipItem } from "chart.js";
 import { Bar } from "react-chartjs-2";
 import { getApiKeyCount, getLifetimeTokens, getTopChatsByUsage, getTokensByGroup } from "../lib/api";
+import { formatTokens } from "../lib/format";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
@@ -40,12 +41,6 @@ const modelDisplayName = (model: string) => {
     if (model === "default-1") return "GPT - OSS";
     if (model === "default-2") return "Nemotron 3 Super";
     return model;
-};
-
-const formatTokens = (tokens: number) => {
-    if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(1)}M`;
-    if (tokens >= 1000) return `${(tokens / 1000).toFixed(1)}k`;
-    return `${tokens}`;
 };
 
 const getPlaceholderUsagePoints = (timeframe: Timeframe): UsagePoint[] => {
@@ -260,9 +255,7 @@ export const Usage = () => {
                         },
                         callback: function (value: string | number) {
                             const num = Number(value);
-                            if (num >= 1000000) return num / 1000000 + "M";
-                            if (num >= 1000) return num / 1000 + "k";
-                            return num;
+                            return formatTokens(num);
                         },
                         maxTicksLimit: 6,
                     },
@@ -393,7 +386,7 @@ export const Usage = () => {
                                                 {chat.name}
                                             </span>
                                             <span className="text-gray-300 font-mono font-medium shrink-0">
-                                                {(chat.tokens / 1000).toFixed(0)}k
+                                                {formatTokens(chat.tokens)}
                                             </span>
                                         </div>
                                         <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden border border-white/5">
