@@ -43,6 +43,7 @@ model Chat {
     status         ChatStatus    @default(QUEUED)
     createdAt      DateTime      @default(now()) @map("created_at")
     collectionName String?       @map("collection_name")
+    shareToken     String?       @unique @map("share_token")
     createdBy      User          @relation(fields: [userId], references: [id])
     chatSources    ChatSource[]  @relation("ChatToChatSource")
     messages       ChatMessage[]

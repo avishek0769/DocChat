@@ -7,6 +7,7 @@ import SignIn from "./pages/SignIn";
 import SignUp from "./pages/SignUp";
 import Profile from "./pages/Profile";
 import { ChatPage } from "./pages/ChatPage";
+import { SharedChatPage } from "./pages/SharedChatPage";
 import { Usage } from "./pages/Usage";
 import { ProtectedRoute, PublicOnlyRoute } from "./components/ProtectedRoute";
 
@@ -14,7 +15,14 @@ function App() {
     return (
         <BrowserRouter>
             <Routes>
-                <Route path="/" element={<LandingPage />} />
+                <Route
+                    path="/"
+                    element={
+                        <PublicOnlyRoute>
+                            <LandingPage />
+                        </PublicOnlyRoute>
+                    }
+                />
                 <Route
                     path="/dashboard"
                     element={
@@ -38,6 +46,10 @@ function App() {
                             <ChatPage />
                         </ProtectedRoute>
                     }
+                />
+                <Route
+                    path="/shared/:shareToken"
+                    element={<SharedChatPage />}
                 />
                 <Route
                     path="/usage"
