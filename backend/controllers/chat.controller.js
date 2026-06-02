@@ -5,6 +5,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { scrapeWebpage } from "../utils/ragUtilities.js";
 import { Queue } from "bullmq";
 import redis from "../utils/redis.js";
+import crypto from "crypto";
 
 const chatCreationQueue = new Queue("chatCreation");
 
@@ -373,6 +374,117 @@ const deleteChat = asyncHandler(async (req, res) => {
     res.status(200).json(new ApiResponse(200, null, "Chat deleted successfully"));
 });
 
+const toggleShare = asyncHandler(async (req, res) => {
+    const { chatId } = req.params;
+
+    const chat = await prisma.chat.findUnique({
+        where: { id: chatId },
+    });
+
+    if (!chat || chat.userId !== req.user.id) {
+        throw new ApiError(404, "Chat not found");
+    }
+
+    if (chat.shareToken) {
+        // Revoke share
+        const updatedChat = await prisma.chat.update({
+            where: { id: chatId },
+            data: { shareToken: null },
+        });
+        res.status(200).json(new ApiResponse(200, updatedChat, "Chat share revoked successfully"));
+    } else {
+        // Generate share token
+        const shareToken = crypto.randomUUID();
+        const updatedChat = await prisma.chat.update({
+            where: { id: chatId },
+            data: { shareToken },
+        });
+        res.status(200).json(new ApiResponse(200, updatedChat, "Chat shared successfully"));
+    }
+});
+
+const getSharedChatDetails = asyncHandler(async (req, res) => {
+    const { shareToken } = req.params;
+
+    const chat = await prisma.chat.findUnique({
+        where: { shareToken },
+        include: {
+            chatSources: {
+                include: {
+                    _count: { select: { pagesIndexed: true } },
+                    pagesIndexed: true,
+                },
+            },
+        },
+    });
+
+    if (!chat) {
+        throw new ApiError(404, "Shared chat not found or link has expired");
+    }
+
+    res.status(200).json(new ApiResponse(200, { chat }, "Shared chat details fetched successfully"));
+});
+
+const forkSharedChat = asyncHandler(async (req, res) => {
+    const { shareToken } = req.params;
+
+    const originalChat = await prisma.chat.findUnique({
+        where: { shareToken },
+        include: {
+            chatSources: true,
+            messages: {
+                include: {
+                    sourceChunks: true,
+                }
+            }
+        },
+    });
+
+    if (!originalChat) {
+        throw new ApiError(404, "Shared chat not found or link has expired");
+    }
+
+    // Create a new chat for the current user
+    const newChat = await prisma.chat.create({
+        data: {
+            name: `${originalChat.name} (Fork)`,
+            collectionName: originalChat.collectionName,
+            status: "READY",
+            userId: req.user.id,
+            chatSources: {
+                connect: originalChat.chatSources.map(source => ({ id: source.id }))
+            }
+        }
+    });
+
+    // Copy messages so the new user has the history
+    for (const msg of originalChat.messages) {
+        const newMessage = await prisma.chatMessage.create({
+            data: {
+                chatId: newChat.id,
+                userPrompt: msg.userPrompt,
+                llmResponse: msg.llmResponse,
+                llmModel: msg.llmModel,
+                createdAt: msg.createdAt,
+            }
+        });
+
+        if (msg.sourceChunks && msg.sourceChunks.length > 0) {
+            await prisma.chatMessageSource.createMany({
+                data: msg.sourceChunks.map((chunk) => ({
+                    chunkText: chunk.chunkText,
+                    heading: chunk.heading,
+                    pageUrl: chunk.pageUrl,
+                    score: chunk.score,
+                    chatMessageId: newMessage.id,
+                }))
+            });
+        }
+    }
+
+    res.status(200).json(new ApiResponse(200, { chatId: newChat.id }, "Chat successfully forked to your account"));
+});
+
 export {
     expectation,
     createChat,
@@ -383,4 +495,7 @@ export {
     deleteChat,
     listAllPagesIndexed,
     recentChats,
+    toggleShare,
+    getSharedChatDetails,
+    forkSharedChat,
 };
