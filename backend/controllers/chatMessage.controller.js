@@ -7,6 +7,7 @@ import OpenAI from "openai";
 import { qdrant, treeindex } from "../utils/ragClients.js";
 import { decryptApiKey } from "../utils/decrypt.js";
 import { generateVectorEmbeddings } from "../utils/ragUtilities.js";
+import { buildMessagesForLLM } from "../utils/contextBuilder.js";
 import { MemoryClient } from "mem0ai";
 
 const memory = MEM0_ENABLED ? new MemoryClient({ apiKey: process.env.MEM0_API_KEY }) : null;
@@ -131,7 +132,6 @@ if (chat.status === "FAILED") {
         relevantNodes = treeindex.findNodes(relevantNodeIds);
     }
 
-    // Dynamic System Instructions
     let systemInstructions = "You are a helpful assistant for answering questions. \n";
     if (relevantSources.points?.length || relevantNodes.length) {
         systemInstructions +=
@@ -140,64 +140,33 @@ if (chat.status === "FAILED") {
         systemInstructions += "Answer the user's greeting or general question directly.";
     }
 
-    // Source Data (if any)
-    let sourceContext = "\n--- DOCUMENTATION SOURCES ---\n";
-    if (relevantSources.points?.length) {
-        relevantSources.points.forEach((point, index) => {
-            sourceContext += `Source ${index + 1}:\n${point.payload.body}\n`;
-        });
-    }
-    else if (relevantNodes.length) {
-        relevantNodes.forEach(({ data }, index) => {
-            sourceContext += `Source ${index + 1}:\n${data}\n`;
-        });
-    }
-
-    // Long-term Memory (Mem0)
-    let memoryContext = "";
+    let memories = [];
     if (MEM0_ENABLED && memory) {
         try {
-            const memoryFetched = await memory.search(userPrompt, {
+            memories = await memory.search(userPrompt, {
                 user_id: req.user.id,
                 limit: 5,
-            });
-            if (memoryFetched && memoryFetched.length) {
-                memoryContext = "\n--- RELEVANT PAST USER FACTS ---\n";
-                memoryFetched.forEach((item) => {
-                    memoryContext += `- ${item.memory}\n`;
-                });
-            }
+            }) || [];
         } catch (error) {
             console.error("Mem0 search error (non-fatal):", error.message);
         }
     }
 
-    // Messages Array for the LLM
-    const messagesForLLM = [
-        {
-            role: "system",
-            content: `${systemInstructions}\n${sourceContext}\n${memoryContext}`,
-        },
-    ];
-
-    // Past messages in the chat to maintain context
     const messages = await prisma.chatMessage.findMany({
         where: { chatId },
-        take: -10,
+        take: -40,
         orderBy: { createdAt: "asc" },
     });
-    messages.forEach((msg) => {
-        if (msg.userPrompt) messagesForLLM.push({ role: "user", content: msg.userPrompt });
-        if (msg.llmResponse) {
-            messagesForLLM.push({
-                role: "assistant",
-                content: msg.llmResponse,
-            });
-        }
-    });
-    messagesForLLM.push({ role: "user", content: userPrompt });
 
-    // Stream response from the LLM
+    const messagesForLLM = buildMessagesForLLM({
+        systemInstructions,
+        relevantSources: relevantSources.points || [],
+        relevantNodes,
+        memories,
+        history: messages,
+        userPrompt,
+    });
+
     const stream = await openai.chat.completions.create({
         model: modelId,
         messages: messagesForLLM,
