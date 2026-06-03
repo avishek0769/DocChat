@@ -14,7 +14,7 @@ const memory = new MemoryClient({ apiKey: process.env.MEM0_API_KEY });
 const getAvailableModels = asyncHandler(async (req, res) => {
     const apikeys = await prisma.apiKey.findMany({
         where: { userId: req.user.id },
-        orderBy:{createdAt:"asc"}
+        orderBy: { createdAt: "asc" }
     });
     if (!apikeys.length) {
         return res
@@ -45,25 +45,25 @@ const sendMessage = asyncHandler(async (req, res) => {
     const chat = await prisma.chat.findUnique({
         where: { id: chatId },
         include: { chatSources: true },
-        orderBy:{createdAt:"asc"}
+        orderBy: { createdAt: "asc" }
     });
     if (!chat) {
         throw new ApiError(404, "Chat not found.");
     }
 
     if (chat.status === "QUEUED" || chat.status === "PROCESSING") {
-  throw new ApiError(
-    409,
-    "Chat is still indexing your docs — please try again in a moment."
-  );
-}
+        throw new ApiError(
+            409,
+            "Chat is still indexing your docs — please try again in a moment."
+        );
+    }
 
-if (chat.status === "FAILED") {
-  throw new ApiError(
-    409,
-    "Chat ingestion failed. Please re-ingest the documentation or check the docs URL and try again."
-  );
-}
+    if (chat.status === "FAILED") {
+        throw new ApiError(
+            409,
+            "Chat ingestion failed. Please re-ingest the documentation or check the docs URL and try again."
+        );
+    }
     let openai;
     let modelId = model;
     let apiKeyId = null;
@@ -85,7 +85,7 @@ if (chat.status === "FAILED") {
             },
             orderBy: { createdAt: "asc" },
         });
-        
+
 
         if (!apiKey) {
             throw new ApiError(400, "Invalid API key ID.");
@@ -123,7 +123,7 @@ if (chat.status === "FAILED") {
         treeindex.loadTree(docTree.treeData);
 
         const relevantNodeIds = await treeindex.retrieveRelevantNodes(userPrompt);
-        if(relevantNodeIds.length == 0) {
+        if (relevantNodeIds.length == 0) {
             res.write("No relevant sources found, for this query");
             res.end();
             return;
@@ -298,7 +298,7 @@ const exportChatMessages = asyncHandler(async (req, res) => {
         orderBy: { createdAt: "asc" },
     });
 
-    if (!chat || chat.userId !== req.user.id) {
+    if (!chat) {
         throw new ApiError(404, "Chat not found.");
     }
 
@@ -364,7 +364,7 @@ const getChatMessages = asyncHandler(async (req, res) => {
         orderBy: { createdAt: "asc" },
     });
 
-    if (!chat || chat.userId !== req.user.id) {
+    if (!chat) {
         throw new ApiError(404, "Chat not found.");
     }
 

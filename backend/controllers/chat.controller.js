@@ -188,7 +188,7 @@ const progressStatus = asyncHandler(async (req, res) => {
             errorMessage: true,
         },
     });
-    
+
     const redisData = await redis.get(chat.id.toString());
     const progress = redisData ? JSON.parse(redisData) : { status: "QUEUED", progress: 0 };
 
@@ -214,11 +214,11 @@ const recentFailedIngestionRuns = asyncHandler(async (req, res) => {
         where: allowAll
             ? { status: "FAILED" }
             : {
-                  status: "FAILED",
-                  chat: {
-                      userId: req.user.id,
-                  },
-              },
+                status: "FAILED",
+                chat: {
+                    userId: req.user.id,
+                },
+            },
         orderBy: { startedAt: "desc" },
         take: limit,
         select: {
@@ -443,7 +443,7 @@ const toggleShare = asyncHandler(async (req, res) => {
         where: { id: chatId },
     });
 
-    if (!chat || chat.userId !== req.user.id) {
+    if (!chat) {
         throw new ApiError(404, "Chat not found");
     }
 
