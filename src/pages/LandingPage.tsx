@@ -31,52 +31,97 @@ const LandingPage = () => {
                 <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-size-[64px_64px] mask-[radial-gradient(ellipse_60%_60%_at_50%_50%,#000_10%,transparent_100%)]" />
             </div>
 
-            {/* Navigation */}
-            <nav className="relative z-10 w-full max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <img src="/docchat-logo.png" alt="DocChat" className="h-16 w-auto" />
-                </div>
-                <div className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-400">
-                    <a href="#problem" className="hover:text-white transition-colors">
-                        Problem
-                    </a>
-                    <a href="#how-it-works" className="hover:text-white transition-colors">
-                        How it works
-                    </a>
-                    <a href="#features" className="hover:text-white transition-colors">
-                        Features
-                    </a>
-                    <a href="#limitations" className="hover:text-white transition-colors">
-                        Limitations
-                    </a>
-                    <a href="#open-source" className="hover:text-white transition-colors">
-                        Open Source
-                    </a>
-                </div>
-                <div className="flex items-center gap-4">
-                    <a
-                        href="https://github.com/avishek0769/DocChat"
-                        target="_blank"
-                        rel="noreferrer"
-                        aria-label="DocChat GitHub Repository"
-                        className="text-gray-300 hover:text-white transition-colors hidden sm:inline-flex"
-                    >
-                        <svg viewBox="0 0 24 24" aria-hidden="true" className="w-8 h-8 fill-current">
-                            <path d="M12 2C6.48 2 2 6.59 2 12.25c0 4.52 2.87 8.36 6.84 9.71.5.1.66-.22.66-.49 0-.24-.01-1.03-.01-1.86-2.78.62-3.37-1.21-3.37-1.21-.45-1.19-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.9 1.57 2.36 1.12 2.94.86.09-.67.35-1.12.64-1.38-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.04 1.03-2.76-.1-.26-.45-1.31.1-2.72 0 0 .84-.28 2.75 1.05A9.31 9.31 0 0 1 12 6.84c.85 0 1.7.12 2.5.35 1.9-1.33 2.74-1.05 2.74-1.05.55 1.41.2 2.46.1 2.72.65.72 1.03 1.64 1.03 2.76 0 3.93-2.35 4.8-4.58 5.05.36.31.68.92.68 1.86 0 1.34-.01 2.42-.01 2.75 0 .27.17.59.67.49A10.26 10.26 0 0 0 22 12.25C22 6.59 17.52 2 12 2Z" />
-                        </svg>
-                    </a>
-                    <RouterLink
-                        to="/signin"
-                        className="text-sm font-medium text-gray-300 hover:text-white transition-colors hidden sm:block"
-                    >
-                        Sign In
-                    </RouterLink>
-                    <RouterLink
-                        to="/signup"
-                        className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/15 border border-white/10 text-sm font-medium transition-all"
-                    >
-                        Get Started
-                    </RouterLink>
+            {/* Navigation — Premium Glassmorphism */}
+            <nav
+                className="sticky top-0 z-50 w-full
+                bg-[rgba(11,11,15,0.55)] backdrop-blur-2xl
+                shadow-[0_8px_40px_rgba(0,0,0,0.6),0_1px_0_rgba(255,255,255,0.04)]
+                [border-bottom:1px_solid_transparent]
+                [background-clip:padding-box]
+                after:absolute after:bottom-0 after:left-0 after:w-full after:h-px
+                after:bg-gradient-to-r after:from-transparent after:via-indigo-500/60 after:to-transparent
+                relative"
+            >
+                <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+                    {/* Logo */}
+                    <div className="flex items-center gap-2">
+                        <img
+                            src="/docchat-logo.png"
+                            alt="DocChat"
+                            className="h-14 w-auto drop-shadow-[0_0_8px_rgba(99,102,241,0.4)]"
+                        />
+                    </div>
+
+                    {/* Nav Links */}
+                    <div className="hidden md:flex items-center gap-1">
+                        {[
+                            { label: "Problem", href: "#problem" },
+                            { label: "How it works", href: "#how-it-works" },
+                            { label: "Features", href: "#features" },
+                            { label: "Limitations", href: "#limitations" },
+                            { label: "Open Source", href: "#open-source" },
+                        ].map(({ label, href }) => (
+                            <a
+                                key={href}
+                                href={href}
+                                className="relative text-[13.5px] font-medium text-white/50 px-3 py-1.5 rounded-lg
+                                    hover:text-white hover:bg-white/[0.06] transition-all duration-200
+                                    after:absolute after:bottom-0 after:left-1/2 after:-translate-x-1/2
+                                    after:w-0 after:h-px after:bg-gradient-to-r after:from-indigo-400 after:to-purple-400
+                                    hover:after:w-4/5 after:transition-all after:duration-300"
+                            >
+                                {label}
+                            </a>
+                        ))}
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-3">
+                        {/* GitHub */}
+                        <a
+                            href="https://github.com/avishek0769/DocChat"
+                            target="_blank"
+                            rel="noreferrer"
+                            aria-label="DocChat GitHub Repository"
+                            className="w-9 h-9 flex items-center justify-center rounded-lg
+                                text-white/40 bg-white/[0.04] border border-white/[0.08]
+                                hover:text-white hover:bg-white/[0.08] hover:border-white/[0.15]
+                                transition-all duration-200 hidden sm:flex"
+                        >
+                            <svg
+                                viewBox="0 0 24 24"
+                                aria-hidden="true"
+                                className="w-[18px] h-[18px] fill-current"
+                            >
+                                <path d="M12 2C6.48 2 2 6.59 2 12.25c0 4.52 2.87 8.36 6.84 9.71.5.1.66-.22.66-.49 0-.24-.01-1.03-.01-1.86-2.78.62-3.37-1.21-3.37-1.21-.45-1.19-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.9 1.57 2.36 1.12 2.94.86.09-.67.35-1.12.64-1.38-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.04 1.03-2.76-.1-.26-.45-1.31.1-2.72 0 0 .84-.28 2.75 1.05A9.31 9.31 0 0 1 12 6.84c.85 0 1.7.12 2.5.35 1.9-1.33 2.74-1.05 2.74-1.05.55 1.41.2 2.46.1 2.72.65.72 1.03 1.64 1.03 2.76 0 3.93-2.35 4.8-4.58 5.05.36.31.68.92.68 1.86 0 1.34-.01 2.42-.01 2.75 0 .27.17.59.67.49A10.26 10.26 0 0 0 22 12.25C22 6.59 17.52 2 12 2Z" />
+                            </svg>
+                        </a>
+
+                        {/* Sign In */}
+                        <RouterLink
+                            to="/signin"
+                            className="text-[13.5px] font-medium text-white/60 px-3.5 py-1.5 rounded-lg
+                                border border-white/[0.08] bg-white/[0.04]
+                                hover:text-white hover:bg-white/[0.08] hover:border-white/[0.18]
+                                transition-all duration-200 hidden sm:block"
+                        >
+                            Sign In
+                        </RouterLink>
+
+                        {/* Get Started CTA */}
+                        <RouterLink
+                            to="/signup"
+                            className="text-[13.5px] font-semibold text-white px-4 py-[7px] rounded-lg
+                                bg-gradient-to-br from-indigo-500 to-purple-600
+                                border border-white/[0.1]
+                                shadow-[0_2px_14px_rgba(99,102,241,0.4),inset_0_1px_0_rgba(255,255,255,0.15)]
+                                hover:shadow-[0_4px_22px_rgba(99,102,241,0.55),inset_0_1px_0_rgba(255,255,255,0.15)]
+                                hover:-translate-y-px active:translate-y-0
+                                transition-all duration-200"
+                        >
+                            Get Started
+                        </RouterLink>
+                    </div>
                 </div>
             </nav>
 
@@ -106,7 +151,7 @@ const LandingPage = () => {
                     transition={{ duration: 0.6, delay: 0.2 }}
                     className="text-md text-gray-500 max-w-2xl mx-auto mb-10 font-medium"
                 >
-                    Built for developers who don’t want to manually search docs.
+                    Built for developers who don't want to manually search docs.
                 </motion.p>
 
                 <motion.div
@@ -142,7 +187,7 @@ const LandingPage = () => {
                         </li>
                         <li className="flex items-start gap-3">
                             <span className="text-gray-600 mt-1">•</span>
-                            <span>Ctrl+F doesn’t work across pages</span>
+                            <span>Ctrl+F doesn't work across pages</span>
                         </li>
                         <li className="flex items-start gap-3">
                             <span className="text-gray-600 mt-1">•</span>
@@ -333,7 +378,7 @@ const LandingPage = () => {
                     <div className="absolute left-2 top-0 bottom-0 w-px bg-white/10 md:left-1/2 md:-translate-x-1/2" />
                     <div className="space-y-5">
                         {[
-                            "You cannot control the web crawler’s depth or breadth yet",
+                            "You cannot control the web crawler's depth or breadth yet",
                             "JavaScript-heavy sites may not be fully supported",
                             "Only up to 300 pages can be ingested reliably each chat",
                             "Large docs may take time to process",
