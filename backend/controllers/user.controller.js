@@ -200,7 +200,7 @@ const userLogOut = asyncHandler(async (req, res) => {
 });
 
 const refreshTokens = asyncHandler(async (req, res) => {
-    const incomingToken = req.user?.refreshToken || "";
+    const incomingToken = req.cookies?.refreshToken || "";
     if (!incomingToken) throw new ApiError(401, "No Refresh Token found");
 
     try {
@@ -239,9 +239,9 @@ const refreshTokens = asyncHandler(async (req, res) => {
                 new ApiResponse(
                     200,
                     {
-                        ...safeUser,
+                        user:safeUser,
                         accessToken,
-                        refreshToken: newRefreshToken,
+                        
                     },
                     "Access Token refreshed !",
                 ),
