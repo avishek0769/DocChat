@@ -106,6 +106,7 @@ if (chat.status === "FAILED") {
 
     let relevantSources = [];
     let relevantNodes = [];
+    let relevantNodeIds = [];
     if (!chat.chatSources[0].isVectorLess) {
         const userPromptEmbeddings = await generateVectorEmbeddings(userPrompt);
         relevantSources = await qdrant.query(chat.collectionName, {
@@ -122,7 +123,7 @@ if (chat.status === "FAILED") {
         treeindex.loadData(docTree.sourceData);
         treeindex.loadTree(docTree.treeData);
 
-        const relevantNodeIds = await treeindex.retrieveRelevantNodes(userPrompt);
+        relevantNodeIds = await treeindex.retrieveRelevantNodes(userPrompt);
         if(relevantNodeIds.length == 0) {
             res.write("No relevant sources found, for this query");
             res.end();
@@ -261,12 +262,22 @@ if (chat.status === "FAILED") {
         }
         else if (relevantNodes.length) {
             await prisma.chatMessageSource.createMany({
-                data: relevantNodes.map((node) => ({
-                    chunkText: node.data,
-                    heading: "",
-                    pageUrl: "",
-                    chatMessageId: chatMessage.id,
-                })),
+                data: relevantNodes.map((node, index) => {
+                    const nodeId = node.id || relevantNodeIds[index] || `idx-${index}`;
+                    let fallbackHeading = "Vectorless Source";
+                    if (node.data) {
+                        const firstLine = node.data.split('\n')[0].trim();
+                        fallbackHeading = firstLine.substring(0, 60);
+                        if (firstLine.length > 60) fallbackHeading += "...";
+                    }
+
+                    return {
+                        chunkText: node.data,
+                        heading: fallbackHeading,
+                        pageUrl: `vectorless://node/${nodeId}`,
+                        chatMessageId: chatMessage.id,
+                    };
+                }),
             });
         }
 
