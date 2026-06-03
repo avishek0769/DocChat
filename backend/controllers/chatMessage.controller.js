@@ -2,14 +2,14 @@ import prisma from "../utils/prismaClient.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
-import { LLM_MODELS, PROVIDERS_BASE_URLS } from "../utils/constants.js";
+import { LLM_MODELS, PROVIDERS_BASE_URLS, MEM0_ENABLED } from "../utils/constants.js";
 import OpenAI from "openai";
 import { qdrant, treeindex } from "../utils/ragClients.js";
 import { decryptApiKey } from "../utils/decrypt.js";
 import { generateVectorEmbeddings } from "../utils/ragUtilities.js";
 import { MemoryClient } from "mem0ai";
 
-const memory = new MemoryClient({ apiKey: process.env.MEM0_API_KEY });
+const memory = MEM0_ENABLED ? new MemoryClient({ apiKey: process.env.MEM0_API_KEY }) : null;
 
 const getAvailableModels = asyncHandler(async (req, res) => {
     const apikeys = await prisma.apiKey.findMany({
@@ -155,15 +155,21 @@ if (chat.status === "FAILED") {
 
     // Long-term Memory (Mem0)
     let memoryContext = "";
-    const memoryFetched = await memory.search(userPrompt, {
-        user_id: req.user.id,
-        limit: 5,
-    });
-    if (memoryFetched.length) {
-        memoryContext = "\n--- RELEVANT PAST USER FACTS ---\n";
-        memoryFetched.forEach((item) => {
-            memoryContext += `- ${item.memory}\n`;
-        });
+    if (MEM0_ENABLED && memory) {
+        try {
+            const memoryFetched = await memory.search(userPrompt, {
+                user_id: req.user.id,
+                limit: 5,
+            });
+            if (memoryFetched && memoryFetched.length) {
+                memoryContext = "\n--- RELEVANT PAST USER FACTS ---\n";
+                memoryFetched.forEach((item) => {
+                    memoryContext += `- ${item.memory}\n`;
+                });
+            }
+        } catch (error) {
+            console.error("Mem0 search error (non-fatal):", error.message);
+        }
     }
 
     // Messages Array for the LLM
@@ -228,16 +234,22 @@ if (chat.status === "FAILED") {
     }
 
     if (llmResponse.trim()) {
-        await memory.add(
-            [
-                { role: "user", content: userPrompt },
-                { role: "assistant", content: llmResponse },
-            ],
-            {
-                user_id: req.user.id,
-                custom_instructions: "Note: Store this interaction history for future reference.",
-            },
-        );
+        if (MEM0_ENABLED && memory) {
+            try {
+                await memory.add(
+                    [
+                        { role: "user", content: userPrompt },
+                        { role: "assistant", content: llmResponse },
+                    ],
+                    {
+                        user_id: req.user.id,
+                        custom_instructions: "Note: Store this interaction history for future reference.",
+                    },
+                );
+            } catch (error) {
+                console.error("Mem0 add error (non-fatal):", error.message);
+            }
+        }
 
         const chatMessage = await prisma.chatMessage.create({
             data: {
