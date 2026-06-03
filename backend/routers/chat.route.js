@@ -6,6 +6,7 @@ import {
     expectationQuerySchema,
     createChatSchema,
     chatIdParamSchema,
+    qdrantCleanupSchema,
 } from "../utils/validationSchemas.js";
 import {
     cancelProcessing,
@@ -21,12 +22,14 @@ import {
     toggleShare,
     getSharedChatDetails,
     forkSharedChat,
+    qdrantCleanup,
 } from "../controllers/chat.controller.js";
 
 const chatRouter = Router();
 
 chatRouter.route("/expectation").get(verifyStrictJWT, validate(expectationQuerySchema), expectation);
 chatRouter.route("/create").post(verifyStrictJWT, validate(createChatSchema), createChat);
+chatRouter.route("/qdrant-cleanup").get(verifyStrictJWT, validate(qdrantCleanupSchema), qdrantCleanup);
 chatRouter.route("/status/:chatId").get(verifyStrictJWT, validate(chatIdParamSchema), verifyChatOwnership, progressStatus);
 chatRouter.route("/ingestion-runs/failed").get(verifyStrictJWT, recentFailedIngestionRuns);
 chatRouter.route("/list").get(verifyStrictJWT, listAllChats);

@@ -34,9 +34,9 @@ const verifyChatOwnership = async (req, res, next) => {
             throw new ApiError(403, "You do not have permission to access this chat.");
         }
 
-        next();
+        return next();
     } catch (error) {
-        next(error);
+        return next(error);
     }
 };
 

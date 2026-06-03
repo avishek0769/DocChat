@@ -4,6 +4,7 @@ const email = z.string().trim().email("Invalid email address");
 const password = z.string().min(6, "Password must be at least 6 characters");
 const chatId = z.string().uuid("Invalid chat ID");
 const url = z.string().trim().url("Invalid URL");
+const DEFAULT_MIN_AGE_DAYS = 7;
 export const VALID_GROUP_BY = ["day", "week", "month"];
 
 export function validateGroupBy(value) {
@@ -116,6 +117,32 @@ export const createChatSchema = {
                 });
 
                 return z.NEVER;
+            }),
+    }),
+};
+
+export const qdrantCleanupSchema = {
+    query: z.object({
+        force: z
+            .union([z.boolean(), z.string(), z.number()])
+            .optional()
+            .transform((value) => {
+                if (value === undefined || value === null) return false;
+                if (typeof value === "boolean") return value;
+                if (typeof value === "number") return value === 1;
+                if (typeof value === "string") {
+                    const normalized = value.trim().toLowerCase();
+                    return ["true", "1", "yes", "on"].includes(normalized);
+                }
+                return false;
+            }),
+        minAgeDays: z
+            .union([z.number(), z.string()])
+            .optional()
+            .transform((value) => {
+                if (value === undefined || value === null || value === "") return DEFAULT_MIN_AGE_DAYS;
+                const parsed = Number(value);
+                return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : DEFAULT_MIN_AGE_DAYS;
             }),
     }),
 };

@@ -187,6 +187,12 @@ node chatWorker.js # Optional: Start the background worker for processing chat c
 
 ---
 
+## Optional Features
+
+- **Long-term Memory (Mem0):** DocChat supports storing long-term interaction history. This feature is automatically enabled if you configure the `MEM0_API_KEY` in your `.env` file. If omitted or if Mem0 calls fail, the chat will continue to function normally without long-term context tracking.
+
+---
+
 ## Limitations
 
 - Works best with static documentation websites
