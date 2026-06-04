@@ -8,6 +8,7 @@ import { qdrant, treeindex } from "../utils/ragClients.js";
 import { decryptApiKey } from "../utils/decrypt.js";
 import { generateVectorEmbeddings } from "../utils/ragUtilities.js";
 import { MemoryClient } from "mem0ai";
+import { createAuditEvent } from "../utils/audit.js";
 
 const memory = MEM0_ENABLED ? new MemoryClient({ apiKey: process.env.MEM0_API_KEY }) : null;
 
@@ -308,6 +309,14 @@ if (chat.status === "FAILED") {
         }
         await prisma.usageEvents.create({
             data: usageEventData,
+        });
+
+        await createAuditEvent("message.sent", req.user.id, chat.id, {
+            chatMessageId: chatMessage.id,
+            model,
+            provider,
+            inputTokens,
+            outputTokens,
         });
     }
 });

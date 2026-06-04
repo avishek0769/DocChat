@@ -7,6 +7,7 @@ import { cleanupQdrantCollections } from "../utils/qdrantCleanup.js";
 import { Queue } from "bullmq";
 import redis from "../utils/redis.js";
 import crypto from "crypto";
+import { createAuditEvent } from "../utils/audit.js";
 
 const chatCreationQueue = new Queue("chatCreation");
 
@@ -157,6 +158,12 @@ const createChat = asyncHandler(async (req, res) => {
             },
             { jobId: chat.id },
         );
+
+        await createAuditEvent("chat.created", req.user.id, chat.id, {
+            chatSourceId: chat.chatSources[0].id,
+            docsUrl,
+            isVectorLess: isVectorLessChat,
+        });
 
         return res
             .status(200)
@@ -546,6 +553,11 @@ const forkSharedChat = asyncHandler(async (req, res) => {
                 connect: originalChat.chatSources.map(source => ({ id: source.id }))
             }
         }
+    });
+
+    await createAuditEvent("chat.created", req.user.id, newChat.id, {
+        forkedFromShareToken: shareToken,
+        originalChatId: originalChat.id,
     });
 
     // Copy messages so the new user has the history

@@ -11,6 +11,7 @@ import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { treeindex, qdrant } from "./utils/ragClients.js";
 import { v4 as uuidv4 } from "uuid";
 import prisma from "./utils/prismaClient.js";
+import { createAuditEvent } from "./utils/audit.js";
 
 function sanitizeErrorMessage(message) {
     if (!message) return null;
@@ -235,6 +236,12 @@ const worker = new Worker(
             },
         });
 
+        await createAuditEvent("ingestion.started", null, chatId, {
+            ingestionRunId: run.id,
+            chatSourceId,
+            isVectorLess,
+        });
+
         try {
             if (!isVectorLess) {
                 await processVector(docsUrl, chatId, collectionName, chatSourceId);
@@ -251,6 +258,11 @@ const worker = new Worker(
                     errorMessage: null,
                 },
             });
+
+            await createAuditEvent("ingestion.completed", null, chatId, {
+                ingestionRunId: run.id,
+                status: "SUCCESS",
+            });
         } catch (err) {
             await prisma.ingestionRun.update({
                 where: { id: run.id },
@@ -260,6 +272,11 @@ const worker = new Worker(
                     errorCode: getErrorCode(err),
                     errorMessage: sanitizeErrorMessage(err?.message),
                 },
+            });
+            await createAuditEvent("ingestion.failed", null, chatId, {
+                ingestionRunId: run.id,
+                errorCode: getErrorCode(err),
+                errorMessage: sanitizeErrorMessage(err?.message),
             });
             throw err;
         }
