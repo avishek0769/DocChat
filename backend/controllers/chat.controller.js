@@ -293,8 +293,8 @@ const listAllChats = asyncHandler(async (req, res) => {
     const chatsWithUsage = chats.map((chat) => {
         const totals = chat.usageEvents.reduce(
             (acc, curr) => {
-                acc.inputTokens += curr.inputTokens;
-                acc.outputTokens += curr.outputTokens;
+                acc.inputTokens += curr.inputTokens ?? 0;
+                acc.outputTokens += curr.outputTokens ?? 0;
                 return acc;
             },
             { inputTokens: 0, outputTokens: 0 },
@@ -342,8 +342,8 @@ const recentChats = asyncHandler(async (req, res) => {
     const chatsWithUsage = chats.map((chat) => {
         const totals = chat.usageEvents.reduce(
             (acc, curr) => {
-                acc.inputTokens += curr.inputTokens;
-                acc.outputTokens += curr.outputTokens;
+                acc.inputTokens += curr.inputTokens ?? 0;
+                acc.outputTokens += curr.outputTokens ?? 0;
                 return acc;
             },
             { inputTokens: 0, outputTokens: 0 },
