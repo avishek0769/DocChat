@@ -45,7 +45,7 @@ function App() {
                         <ProtectedRoute>
                             <ChatPage />
                         </ProtectedRoute>
-                    }  
+                    }
                 />
                 <Route
                     path="/shared/:shareToken"

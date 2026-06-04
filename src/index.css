@@ -48,3 +48,24 @@
     scrollbar-width: thin;
     scrollbar-color: rgba(255, 255, 255, 0.1) #0b0b0f;
 }
+
+@keyframes skeleton-shimmer {
+    0% {
+        background-position: 200% 0;
+    }
+
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+.skeleton-shimmer {
+    background-image: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0.06) 0%,
+        rgba(255, 255, 255, 0.18) 50%,
+        rgba(255, 255, 255, 0.06) 100%
+    );
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.35s linear infinite;
+}

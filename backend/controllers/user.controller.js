@@ -52,6 +52,8 @@ const generateRefreshToken = (userId) => {
     );
 };
 
+const generateVerificationCode = () => Math.floor(Math.random() * 90000) + 10000;
+
 const generateAccessAndRefreshTokens = async (userId) => {
     try {
         const user = await prisma.user.findUnique({ where: { id: userId } });
@@ -80,7 +82,7 @@ const sendVerificationCode = asyncHandler(async (req, res) => {
         data: { email },
     });
 
-    const code = Math.floor(Math.random() * 99999 + 10000);
+    const code = generateVerificationCode();
     await redis.set(email, code, "EX", 3 * 60);
 
     await resend.emails.send({
@@ -271,7 +273,7 @@ const sendResetCode = asyncHandler(async (req, res) => {
         throw new ApiError(404, "User with this email does not exist");
     }
 
-    const code = Math.floor(10000 + Math.random() * 99999);
+    const code = generateVerificationCode();
     await redis.set(email, code, "EX", 3 * 60);
 
     await resend.emails.send({

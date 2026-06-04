@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sidebar } from "../components/Sidebar";
+import Skeleton from "../components/Skeleton";
 
 export interface Source {
     id: string;
@@ -732,10 +733,19 @@ export const ChatPage = () => {
                     <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-3 py-4 sm:px-6 sm:py-6 lg:px-8 custom-scrollbar scroll-smooth">
                         <div className="max-w-3xl mx-auto space-y-8 pb-10">
                             {isMessagesLoading ? (
-                                <div className="flex flex-col items-center justify-center h-full min-h-[50vh] text-center space-y-3 text-gray-400">
-                                    <Loader2 className="w-6 h-6 animate-spin text-accent-blue" />
-                                    <p className="text-sm">Fetching messages...</p>
-                                </div>
+                                <div className="space-y-8">
+  {[1,2,3,4].map((i) => (
+    <div key={i} className="flex gap-4">
+      <Skeleton className="w-8 h-8 rounded-lg shrink-0" />
+
+      <div className="flex-1">
+        <Skeleton className="h-4 w-3/4 mb-2" />
+        <Skeleton className="h-4 w-full mb-2" />
+        <Skeleton className="h-4 w-5/6" />
+      </div>
+    </div>
+  ))}
+</div>
                             ) : messages.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center h-full min-h-[50vh] text-center space-y-6">
                                     <div className="w-16 h-16 rounded-2xl bg-linear-to-br from-accent-blue/20 to-accent-purple/20 flex items-center justify-center border border-white/10 shadow-2xl shadow-accent-blue/10">
@@ -994,10 +1004,19 @@ export const ChatPage = () => {
 
                             <div className="flex-1 overflow-y-auto p-4 w-[320px] space-y-4">
                                 {isSourcesLoading ? (
-                                    <div className="flex flex-col items-center justify-center h-40 text-gray-400 gap-3">
-                                        <Loader2 className="w-6 h-6 animate-spin text-accent-blue" />
-                                        <span className="text-sm">Fetching source chunks...</span>
-                                    </div>
+                                    <div className="space-y-4">
+  {[1,2,3].map((i) => (
+    <div
+      key={i}
+      className="bg-white/3 border border-white/10 rounded-xl p-4"
+    >
+      <Skeleton className="h-4 w-2/3 mb-3" />
+      <Skeleton className="h-3 w-full mb-2" />
+      <Skeleton className="h-3 w-full mb-2" />
+      <Skeleton className="h-3 w-3/4" />
+    </div>
+  ))}
+</div>
                                 ) : selectedSources.length === 0 ? (
                                     <div className="text-center text-gray-500 text-sm py-10">
                                         {sourceFetchAttempted

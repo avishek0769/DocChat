@@ -72,6 +72,8 @@ model ChatSource {
     documentTree     DocumentTree?
     createdAt        DateTime       @default(now()) @map("created_at")
     ingestionRuns    IngestionRun[]
+
+    @@unique([documentationUrl, isVectorLess])
 }
 
 model IngestionRun {

@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Sidebar } from "../components/Sidebar";
+import Skeleton from "../components/Skeleton";
 
 import {
     MessageSquare,
@@ -448,9 +449,18 @@ const Dashboard = () => {
                         </h2>
 
                         {isLoading ? (
-                            <div className="p-8 text-center bg-white/1 border border-white/5 border-dashed rounded-xl text-sm text-gray-400">
-                                Loading chats...
-                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+  {[1,2,3].map((i) => (
+    <div
+      key={i}
+      className="p-5 rounded-xl bg-white/2 border border-white/5"
+    >
+      <Skeleton className="h-4 w-24 mb-3" />
+      <Skeleton className="h-8 w-16 mb-3" />
+      <Skeleton className="h-3 w-20" />
+    </div>
+  ))}
+</div>
                         ) : chats.length > 0 ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                 {chats.map((chat) => {

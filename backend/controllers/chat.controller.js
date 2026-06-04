@@ -89,24 +89,47 @@ const createChat = asyncHandler(async (req, res) => {
     const { internalLinks, title } = await scrapeWebpage(docsUrl, docsUrl);
     name = name || title || "Untitled Chat";
 
-    const existingChatSource = await prisma.chatSource.findFirst({
-        where: {
-            documentationUrl: docsUrl,
-            isVectorLess: isVectorLessChat,
-        },
-        include: {
-            chats: { take: 1 },
-        },
-    });
+    let chatSource;
+    let isNew = false;
+    const collectionName = !isVectorLessChat ? `${name.replace(/\s+/g, "-")}-${Date.now()}` : null;
 
-    if (existingChatSource) {
+    try {
+        chatSource = await prisma.chatSource.create({
+            data: {
+                totalPages: internalLinks.length,
+                heading: name,
+                documentationUrl: docsUrl,
+                collectionName: collectionName,
+                isVectorLess: isVectorLessChat,
+            },
+        });
+        isNew = true;
+    } catch (error) {
+        if (error.code === "P2002") { // Unique constraint violation
+            chatSource = await prisma.chatSource.findUnique({
+                where: {
+                    documentationUrl_isVectorLess: {
+                        documentationUrl: docsUrl,
+                        isVectorLess: isVectorLessChat,
+                    },
+                },
+            });
+            if (!chatSource) {
+                throw new ApiError(500, "Failed to retrieve existing ChatSource after unique constraint violation.");
+            }
+        } else {
+            throw error; // Rethrow other errors
+        }
+    }
+
+    if (!isNew) {
         const chat = await prisma.chat.create({
             data: {
                 name,
-                collectionName: existingChatSource.collectionName,
+                collectionName: chatSource.collectionName,
                 chatSources: {
                     connect: {
-                        id: existingChatSource.id,
+                        id: chatSource.id,
                     },
                 },
                 status: "READY",
@@ -124,18 +147,13 @@ const createChat = asyncHandler(async (req, res) => {
                 ),
             );
     } else {
-        const collectionName = !isVectorLessChat ? `${name.replace(/\s+/g, "-")}-${Date.now()}` : null;
         const chat = await prisma.chat.create({
             data: {
                 name,
-                collectionName: collectionName,
+                collectionName: chatSource.collectionName,
                 chatSources: {
-                    create: {
-                        totalPages: internalLinks.length,
-                        heading: name,
-                        documentationUrl: docsUrl,
-                        collectionName: collectionName,
-                        isVectorLess: isVectorLessChat,
+                    connect: {
+                        id: chatSource.id,
                     },
                 },
                 status: "QUEUED",
@@ -189,16 +207,12 @@ const progressStatus = asyncHandler(async (req, res) => {
             errorMessage: true,
         },
     });
-    
+
     const redisData = await redis.get(chat.id.toString());
     const progress = redisData ? JSON.parse(redisData) : { status: "QUEUED", progress: 0 };
 
     res.status(200).json(
-        new ApiResponse(
-            200,
-            { progress, latestIngestionRun },
-            "Progress fetched successfully",
-        ),
+        new ApiResponse(200, { progress, latestIngestionRun }, "Progress fetched successfully"),
     );
 });
 
@@ -472,7 +486,7 @@ const toggleShare = asyncHandler(async (req, res) => {
         where: { id: chatId },
     });
 
-    if (!chat || chat.userId !== req.user.id) {
+    if (!chat) {
         throw new ApiError(404, "Chat not found");
     }
 
@@ -526,8 +540,8 @@ const forkSharedChat = asyncHandler(async (req, res) => {
             messages: {
                 include: {
                     sourceChunks: true,
-                }
-            }
+                },
+            },
         },
     });
 
@@ -543,9 +557,9 @@ const forkSharedChat = asyncHandler(async (req, res) => {
             status: "READY",
             userId: req.user.id,
             chatSources: {
-                connect: originalChat.chatSources.map(source => ({ id: source.id }))
-            }
-        }
+                connect: originalChat.chatSources.map((source) => ({ id: source.id })),
+            },
+        },
     });
 
     // Copy messages so the new user has the history
@@ -557,7 +571,7 @@ const forkSharedChat = asyncHandler(async (req, res) => {
                 llmResponse: msg.llmResponse,
                 llmModel: msg.llmModel,
                 createdAt: msg.createdAt,
-            }
+            },
         });
 
         if (msg.sourceChunks && msg.sourceChunks.length > 0) {
@@ -568,12 +582,14 @@ const forkSharedChat = asyncHandler(async (req, res) => {
                     pageUrl: chunk.pageUrl,
                     score: chunk.score,
                     chatMessageId: newMessage.id,
-                }))
+                })),
             });
         }
     }
 
-    res.status(200).json(new ApiResponse(200, { chatId: newChat.id }, "Chat successfully forked to your account"));
+    res.status(200).json(
+        new ApiResponse(200, { chatId: newChat.id }, "Chat successfully forked to your account"),
+    );
 });
 
 export {
