@@ -30,7 +30,9 @@ const chatRouter = Router();
 chatRouter.route("/expectation").get(verifyStrictJWT, validate(expectationQuerySchema), expectation);
 chatRouter.route("/create").post(verifyStrictJWT, validate(createChatSchema), createChat);
 chatRouter.route("/qdrant-cleanup").get(verifyStrictJWT, validate(qdrantCleanupSchema), qdrantCleanup);
-chatRouter.route("/status/:chatId").get(verifyStrictJWT, validate(chatIdParamSchema), verifyChatOwnership, progressStatus);
+chatRouter
+    .route("/status/:chatId")
+    .get(verifyStrictJWT, validate(chatIdParamSchema), verifyChatOwnership, progressStatus);
 chatRouter.route("/ingestion-runs/failed").get(verifyStrictJWT, recentFailedIngestionRuns);
 chatRouter.route("/list").get(verifyStrictJWT, listAllChats);
 chatRouter.route("/recent").get(verifyStrictJWT, recentChats);
@@ -38,11 +40,21 @@ chatRouter.route("/recent").get(verifyStrictJWT, recentChats);
 // Shared Chat Routes
 chatRouter.route("/shared/:shareToken").get(getSharedChatDetails);
 chatRouter.route("/shared/:shareToken/fork").post(verifyStrictJWT, forkSharedChat);
-chatRouter.route("/:chatId/share").post(verifyStrictJWT, validate(chatIdParamSchema), verifyChatOwnership, toggleShare);
+chatRouter
+    .route("/:chatId/share")
+    .post(verifyStrictJWT, validate(chatIdParamSchema), verifyChatOwnership, toggleShare);
 
-chatRouter.route("/:chatId").get(verifyStrictJWT, validate(chatIdParamSchema), verifyChatOwnership, chatDetails);
-chatRouter.route("/pages-indexed/:chatId").get(verifyStrictJWT, validate(chatIdParamSchema), verifyChatOwnership, listAllPagesIndexed);
-chatRouter.route("/:chatId").delete(verifyStrictJWT, validate(chatIdParamSchema), verifyChatOwnership, deleteChat);
-chatRouter.route("/cancel/:chatId").get(verifyStrictJWT, validate(chatIdParamSchema), verifyChatOwnership, cancelProcessing);
+chatRouter
+    .route("/:chatId")
+    .get(verifyStrictJWT, validate(chatIdParamSchema), verifyChatOwnership, chatDetails);
+chatRouter
+    .route("/pages-indexed/:chatId")
+    .get(verifyStrictJWT, validate(chatIdParamSchema), verifyChatOwnership, listAllPagesIndexed);
+chatRouter
+    .route("/:chatId")
+    .delete(verifyStrictJWT, validate(chatIdParamSchema), verifyChatOwnership, deleteChat);
+chatRouter
+    .route("/cancel/:chatId")
+    .get(verifyStrictJWT, validate(chatIdParamSchema), verifyChatOwnership, cancelProcessing);
 
 export default chatRouter;

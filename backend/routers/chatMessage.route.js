@@ -19,10 +19,18 @@ import {
 const chatMessageRouter = Router();
 
 chatMessageRouter.route("/models").get(verifyStrictJWT, getAvailableModels);
-chatMessageRouter.route("/send").post(verifyStrictJWT, validate(sendMessageSchema), verifyChatOwnership, sendMessage);
-chatMessageRouter.route("/all/:chatId").get(verifyStrictJWT, validate(chatIdParamSchema), verifyChatOwnership, getChatMessages);
-chatMessageRouter.route("/sources/:messageId").get(verifyStrictJWT, validate(messageIdParamSchema), getChatMessageSources);
-chatMessageRouter.route("/export/:chatId").get(verifyStrictJWT, validate(chatIdParamSchema), verifyChatOwnership, exportChatMessages);
+chatMessageRouter
+    .route("/send")
+    .post(verifyStrictJWT, validate(sendMessageSchema), verifyChatOwnership, sendMessage);
+chatMessageRouter
+    .route("/all/:chatId")
+    .get(verifyStrictJWT, validate(chatIdParamSchema), verifyChatOwnership, getChatMessages);
+chatMessageRouter
+    .route("/sources/:messageId")
+    .get(verifyStrictJWT, validate(messageIdParamSchema), getChatMessageSources);
+chatMessageRouter
+    .route("/export/:chatId")
+    .get(verifyStrictJWT, validate(chatIdParamSchema), verifyChatOwnership, exportChatMessages);
 
 // Shared Chat Messages Route
 chatMessageRouter.route("/shared/:shareToken/messages").get(getSharedChatMessages);

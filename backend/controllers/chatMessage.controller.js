@@ -14,7 +14,7 @@ const memory = MEM0_ENABLED ? new MemoryClient({ apiKey: process.env.MEM0_API_KE
 const getAvailableModels = asyncHandler(async (req, res) => {
     const apikeys = await prisma.apiKey.findMany({
         where: { userId: req.user.id },
-        orderBy: { createdAt: "asc" }
+        orderBy: { createdAt: "asc" },
     });
     if (!apikeys.length) {
         return res
@@ -32,7 +32,7 @@ const getAvailableModels = asyncHandler(async (req, res) => {
     apikeys.map((key) => {
         models.push(...LLM_MODELS[key.provider]);
     });
-    Array.from(new Set(models)).sort()
+    Array.from(new Set(models)).sort();
 
     return res
         .status(200)
@@ -51,16 +51,13 @@ const sendMessage = asyncHandler(async (req, res) => {
     }
 
     if (chat.status === "QUEUED" || chat.status === "PROCESSING") {
-        throw new ApiError(
-            409,
-            "Chat is still indexing your docs — please try again in a moment."
-        );
+        throw new ApiError(409, "Chat is still indexing your docs — please try again in a moment.");
     }
 
     if (chat.status === "FAILED") {
         throw new ApiError(
             409,
-            "Chat ingestion failed. Please re-ingest the documentation or check the docs URL and try again."
+            "Chat ingestion failed. Please re-ingest the documentation or check the docs URL and try again.",
         );
     }
     let openai;
@@ -84,7 +81,6 @@ const sendMessage = asyncHandler(async (req, res) => {
             },
             orderBy: { createdAt: "asc" },
         });
-
 
         if (!apiKey) {
             throw new ApiError(400, "Invalid API key ID.");
@@ -145,8 +141,7 @@ const sendMessage = asyncHandler(async (req, res) => {
         relevantSources.points.forEach((point, index) => {
             sourceContext += `Source ${index + 1}:\n${point.payload.body}\n`;
         });
-    }
-    else if (relevantNodes.length) {
+    } else if (relevantNodes.length) {
         relevantNodes.forEach(({ data }, index) => {
             sourceContext += `Source ${index + 1}:\n${data}\n`;
         });
@@ -242,7 +237,8 @@ const sendMessage = asyncHandler(async (req, res) => {
                     ],
                     {
                         user_id: req.user.id,
-                        custom_instructions: "Note: Store this interaction history for future reference.",
+                        custom_instructions:
+                            "Note: Store this interaction history for future reference.",
                     },
                 );
             } catch (error) {
@@ -269,14 +265,13 @@ const sendMessage = asyncHandler(async (req, res) => {
                     score: Math.round(point.score * 100),
                 })),
             });
-        }
-        else if (relevantNodes.length) {
+        } else if (relevantNodes.length) {
             await prisma.chatMessageSource.createMany({
                 data: relevantNodes.map((node, index) => {
                     const nodeId = node.id || relevantNodeIds[index] || `idx-${index}`;
                     let fallbackHeading = "Vectorless Source";
                     if (node.data) {
-                        const firstLine = node.data.split('\n')[0].trim();
+                        const firstLine = node.data.split("\n")[0].trim();
                         fallbackHeading = firstLine.substring(0, 60);
                         if (firstLine.length > 60) fallbackHeading += "...";
                     }
@@ -325,7 +320,6 @@ const exportChatMessages = asyncHandler(async (req, res) => {
     const messages = await prisma.chatMessage.findMany({
         where: { chatId },
         orderBy: { createdAt: "asc" },
-
     });
 
     const escapeForPlainText = (text) => text || "";
@@ -451,4 +445,11 @@ const getSharedChatMessages = asyncHandler(async (req, res) => {
         .json(new ApiResponse(200, { messages: messages }, "Chat messages retrieved successfully."));
 });
 
-export { sendMessage, getAvailableModels, getChatMessages, getChatMessageSources, exportChatMessages, getSharedChatMessages };
+export {
+    sendMessage,
+    getAvailableModels,
+    getChatMessages,
+    getChatMessageSources,
+    exportChatMessages,
+    getSharedChatMessages,
+};

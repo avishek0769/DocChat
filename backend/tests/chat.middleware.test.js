@@ -1,6 +1,6 @@
 /**
  * Test Suite for Chat Ownership Middleware
- * 
+ *
  * Verifies the authorization logic that ensures users can only access or modify
  * chats that belong to them. This suite mocks Prisma and the ApiError class
  * to ensure isolated unit testing.
@@ -82,7 +82,7 @@ describe("verifyChatOwnership middleware", () => {
         expect(next).toHaveBeenCalledTimes(1);
         expect(next.mock.calls[0][0]).toBeUndefined(); // no error passed
     });
-    
+
     test("should extract chatId from req.body if not in params", async () => {
         req.body.chatId = "chat-789";
         findUniqueMock.mockResolvedValue({ userId: "user-123" });
