@@ -83,7 +83,7 @@ const sendMessage = asyncHandler(async (req, res) => {
         });
 
         if (!apiKey) {
-            throw new ApiError(400, "Invalid API key ID.");
+            throw new ApiError(400, `No API key found for this provider (${provider}). Please configure it in your settings.`);
         }
         apiKeyId = apiKey.id;
         if (apiKey.userId !== req.user.id) {
