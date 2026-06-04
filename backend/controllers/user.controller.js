@@ -6,6 +6,7 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import redis from "../utils/redis.js";
 import { Resend } from "resend";
+import { emit } from "node:cluster";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -252,7 +253,12 @@ const refreshTokens = asyncHandler(async (req, res) => {
 });
 
 const currentUserProfile = asyncHandler(async (req, res) => {
-    const user = req.user;
+    const user = {
+        id:req.user.id,
+        fullname:req.user.fullname,
+        username:req.user.username,
+        email:req.user.email,
+    }
     res.status(200).json(new ApiResponse(200, user, "Current user profile fetched successfully !"));
 });
 
