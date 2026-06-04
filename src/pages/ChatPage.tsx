@@ -43,6 +43,7 @@ import {
     Database,
     Download,
     Link as LinkIcon,
+    Share2,
 } from "lucide-react";
 import clsx from "clsx";
 import hljs from "highlight.js";
@@ -57,7 +58,9 @@ import {
     getPagesIndexed,
     sendMessageStream,
     exportChatMessages,
+    toggleChatShare,
 } from "../lib/api";
+import { formatTokens } from "../lib/format";
 
 type CurrentLink = {
     title: string;
@@ -102,13 +105,6 @@ export const ChatPage = () => {
     const [isPageLoading, setIsPageLoading] = useState(true);
     const [isMessagesLoading, setIsMessagesLoading] = useState(true);
     const [error, setError] = useState("");
-
-    const formatTokens = (tokens: number) => {
-        if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(1)}M`;
-        if (tokens >= 1000) return `${(tokens / 1000).toFixed(1)}k`;
-        return tokens.toString();
-    };
-
     // Layout configuration
     const [leftPanelOpen, setLeftPanelOpen] = useState(true);
     const [rightPanelOpen, setRightPanelOpen] = useState(false);
@@ -128,6 +124,28 @@ export const ChatPage = () => {
     const [isIndexedModalOpen, setIsIndexedModalOpen] = useState(false);
     const [currentLinks, setCurrentLinks] = useState<CurrentLink[]>([]);
     const [indexedPages, setIndexedPages] = useState<IndexedPage[]>([]);
+
+    const [isSharing, setIsSharing] = useState(false);
+    const [shareToken, setShareToken] = useState<string | null>(null);
+    const [shareModalOpen, setShareModalOpen] = useState(false);
+
+    const handleShare = () => {
+        setShareModalOpen(true);
+    };
+
+    const handleToggleShare = async () => {
+        setIsSharing(true);
+        try {
+            const res = await toggleChatShare(chatId);
+            setShareToken(res.shareToken || null);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to toggle share.");
+        } finally {
+            setIsSharing(false);
+        }
+    };
+
+    const [linkCopied, setLinkCopied] = useState(false);
 
     const handleExport = async () => {
         if (isExporting) return;
@@ -167,6 +185,8 @@ export const ChatPage = () => {
                 tokensUsed: chat?.totalUsage?.total || 0,
                 lastUpdated: new Date(chat?.updatedAt || Date.now()).toLocaleString(),
             }));
+
+            setShareToken(chat?.shareToken || null);
 
             setCurrentLinks(
                 (chat?.chatSources || [])
@@ -236,6 +256,7 @@ export const ChatPage = () => {
     };
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
         loadChatPage();
     }, [chatId]);
 
@@ -443,15 +464,26 @@ export const ChatPage = () => {
                 );
             }
         } catch (err) {
-            if (chunkRafRef.current !== null) {
-                window.cancelAnimationFrame(chunkRafRef.current);
-                chunkRafRef.current = null;
-            }
-            pendingChunkRef.current = "";
-            setIsAwaitingFirstChunk(false);
-            setError(err instanceof Error ? err.message : "Failed to send message.");
-            setMessages((prev) => prev.filter((m) => m.id !== aiId));
-        } finally {
+    if (chunkRafRef.current !== null) {
+        window.cancelAnimationFrame(chunkRafRef.current);
+        chunkRafRef.current = null;
+    }
+    pendingChunkRef.current = "";
+    setIsAwaitingFirstChunk(false);
+
+    const errMsg = err instanceof Error ? err.message : "Failed to send message.";
+
+    // 409 = chat not ready or failed — show inline banner, restore input
+    if (err instanceof Error && (err.message.includes("indexing") || err.message.includes("ingestion"))) {
+        setError(errMsg);
+        setInput(newUserMessage.content);           // restore so user can retry
+        setMessages((prev) => prev.filter((m) => m.id !== aiId || m.id !== newUserMessage.id));
+    } else {
+        setError(errMsg);
+        setMessages((prev) => prev.filter((m) => m.id !== aiId));
+    }
+}
+        finally {
             setIsTyping(false);
         }
     };
@@ -590,6 +622,7 @@ export const ChatPage = () => {
 
                 {/* Left Toggle Button */}
                 <button
+                    aria-label="Toggle-sidebar"
                     onClick={() => setLeftPanelOpen(!leftPanelOpen)}
                     className="absolute -left-px top-1/2 -translate-y-1/2 z-30 w-5 h-12 bg-[#1a1a24] border border-white/10 rounded-r-lg items-center justify-center hover:bg-[#252535] transition-colors shadow-lg hidden sm:flex"
                     style={{ left: leftPanelOpen ? 279 : -1 }}
@@ -614,6 +647,7 @@ export const ChatPage = () => {
                                 <Menu className="w-4 h-4" />
                             </button>
                             <button
+                                aria-label="Back to dashboard"
                                 onClick={() => navigate("/dashboard")}
                                 className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/5 transition-colors text-gray-400 hover:text-white lg:hidden"
                             >
@@ -646,6 +680,7 @@ export const ChatPage = () => {
                                 </div>
                             </div>
                             <button
+                                aria-label="Export chat"
                                 onClick={handleExport}
                                 disabled={isExporting}
                                 className="px-2 sm:px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border border-white/10 bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 flex items-center gap-1.5 sm:gap-2 disabled:opacity-50"
@@ -660,6 +695,15 @@ export const ChatPage = () => {
                                     }
                                     setRightPanelOpen(!rightPanelOpen);
                                 }}
+                                aria-label="Toggle right panel"
+                                disabled={isSharing}
+                                className="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border border-white/10 bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 flex items-center gap-2 disabled:opacity-50"
+                            >
+                                <Share2 className="w-4 h-4" />
+                                <span className="hidden sm:inline">{isSharing ? "Sharing..." : "Share"}</span>
+                            </button>
+                            <button
+                                onClick={() => setRightPanelOpen(!rightPanelOpen)}
                                 className={clsx(
                                     "px-2 sm:px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border flex items-center gap-1.5 sm:gap-2",
                                     rightPanelOpen
@@ -723,6 +767,7 @@ export const ChatPage = () => {
                                             "How to handle errors?",
                                         ].map((suggestion) => (
                                             <button
+                                                aria-label="use suggestion"
                                                 key={suggestion}
                                                 onClick={() => {
                                                     setInput(suggestion);
@@ -782,6 +827,7 @@ export const ChatPage = () => {
                                 />
                                 <div className="absolute right-3 bottom-3 flex items-center gap-2">
                                     <button
+                                        aria-label="Send message"
                                         type="submit"
                                         disabled={!input.trim() || isTyping}
                                         className="w-8 h-8 rounded-xl bg-accent-blue text-white flex items-center justify-center hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-accent-blue/20"
@@ -801,6 +847,7 @@ export const ChatPage = () => {
 
                 {/* Right Toggle Button */}
                 <button
+                    aria-label="Toggle right panel"
                     onClick={() => setRightPanelOpen(!rightPanelOpen)}
                     className="absolute -right-px top-1/2 -translate-y-1/2 z-30 w-5 h-12 bg-[#1a1a24] border border-white/10 rounded-l-lg items-center justify-center hover:bg-[#252535] transition-colors shadow-lg hidden sm:flex"
                     style={{ right: rightPanelOpen ? 319 : -1 }}
@@ -853,6 +900,88 @@ export const ChatPage = () => {
                         )}
                     </button>
                 )}
+                {/* Share Modal */}
+                <AnimatePresence>
+                    {shareModalOpen && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.95 }}
+                                className="bg-[#1a1a24] border border-white/10 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl"
+                            >
+                                <div className="p-6">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                                            <Share2 className="w-5 h-5 text-accent-blue" />
+                                            Share Chat
+                                        </h3>
+                                        <button
+                                            onClick={() => setShareModalOpen(false)}
+                                            className="text-gray-400 hover:text-white transition-colors"
+                                        >
+                                            <X className="w-5 h-5" />
+                                        </button>
+                                    </div>
+                                    <div className="space-y-4">
+                                        {shareToken ? (
+                                            <>
+                                                <p className="text-sm text-gray-400">
+                                                    Anyone with this link can view the chat history. They can also continue the chat by creating their own copy.
+                                                </p>
+                                                <div className="flex gap-2 items-center">
+                                                    <input
+                                                        type="text"
+                                                        readOnly
+                                                        value={`${window.location.origin}/shared/${shareToken}`}
+                                                        className="w-full bg-[#0b0b0f] border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-200 font-mono focus:outline-none"
+                                                    />
+                                                    <button
+                                                        onClick={() => {
+                                                            navigator.clipboard.writeText(`${window.location.origin}/shared/${shareToken}`);
+                                                            setLinkCopied(true);
+                                                            setTimeout(() => setLinkCopied(false), 2000);
+                                                        }}
+                                                        className="p-2 rounded-lg bg-accent-blue/10 text-accent-blue hover:bg-accent-blue/20 transition-colors flex items-center gap-1"
+                                                    >
+                                                        {linkCopied ? (
+                                                            <>
+                                                                <Check className="w-4 h-4 text-green-400" />
+                                                                <span className="text-sm font-medium text-green-400">Copied</span>
+                                                            </>
+                                                        ) : (
+                                                            <Copy className="w-4 h-4" />
+                                                        )}
+                                                    </button>
+                                                </div>
+                                                <button
+                                                    onClick={handleToggleShare}
+                                                    disabled={isSharing}
+                                                    className="w-full py-2.5 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors text-sm font-medium disabled:opacity-50"
+                                                >
+                                                    {isSharing ? "Revoking..." : "Revoke Link"}
+                                                </button>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <p className="text-sm text-gray-400">
+                                                    Generate a link to share this conversation with others.
+                                                </p>
+                                                <button
+                                                    onClick={handleToggleShare}
+                                                    disabled={isSharing}
+                                                    className="w-full py-2.5 rounded-lg bg-accent-blue text-white hover:bg-blue-600 transition-colors text-sm font-medium disabled:opacity-50"
+                                                >
+                                                    {isSharing ? "Creating..." : "Create Share Link"}
+                                                </button>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>
 
                 {/* 3. Right Panel (Sources) */}
                 <AnimatePresence initial={false}>
@@ -1237,6 +1366,7 @@ export const ChatPage = () => {
                             <div className="p-4 sm:p-6 border-b border-white/10 flex items-center justify-between gap-3">
                                 <h2 className="text-lg sm:text-xl font-semibold text-white">Indexed Pages</h2>
                                 <button
+                                    aria-label="close indexed modal"
                                     onClick={() => setIsIndexedModalOpen(false)}
                                     className="p-2 -mr-2 text-gray-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors"
                                 >
@@ -1445,6 +1575,7 @@ const ChatMessage = ({
                 {isAi && !message.isStreaming && (
                     <div className="flex items-center gap-2 opacity-100 transition-opacity mt-1">
                         <button
+                            
                             onClick={handleCopy}
                             className="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-1.5 text-sm font-medium"
                         >
@@ -1459,6 +1590,7 @@ const ChatMessage = ({
                         <>
                             <div className="w-px h-3 bg-white/10" />
                             <button
+                                
                                 onClick={() => onViewSources(message)}
                                 className="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-1.5 text-sm font-medium"
                             >

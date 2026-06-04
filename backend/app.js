@@ -8,7 +8,14 @@ const errorHandler = (err, req, res, next) => {
     const statusCode = err.statusCode || 500;
     const message = err.message || "Internal Server Error";
     console.log(err);
-    res.status(statusCode).json({ message });
+    // Include errors array when present so the frontend can
+    // render structured validation feedback instead of one
+    // collapsed generic string (fixes issue #31).
+    const body = { message };
+    if (Array.isArray(err.errors) && err.errors.length > 0) {
+        body.errors = err.errors;
+    }
+    res.status(statusCode).json(body);
 };
 
 app.use(

@@ -24,3 +24,4 @@ export const PROVIDERS_BASE_URLS = {
     XAI: "https://api.xaicontrol.com/v1",
     OPENROUTER: "https://openrouter.ai/api/v1",
 };
+export const MEM0_ENABLED = Boolean(process.env.MEM0_API_KEY);

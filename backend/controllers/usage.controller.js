@@ -1,7 +1,7 @@
 import prisma from "../utils/prismaClient.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
-import { ApiError } from "../utils/ApiError.js";
+import { validateGroupBy } from "../utils/validationSchemas.js";
 import { Prisma } from "../generated/prisma/index.js";
 
 const totalTokensUsedInLifetime = asyncHandler(async (req, res) => {
@@ -19,10 +19,46 @@ const totalTokensUsedInLifetime = asyncHandler(async (req, res) => {
 
 const tokensUsedByGroup = asyncHandler(async (req, res) => {
     const { groupBy } = req.params;
+    const { from, to } = req.query;
+
+    validateGroupBy(groupBy);
+
+    if (from && isNaN(Date.parse(from))) {
+        const err = new Error("Invalid 'from' date");
+        err.status = 400;
+        err.statusCode = 400;
+        throw err;
+    }
+
+    if (to && isNaN(Date.parse(to))) {
+        const err = new Error("Invalid 'to' date");
+        err.status = 400;
+        err.statusCode = 400;
+        throw err;
+    }
+
+    let truncUnit;
+    switch (groupBy) {
+        case "day":
+            truncUnit = "day";
+            break;
+        case "week":
+            truncUnit = "week";
+            break;
+        case "month":
+            truncUnit = "month";
+            break;
+        default: {
+            const err = new Error("Invalid groupBy");
+            err.status = 400;
+            err.statusCode = 400;
+            throw err;
+        }
+    }
 
     const usageByGroup = await prisma.$queryRaw`
         SELECT 
-            DATE_TRUNC(${Prisma.raw(`'${groupBy}'`)}, u."timestamp") AS period,
+            DATE_TRUNC(${truncUnit}, u."timestamp") AS period,
             m."llm_model" AS "model",
             SUM(u."input_tokens") AS "totalInput",
             SUM(u."output_tokens") AS "totalOutput"
@@ -33,7 +69,6 @@ const tokensUsedByGroup = asyncHandler(async (req, res) => {
         ORDER BY period DESC, "totalInput" DESC;
     `;
 
-    // Convert BigInt to Number. Cause JSON doesn't support BigInt, and Prisma returns BigInt for SUM aggregations.
     const serializedUsage = usageByGroup.reduce((acc, curr) => {
         const periodKey = new Date(curr.period).toISOString();
         if (!acc[periodKey]) {
@@ -104,4 +139,54 @@ const topChatsByTokensUsed = asyncHandler(async (req, res) => {
         .json(new ApiResponse(200, result, "Top chats by tokens used retrieved successfully"));
 });
 
-export { totalTokensUsedInLifetime, tokensUsedByGroup, topChatsByTokensUsed };
+const usageBreakdownByModel = asyncHandler(async (req, res) => {
+    const { from, to, page = 1, limit = 10 } = req.query;
+    const offset = (Number(page) - 1) * Number(limit);
+
+    const conditions = [Prisma.sql`u."user_id" = ${req.user.id}`];
+    if (from) conditions.push(Prisma.sql`u."timestamp" >= ${new Date(from)}`);
+    if (to)   conditions.push(Prisma.sql`u."timestamp" <= ${new Date(to)}`);
+    const whereClause = Prisma.join(conditions, " AND ");
+
+    const breakdown = await prisma.$queryRaw`
+        SELECT
+            m."llm_model"   AS "model",
+            a."provider"    AS "provider",
+            SUM(u."input_tokens")::int                              AS "totalInputTokens",
+            SUM(u."output_tokens")::int                             AS "totalOutputTokens",
+            (SUM(u."input_tokens") + SUM(u."output_tokens"))::int   AS "totalTokens",
+            COUNT(*)::int                                           AS "requestCount"
+        FROM "UsageEvents" u
+        JOIN "ChatMessage" m ON u."message_id" = m."id"
+        LEFT JOIN "ApiKey"  a ON u."apikey_id"  = a."id"
+        WHERE ${whereClause}
+        GROUP BY m."llm_model", a."provider"
+        ORDER BY "totalTokens" DESC
+        LIMIT  ${Number(limit)}
+        OFFSET ${offset}
+    `;
+
+    const countResult = await prisma.$queryRaw`
+        SELECT COUNT(DISTINCT (m."llm_model", a."provider"))::int AS count
+        FROM "UsageEvents" u
+        JOIN "ChatMessage" m ON u."message_id" = m."id"
+        LEFT JOIN "ApiKey"  a ON u."apikey_id"  = a."id"
+        WHERE ${whereClause}
+    `;
+
+    const total = countResult[0]?.count || 0;
+
+    return res.status(200).json(
+        new ApiResponse(200, {
+            data: breakdown,
+            pagination: {
+                page:       Number(page),
+                limit:      Number(limit),
+                total,
+                totalPages: Math.ceil(total / Number(limit)),
+            },
+        }, "Usage breakdown by model/provider retrieved successfully")
+    );
+});
+
+export { totalTokensUsedInLifetime, tokensUsedByGroup, topChatsByTokensUsed, usageBreakdownByModel };

@@ -2,18 +2,19 @@ import prisma from "../utils/prismaClient.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
-import { LLM_MODELS, PROVIDERS_BASE_URLS } from "../utils/constants.js";
+import { LLM_MODELS, PROVIDERS_BASE_URLS, MEM0_ENABLED } from "../utils/constants.js";
 import OpenAI from "openai";
 import { qdrant, treeindex } from "../utils/ragClients.js";
 import { decryptApiKey } from "../utils/decrypt.js";
 import { generateVectorEmbeddings } from "../utils/ragUtilities.js";
 import { MemoryClient } from "mem0ai";
 
-const memory = new MemoryClient({ apiKey: process.env.MEM0_API_KEY });
+const memory = MEM0_ENABLED ? new MemoryClient({ apiKey: process.env.MEM0_API_KEY }) : null;
 
 const getAvailableModels = asyncHandler(async (req, res) => {
     const apikeys = await prisma.apiKey.findMany({
         where: { userId: req.user.id },
+        orderBy: { createdAt: "asc" },
     });
     if (!apikeys.length) {
         return res
@@ -31,6 +32,7 @@ const getAvailableModels = asyncHandler(async (req, res) => {
     apikeys.map((key) => {
         models.push(...LLM_MODELS[key.provider]);
     });
+    Array.from(new Set(models)).sort();
 
     return res
         .status(200)
@@ -42,12 +44,22 @@ const sendMessage = asyncHandler(async (req, res) => {
 
     const chat = await prisma.chat.findUnique({
         where: { id: chatId },
-        include: { chatSources: true },
+        include: { chatSources: { orderBy: { createdAt: "asc" } } },
     });
     if (!chat) {
         throw new ApiError(404, "Chat not found.");
     }
 
+    if (chat.status === "QUEUED" || chat.status === "PROCESSING") {
+        throw new ApiError(409, "Chat is still indexing your docs — please try again in a moment.");
+    }
+
+    if (chat.status === "FAILED") {
+        throw new ApiError(
+            409,
+            "Chat ingestion failed. Please re-ingest the documentation or check the docs URL and try again.",
+        );
+    }
     let openai;
     let modelId = model;
     let apiKeyId = null;
@@ -67,12 +79,13 @@ const sendMessage = asyncHandler(async (req, res) => {
                 userId: req.user.id,
                 provider,
             },
+            orderBy: { createdAt: "asc" },
         });
-        apiKeyId = apiKey.id;
 
         if (!apiKey) {
-            throw new ApiError(400, "Invalid API key ID.");
+            throw new ApiError(400, `No API key found for this provider (${provider}). Please configure it in your settings.`);
         }
+        apiKeyId = apiKey.id;
         if (apiKey.userId !== req.user.id) {
             throw new ApiError(403, "You do not have access to this API key.");
         }
@@ -88,6 +101,7 @@ const sendMessage = asyncHandler(async (req, res) => {
 
     let relevantSources = [];
     let relevantNodes = [];
+    let relevantNodeIds = [];
     if (!chat.chatSources[0].isVectorLess) {
         const userPromptEmbeddings = await generateVectorEmbeddings(userPrompt);
         relevantSources = await qdrant.query(chat.collectionName, {
@@ -103,8 +117,8 @@ const sendMessage = asyncHandler(async (req, res) => {
         treeindex.loadData(docTree.sourceData);
         treeindex.loadTree(docTree.treeData);
 
-        const relevantNodeIds = await treeindex.retrieveRelevantNodes(userPrompt);
-        if(relevantNodeIds.length == 0) {
+        relevantNodeIds = await treeindex.retrieveRelevantNodes(userPrompt);
+        if (relevantNodeIds.length === 0) {
             res.write("No relevant sources found, for this query");
             res.end();
             return;
@@ -127,8 +141,7 @@ const sendMessage = asyncHandler(async (req, res) => {
         relevantSources.points.forEach((point, index) => {
             sourceContext += `Source ${index + 1}:\n${point.payload.body}\n`;
         });
-    }
-    else if (relevantNodes.length) {
+    } else if (relevantNodes.length) {
         relevantNodes.forEach(({ data }, index) => {
             sourceContext += `Source ${index + 1}:\n${data}\n`;
         });
@@ -136,15 +149,21 @@ const sendMessage = asyncHandler(async (req, res) => {
 
     // Long-term Memory (Mem0)
     let memoryContext = "";
-    const memoryFetched = await memory.search(userPrompt, {
-        user_id: req.user.id,
-        limit: 5,
-    });
-    if (memoryFetched.length) {
-        memoryContext = "\n--- RELEVANT PAST USER FACTS ---\n";
-        memoryFetched.forEach((item) => {
-            memoryContext += `- ${item.memory}\n`;
-        });
+    if (MEM0_ENABLED && memory) {
+        try {
+            const memoryFetched = await memory.search(userPrompt, {
+                user_id: req.user.id,
+                limit: 5,
+            });
+            if (memoryFetched && memoryFetched.length) {
+                memoryContext = "\n--- RELEVANT PAST USER FACTS ---\n";
+                memoryFetched.forEach((item) => {
+                    memoryContext += `- ${item.memory}\n`;
+                });
+            }
+        } catch (error) {
+            console.error("Mem0 search error (non-fatal):", error.message);
+        }
     }
 
     // Messages Array for the LLM
@@ -209,16 +228,23 @@ const sendMessage = asyncHandler(async (req, res) => {
     }
 
     if (llmResponse.trim()) {
-        await memory.add(
-            [
-                { role: "user", content: userPrompt },
-                { role: "assistant", content: llmResponse },
-            ],
-            {
-                user_id: req.user.id,
-                custom_instructions: "Note: Store this interaction history for future reference.",
-            },
-        );
+        if (MEM0_ENABLED && memory) {
+            try {
+                await memory.add(
+                    [
+                        { role: "user", content: userPrompt },
+                        { role: "assistant", content: llmResponse },
+                    ],
+                    {
+                        user_id: req.user.id,
+                        custom_instructions:
+                            "Note: Store this interaction history for future reference.",
+                    },
+                );
+            } catch (error) {
+                console.error("Mem0 add error (non-fatal):", error.message);
+            }
+        }
 
         const chatMessage = await prisma.chatMessage.create({
             data: {
@@ -239,15 +265,24 @@ const sendMessage = asyncHandler(async (req, res) => {
                     score: Math.round(point.score * 100),
                 })),
             });
-        }
-        else if (relevantNodes.length) {
+        } else if (relevantNodes.length) {
             await prisma.chatMessageSource.createMany({
-                data: relevantNodes.map((node) => ({
-                    chunkText: node.data,
-                    heading: "",
-                    pageUrl: "",
-                    chatMessageId: chatMessage.id,
-                })),
+                data: relevantNodes.map((node, index) => {
+                    const nodeId = node.id || relevantNodeIds[index] || `idx-${index}`;
+                    let fallbackHeading = "Vectorless Source";
+                    if (node.data) {
+                        const firstLine = node.data.split("\n")[0].trim();
+                        fallbackHeading = firstLine.substring(0, 60);
+                        if (firstLine.length > 60) fallbackHeading += "...";
+                    }
+
+                    return {
+                        chunkText: node.data,
+                        heading: fallbackHeading,
+                        pageUrl: `vectorless://node/${nodeId}`,
+                        chatMessageId: chatMessage.id,
+                    };
+                }),
             });
         }
 
@@ -278,7 +313,7 @@ const exportChatMessages = asyncHandler(async (req, res) => {
         where: { id: chatId },
     });
 
-    if (!chat || chat.userId !== req.user.id) {
+    if (!chat) {
         throw new ApiError(404, "Chat not found.");
     }
 
@@ -342,12 +377,13 @@ const getChatMessages = asyncHandler(async (req, res) => {
         where: { id: chatId },
     });
 
-    if (!chat || chat.userId !== req.user.id) {
+    if (!chat) {
         throw new ApiError(404, "Chat not found.");
     }
 
     const messages = await prisma.chatMessage.findMany({
         where: { chatId },
+        orderBy: { createdAt: "asc" },
     });
 
     if (!messages.length) {
@@ -366,6 +402,7 @@ const getChatMessageSources = asyncHandler(async (req, res) => {
 
     const messageSources = await prisma.chatMessageSource.findMany({
         where: { chatMessageId: messageId },
+        orderBy: { createdAt: "asc" },
     });
 
     if (!messageSources.length) {
@@ -381,4 +418,38 @@ const getChatMessageSources = asyncHandler(async (req, res) => {
         .json(new ApiResponse(200, { messageSources }, "Chat message sources retrieved successfully."));
 });
 
-export { sendMessage, getAvailableModels, getChatMessages, getChatMessageSources, exportChatMessages };
+const getSharedChatMessages = asyncHandler(async (req, res) => {
+    const { shareToken } = req.params;
+
+    const chat = await prisma.chat.findUnique({
+        where: { shareToken },
+    });
+
+    if (!chat) {
+        throw new ApiError(404, "Shared chat not found");
+    }
+
+    const messages = await prisma.chatMessage.findMany({
+        where: { chatId: chat.id },
+        orderBy: { createdAt: "asc" },
+    });
+
+    if (!messages.length) {
+        return res
+            .status(200)
+            .json(new ApiResponse(200, { messages: [] }, "No messages found for this chat."));
+    }
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, { messages: messages }, "Chat messages retrieved successfully."));
+});
+
+export {
+    sendMessage,
+    getAvailableModels,
+    getChatMessages,
+    getChatMessageSources,
+    exportChatMessages,
+    getSharedChatMessages,
+};
