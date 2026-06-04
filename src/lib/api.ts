@@ -210,7 +210,8 @@ export const getChats = () =>
 
 export const createChat = async (payload: {
     name?: string;
-    docsUrl: string;
+    docsUrl?: string;
+    docsUrls?: string[];
     isVectorLess?: boolean;
     scrapeLimit?: number;
 }) => {
@@ -221,6 +222,18 @@ export const createChat = async (payload: {
     invalidateChatCaches();
     return result;
 };
+
+export const addChatSource = async (chatId: string, payload: { docsUrl: string; isVectorLess?: boolean }) =>
+    apiRequest<{ chatId: string; chatSourceId: string; attached: boolean; status: string }>(`/chat/${chatId}/sources`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+    });
+
+export const removeChatSource = async (chatId: string, payload: { docsUrl: string; isVectorLess?: boolean }) =>
+    apiRequest<{ chatId: string; chatSourceId: string; detached: boolean }>(`/chat/${chatId}/sources`, {
+        method: "DELETE",
+        body: JSON.stringify(payload),
+    });
 
 export const deleteChat = async (chatId: string) => {
     const result = await apiRequest(`/chat/${chatId}`, { method: "DELETE" });

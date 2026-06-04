@@ -107,6 +107,7 @@ const Dashboard = () => {
     // New Chat Form State
     const [chatName, setChatName] = useState("");
     const [chatUrl, setChatUrl] = useState("");
+    const [chatUrls, setChatUrls] = useState<string[]>([]);
     const [isVectorLess, setIsVectorLess] = useState(false);
     const [scrapeLimit, setScrapeLimit] = useState<number | "">("");
 
@@ -333,19 +334,20 @@ const Dashboard = () => {
     }, []);
 
     const handleCreateChat = async () => {
-        if (!chatUrl) return;
+        if (!chatUrls.length) return;
         setIsCreating(true);
         setError("");
         try {
             await createChat({
                 name: chatName || undefined,
-                docsUrl: chatUrl,
+                docsUrls: chatUrls,
                 isVectorLess,
                 scrapeLimit: scrapeLimit || undefined,
             });
             setIsModalOpen(false);
             setChatName("");
             setChatUrl("");
+            setChatUrls([]);
             setIsVectorLess(false);
             setScrapeLimit("");
             showToast("Chat created and processing started.");
@@ -355,6 +357,17 @@ const Dashboard = () => {
         } finally {
             setIsCreating(false);
         }
+    };
+
+    const handleAddChatUrl = () => {
+        const value = chatUrl.trim();
+        if (!value) return;
+        setChatUrls((prev) => (prev.includes(value) ? prev : [...prev, value]));
+        setChatUrl("");
+    };
+
+    const handleRemoveChatUrl = (url: string) => {
+        setChatUrls((prev) => prev.filter((item) => item !== url));
     };
 
     const handleDeleteChat = async () => {
@@ -403,7 +416,7 @@ const Dashboard = () => {
     };
 
     // Disabled state for the Start Processing button
-    const isStartDisabled = !chatUrl;
+    const isStartDisabled = !chatUrls.length;
     const getStatusBadge = (isVectorLess: boolean, status: string) => {
         switch (status) {
             case "ready":
@@ -855,8 +868,34 @@ const Dashboard = () => {
                                     className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-blue/50 focus:ring-1 focus:ring-accent-blue/50 transition-all font-mono"
                                 />
                                 <p className="text-xs text-gray-500">
-                                    We'll scrape this page and sub-pages automatically.
+                                    Add one or more documentation URLs. We'll scrape each page and its sub-pages automatically.
                                 </p>
+                                <button
+                                    type="button"
+                                    onClick={handleAddChatUrl}
+                                    className="mt-2 px-3 py-1.5 rounded-md bg-white/10 hover:bg-white/15 text-xs font-medium text-white transition-colors"
+                                >
+                                    Add URL
+                                </button>
+                                {chatUrls.length > 0 && (
+                                    <div className="mt-3 space-y-2">
+                                        {chatUrls.map((url) => (
+                                            <div
+                                                key={url}
+                                                className="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-white/5 border border-white/10"
+                                            >
+                                                <span className="text-xs text-gray-300 truncate font-mono">{url}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleRemoveChatUrl(url)}
+                                                    className="text-xs text-red-400 hover:text-red-300"
+                                                >
+                                                    Remove
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
 
                             {/* Ingestion Mode */}

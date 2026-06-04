@@ -50,6 +50,8 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import CodeBlock from "../components/CodeBlock";
 import {
+    addChatSource,
+    removeChatSource,
     getAvailableModels,
     getChatDetails,
     getChatMessages,
@@ -126,14 +128,11 @@ export const ChatPage = () => {
     const [isIndexedModalOpen, setIsIndexedModalOpen] = useState(false);
     const [currentLinks, setCurrentLinks] = useState<CurrentLink[]>([]);
     const [indexedPages, setIndexedPages] = useState<IndexedPage[]>([]);
+    const [newSourceUrl, setNewSourceUrl] = useState("");
 
     const [isSharing, setIsSharing] = useState(false);
     const [shareToken, setShareToken] = useState<string | null>(null);
     const [shareModalOpen, setShareModalOpen] = useState(false);
-
-    const handleShare = () => {
-        setShareModalOpen(true);
-    };
 
     const handleToggleShare = async () => {
         setIsSharing(true);
@@ -268,6 +267,27 @@ export const ChatPage = () => {
             setIsMessagesLoading(false);
         } finally {
             setIsPageLoading(false);
+        }
+    };
+
+    const handleAddSource = async () => {
+        const value = newSourceUrl.trim();
+        if (!value) return;
+        try {
+            await addChatSource(chatId, { docsUrl: value });
+            setNewSourceUrl("");
+            await loadChatPage();
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to add source.");
+        }
+    };
+
+    const handleRemoveSource = async (docsUrl: string) => {
+        try {
+            await removeChatSource(chatId, { docsUrl });
+            await loadChatPage();
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to remove source.");
         }
     };
 
@@ -602,6 +622,25 @@ export const ChatPage = () => {
                                     <FileText className="w-4 h-4 text-accent-blue" />
                                     Show all pages
                                 </button>
+                                <div className="mt-4 space-y-2">
+                                    <label className="text-xs uppercase tracking-wider text-gray-500 font-semibold">
+                                        Add Source
+                                    </label>
+                                    <input
+                                        type="url"
+                                        value={newSourceUrl}
+                                        onChange={(e) => setNewSourceUrl(e.target.value)}
+                                        placeholder="https://docs.example.com"
+                                        className="w-full bg-[#111] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-blue/50 focus:ring-1 focus:ring-accent-blue/50 transition-all font-mono"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={handleAddSource}
+                                        className="w-full px-3 py-2 rounded-lg bg-accent-blue hover:bg-accent-blue/90 text-white text-sm font-medium transition-colors"
+                                    >
+                                        Add to Chat
+                                    </button>
+                                </div>
                             </div>
 
                             {/* Scraped Pages List */}
@@ -616,10 +655,17 @@ export const ChatPage = () => {
                                                 key={i}
                                                 className="px-3 py-2 rounded-lg text-sm transition-colors border border-transparent text-gray-400"
                                             >
-                                                <div className="flex items-center justify-between">
+                                                <div className="flex items-center justify-between gap-2">
                                                     <span className="truncate pr-2 text-gray-300">
                                                         {page.title}
                                                     </span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleRemoveSource(page.url)}
+                                                        className="text-[11px] text-red-400 hover:text-red-300 shrink-0"
+                                                    >
+                                                        Remove
+                                                    </button>
                                                 </div>
                                                 <a
                                                     href={page.url}
@@ -1212,6 +1258,25 @@ export const ChatPage = () => {
                                         <FileText className="w-4 h-4 text-accent-blue" />
                                         Show all pages
                                     </button>
+                                    <div className="mt-4 space-y-2">
+                                        <label className="text-xs uppercase tracking-wider text-gray-500 font-semibold">
+                                            Add Source
+                                        </label>
+                                        <input
+                                            type="url"
+                                            value={newSourceUrl}
+                                            onChange={(e) => setNewSourceUrl(e.target.value)}
+                                            placeholder="https://docs.example.com"
+                                            className="w-full bg-[#111] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-blue/50 focus:ring-1 focus:ring-accent-blue/50 transition-all font-mono"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={handleAddSource}
+                                            className="w-full px-3 py-2 rounded-lg bg-accent-blue hover:bg-accent-blue/90 text-white text-sm font-medium transition-colors"
+                                        >
+                                            Add to Chat
+                                        </button>
+                                    </div>
                                 </div>
                                 <div className="flex-1 overflow-y-auto p-4">
                                     <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">
@@ -1224,9 +1289,18 @@ export const ChatPage = () => {
                                                     key={i}
                                                     className="px-3 py-2 rounded-lg text-sm border border-white/10 bg-white/5"
                                                 >
-                                                    <span className="block text-gray-300 wrap-break-word">
-                                                        {page.title}
-                                                    </span>
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <span className="block text-gray-300 wrap-break-word">
+                                                            {page.title}
+                                                        </span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleRemoveSource(page.url)}
+                                                            className="text-[11px] text-red-400 hover:text-red-300 shrink-0"
+                                                        >
+                                                            Remove
+                                                        </button>
+                                                    </div>
                                                     <a
                                                         href={page.url}
                                                         target="_blank"
