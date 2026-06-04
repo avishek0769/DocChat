@@ -170,6 +170,7 @@ export const getUserProfile = () =>
             fullname?: string | null;
             username?: string | null;
             email?: string | null;
+            isAdmin?: boolean;
         }>("/user/profile", { method: "GET" }),
     );
 
@@ -368,13 +369,6 @@ export const getTopChatsByUsage = () =>
             }>
         >("/usage/top-chats", { method: "GET" }),
     );
-    apiRequest<
-        Array<{
-            chatId: string;
-            _sum: { inputTokens: number | null; outputTokens: number | null };
-            name?: string | null;
-        }>
-    >("/usage/top-chats", { method: "GET" });
 export type UsageBreakdownItem = {
     model: string;
     provider: string | null;
@@ -406,6 +400,100 @@ export const getUsageBreakdown = (params?: {
         };
     }>(`/usage/breakdown${query ? `?${query}` : ""}`, { method: "GET" });
 };
+
+export type AdminOverviewData = {
+    kpis?: Array<{
+        label: string;
+        value: number;
+        delta?: string | null;
+    }>;
+    recentActivity?: Array<{
+        id: string;
+        type: string;
+        title?: string | null;
+        detail?: string | null;
+        userName?: string | null;
+        createdAt: string;
+    }>;
+};
+
+export type AdminUserItem = {
+    id: string;
+    fullname?: string | null;
+    username?: string | null;
+    email?: string | null;
+    isAdmin?: boolean;
+    createdAt?: string;
+    lastActiveAt?: string | null;
+    totalChats?: number;
+    totalTokens?: number;
+};
+
+export type AdminUserDetailResponse = {
+    user: AdminUserItem & {
+        role?: string | null;
+    };
+    recentChats?: ChatItem[];
+    recentActivity?: Array<{
+        id: string;
+        type: string;
+        title?: string | null;
+        detail?: string | null;
+        createdAt: string;
+    }>;
+    usageBreakdown?: UsageBreakdownItem[];
+};
+
+export type AdminUsageData = {
+    totals?: {
+        inputTokens?: number;
+        outputTokens?: number;
+    };
+    topUsers?: Array<{
+        id: string;
+        fullname?: string | null;
+        username?: string | null;
+        email?: string | null;
+        inputTokens?: number;
+        outputTokens?: number;
+        totalTokens?: number;
+    }>;
+    topModels?: UsageBreakdownItem[];
+};
+
+export type AdminIngestionData = {
+    status?: Array<{
+        status: string;
+        count: number;
+    }>;
+    failedRuns?: Array<{
+        id: string;
+        chatId?: string;
+        chatName?: string | null;
+        url?: string | null;
+        error?: string | null;
+        createdAt: string;
+        updatedAt?: string;
+    }>;
+};
+
+export const getAdminOverview = () =>
+    apiRequest<AdminOverviewData>("/admin/overview", { method: "GET" });
+
+export const getAdminUsers = (page = 1, limit = 10) =>
+    apiRequest<{
+        data: AdminUserItem[];
+        pagination: { page: number; limit: number; total: number; totalPages: number };
+    }>(`/admin/users?page=${page}&limit=${limit}`, { method: "GET" });
+
+export const getAdminUser = (userId: string) =>
+    apiRequest<AdminUserDetailResponse>(`/admin/users/${userId}`, { method: "GET" });
+
+export const getAdminUsage = (range: "24h" | "7d" | "30d") =>
+    apiRequest<AdminUsageData>(`/admin/usage?range=${range}`, { method: "GET" });
+
+export const getAdminIngestion = (range: "24h" | "7d" | "30d") =>
+    apiRequest<AdminIngestionData>(`/admin/ingestion?range=${range}`, { method: "GET" });
 
 export const toggleChatShare = (chatId: string) =>
     apiRequest<ChatItem>(`/chat/${chatId}/share`, { method: "POST" });

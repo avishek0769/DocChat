@@ -7,6 +7,10 @@ import {
     User,
     LogOut,
     Activity,
+    Shield,
+    BarChart3,
+    Users,
+    Boxes,
 } from "lucide-react";
 import clsx from "clsx";
 import { getApiKeyCount, getUserProfile } from "../lib/api";
@@ -21,6 +25,7 @@ export const Sidebar = ({ isCollapsed = false }: SidebarProps) => {
     const path = location.pathname;
     const [profileName, setProfileName] = useState("User");
     const [profileSubline, setProfileSubline] = useState("-");
+    const [isAdmin, setIsAdmin] = useState(false);
 
     useEffect(() => {
         let mounted = true;
@@ -39,10 +44,12 @@ export const Sidebar = ({ isCollapsed = false }: SidebarProps) => {
 
                 setProfileName(displayName);
                 setProfileSubline(`${keyCount.count || 0} API keys`);
+                setIsAdmin(Boolean(profile.isAdmin));
             } catch {
                 if (!mounted) return;
                 setProfileName("User");
                 setProfileSubline("-");
+                setIsAdmin(false);
             }
         };
 
@@ -63,6 +70,13 @@ export const Sidebar = ({ isCollapsed = false }: SidebarProps) => {
         { name: "Usage", path: "/usage", icon: Activity },
         { name: "Settings", path: "/settings", icon: SettingsIcon },
         { name: "Profile", path: "/profile", icon: User },
+    ];
+
+    const adminItems = [
+        { name: "Overview", path: "/admin", icon: Shield },
+        { name: "Users", path: "/admin/users", icon: Users },
+        { name: "Usage", path: "/admin/usage", icon: BarChart3 },
+        { name: "Ingestion", path: "/admin/ingestion", icon: Boxes },
     ];
 
     return (
@@ -104,6 +118,42 @@ export const Sidebar = ({ isCollapsed = false }: SidebarProps) => {
                         </Link>
                     );
                 })}
+
+                {isAdmin && (
+                    <div className="pt-4 mt-4 border-t border-white/5 space-y-1">
+                        {!isCollapsed && (
+                            <p className="px-3 text-[11px] uppercase tracking-[0.2em] text-gray-500">
+                                Admin
+                            </p>
+                        )}
+                        {adminItems.map((item) => {
+                            const isActive = path === item.path;
+                            const Icon = item.icon;
+                            return (
+                                <Link
+                                    key={item.name}
+                                    to={item.path}
+                                    title={isCollapsed ? item.name : undefined}
+                                    className={clsx(
+                                        "flex items-center rounded-lg font-medium transition-colors text-sm",
+                                        isCollapsed ? "justify-center p-3" : "gap-3 px-3 py-2",
+                                        isActive
+                                            ? "bg-white/5 text-white border border-white/5"
+                                            : "text-gray-400 hover:text-white hover:bg-white/5 border border-transparent",
+                                    )}
+                                >
+                                    <Icon
+                                        className={clsx(
+                                            "w-5 h-5 shrink-0",
+                                            isActive ? "text-accent-blue" : "",
+                                        )}
+                                    />
+                                    {!isCollapsed && item.name}
+                                </Link>
+                            );
+                        })}
+                    </div>
+                )}
             </nav>
 
             {/* Profile Bottom */}
