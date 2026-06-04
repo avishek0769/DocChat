@@ -17,27 +17,30 @@ function App() {
                 <Route path="/" element={<LandingPage />} />
                 <Route
                     path="/dashboard"
-                    element={
-                        <ProtectedRoute>
-                            <Dashboard />
-                        </ProtectedRoute>
-                    }
+                    // element={
+                    //     <ProtectedRoute>
+                    //         <Dashboard />
+                    //     </ProtectedRoute>
+                    // }
+                    element={<Dashboard />}
                 />
                 <Route
                     path="/chats"
-                    element={
-                        <ProtectedRoute>
-                            <AllChats />
-                        </ProtectedRoute>
-                    }
+                    // element={
+                    //     <ProtectedRoute>
+                    //         <AllChats />
+                    //     </ProtectedRoute>
+                    // }
+                    element={<AllChats />}
                 />
                 <Route
                     path="/chat/:id"
-                    element={
-                        <ProtectedRoute>
-                            <ChatPage />
-                        </ProtectedRoute>
-                    }  
+                    // element={
+                    //     <ProtectedRoute>
+                    //         <ChatPage />
+                    //     </ProtectedRoute>
+                    // }  
+                    element={<ChatPage />}
                 />
                 <Route
                     path="/usage"
