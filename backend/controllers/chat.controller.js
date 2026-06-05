@@ -164,11 +164,36 @@ const createChat = asyncHandler(async (req, res) => {
     }
 });
 
+const DEFAULT_PROGRESS = {
+    status: "QUEUED",
+    current: 0,
+    total: 0,
+    progress: 0,
+};
+
+const normalizeProgress = (progress = {}) => {
+    const data = progress && typeof progress === "object" ? progress : {};
+
+    return {
+        ...DEFAULT_PROGRESS,
+        ...data,
+        current: Number.isFinite(data.current) ? data.current : DEFAULT_PROGRESS.current,
+        total: Number.isFinite(data.total) ? data.total : DEFAULT_PROGRESS.total,
+        progress: Number.isFinite(data.progress) ? data.progress : DEFAULT_PROGRESS.progress,
+    };
+};
+
 const progressStatus = asyncHandler(async (req, res) => {
     const { chatId } = req.params;
 
-    const chat = await prisma.chat.findUnique({
-        where: { id: chatId },
+    const chat = await prisma.chat.findFirst({
+        where: {
+            id: chatId,
+            userId: req.user.id,
+        },
+        select: {
+            id: true,
+        },
     });
 
     if (!chat) {
@@ -176,7 +201,7 @@ const progressStatus = asyncHandler(async (req, res) => {
     }
 
     const latestIngestionRun = await prisma.ingestionRun.findFirst({
-        where: { chatId },
+        where: { chatId: chat.id },
         orderBy: { startedAt: "desc" },
         select: {
             id: true,
@@ -190,8 +215,8 @@ const progressStatus = asyncHandler(async (req, res) => {
         },
     });
 
-    const redisData = await redis.get(chat.id.toString());
-    const progress = redisData ? JSON.parse(redisData) : { status: "QUEUED", progress: 0 };
+    const redisData = await redis.get(chat.id);
+    const progress = normalizeProgress(redisData ? JSON.parse(redisData) : DEFAULT_PROGRESS);
 
     res.status(200).json(
         new ApiResponse(200, { progress, latestIngestionRun }, "Progress fetched successfully"),

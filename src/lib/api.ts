@@ -217,7 +217,14 @@ export const deleteChat = async (chatId: string) => {
 };
 
 export const getChatStatus = (chatId: string) =>
-    apiRequest<{ progress: { status: string; progress: number } }>(`/chat/status/${chatId}`, {
+    apiRequest<{
+        progress: {
+            status: string;
+            progress: number;
+            current: number;
+            total: number;
+        };
+    }>(`/chat/status/${chatId}`, {
         method: "GET",
     });
 
