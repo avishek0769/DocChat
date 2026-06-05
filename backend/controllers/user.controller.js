@@ -13,10 +13,16 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 const AccessOptions = {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 1 * 24 * 60 * 60 * 1000, // 1 day
+    path: "/",
 };
 const RefreshOptions = {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 10 * 24 * 60 * 60 * 1000, // 10 days
+    path: "/",
 };
 
 const hashPassword = async (password) => {
