@@ -6,7 +6,7 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import redis from "../utils/redis.js";
 import { Resend } from "resend";
-import { emit } from "node:cluster";
+
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
