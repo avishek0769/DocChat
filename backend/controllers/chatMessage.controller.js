@@ -6,7 +6,7 @@ import { LLM_MODELS, PROVIDERS_BASE_URLS, MEM0_ENABLED } from "../utils/constant
 import OpenAI from "openai";
 import { qdrant, treeindex } from "../utils/ragClients.js";
 import { decryptApiKey } from "../utils/decrypt.js";
-import { generateVectorEmbeddings } from "../utils/ragUtilities.js";
+import { retrieveHybridSources } from "../utils/ragUtilities.js";
 import { buildMessagesForLLM } from "../utils/contextBuilder.js";
 import { MemoryClient } from "mem0ai";
 
@@ -104,13 +104,7 @@ const sendMessage = asyncHandler(async (req, res) => {
     let relevantNodes = [];
     let relevantNodeIds = [];
     if (!chat.chatSources[0].isVectorLess) {
-        const userPromptEmbeddings = await generateVectorEmbeddings(userPrompt);
-        relevantSources = await qdrant.query(chat.collectionName, {
-            query: userPromptEmbeddings,
-            limit: 5,
-            with_payload: true,
-            score_threshold: 0.35,
-        });
+        relevantSources = await retrieveHybridSources(qdrant, chat.collectionName, userPrompt);
     } else {
         const docTree = await prisma.documentTree.findUnique({
             where: { id: chat.collectionName },

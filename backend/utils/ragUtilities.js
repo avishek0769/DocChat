@@ -2,13 +2,64 @@ import * as cheerio from "cheerio";
 import OpenAI from "openai";
 import dns from "node:dns/promises";
 
-const openai = new OpenAI({
-    baseURL: "https://openrouter.ai/api/v1",
-    apiKey: process.env.OPENROUTER_EMBEDDING_API_KEY,
-});
+const lexicalPointCache = new Map();
+let openai;
+
+const DEFAULT_HYBRID_CONFIG = {
+    denseLimit: 10,
+    lexicalLimit: 10,
+    finalLimit: 5,
+    rrfK: 60,
+    lexicalCacheTtlMs: 600000,
+    lexicalMaxPoints: 5000,
+    scrollBatchSize: 256,
+};
+
+function getOpenAIClient() {
+    if (!process.env.OPENROUTER_EMBEDDING_API_KEY) {
+        throw new Error("OPENROUTER_EMBEDDING_API_KEY is required to generate vector embeddings.");
+    }
+
+    if (!openai) {
+        openai = new OpenAI({
+            baseURL: "https://openrouter.ai/api/v1",
+            apiKey: process.env.OPENROUTER_EMBEDDING_API_KEY,
+        });
+    }
+
+    return openai;
+}
+
+function readPositiveInt(value, fallback) {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function getHybridRetrievalConfig(overrides = {}) {
+    const config = {
+        denseLimit: readPositiveInt(process.env.HYBRID_DENSE_LIMIT, DEFAULT_HYBRID_CONFIG.denseLimit),
+        lexicalLimit: readPositiveInt(process.env.HYBRID_LEXICAL_LIMIT, DEFAULT_HYBRID_CONFIG.lexicalLimit),
+        finalLimit: readPositiveInt(process.env.HYBRID_FINAL_LIMIT, DEFAULT_HYBRID_CONFIG.finalLimit),
+        rrfK: readPositiveInt(process.env.HYBRID_RRF_K, DEFAULT_HYBRID_CONFIG.rrfK),
+        lexicalCacheTtlMs: readPositiveInt(
+            process.env.HYBRID_LEXICAL_CACHE_TTL_MS,
+            DEFAULT_HYBRID_CONFIG.lexicalCacheTtlMs,
+        ),
+        lexicalMaxPoints: readPositiveInt(
+            process.env.HYBRID_LEXICAL_MAX_POINTS,
+            DEFAULT_HYBRID_CONFIG.lexicalMaxPoints,
+        ),
+        scrollBatchSize: readPositiveInt(
+            process.env.HYBRID_SCROLL_BATCH_SIZE,
+            DEFAULT_HYBRID_CONFIG.scrollBatchSize,
+        ),
+    };
+
+    return { ...config, ...overrides };
+}
 
 async function generateVectorEmbeddings(text) {
-    const response = await openai.embeddings.create({
+    const response = await getOpenAIClient().embeddings.create({
         model: "openai/text-embedding-3-small",
         input: text,
         encoding_format: "float",
@@ -16,6 +67,216 @@ async function generateVectorEmbeddings(text) {
     });
 
     return response.data[0].embedding;
+}
+
+function pointId(point) {
+    return String(point?.id ?? "");
+}
+
+function normalizeSearchText(value = "") {
+    return String(value)
+        .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+        .toLowerCase();
+}
+
+function tokenizeSearchText(value = "") {
+    const text = normalizeSearchText(value);
+    const tokens = new Set();
+    const matches = text.match(/[a-z0-9]+(?:[._:/#-][a-z0-9]+)*/g) || [];
+
+    for (const match of matches) {
+        tokens.add(match);
+        for (const part of match.split(/[._:/#-]+/)) {
+            if (part) tokens.add(part);
+        }
+    }
+
+    return Array.from(tokens);
+}
+
+function countTokenMatches(tokens, queryTokens) {
+    const counts = new Map();
+
+    for (const token of tokens) {
+        counts.set(token, (counts.get(token) || 0) + 1);
+    }
+
+    return queryTokens.reduce((total, token) => total + (counts.get(token) || 0), 0);
+}
+
+function lexicalScorePoint(point, queryTokens, normalizedQuery) {
+    const payload = point?.payload || {};
+    const title = payload.title || "";
+    const url = payload.url || "";
+    const body = payload.body || "";
+    let score = 0;
+
+    score += countTokenMatches(tokenizeSearchText(title), queryTokens) * 3;
+    score += countTokenMatches(tokenizeSearchText(url), queryTokens) * 2;
+    score += countTokenMatches(tokenizeSearchText(body), queryTokens);
+
+    if (normalizedQuery.length >= 3) {
+        const normalizedTitle = normalizeSearchText(title);
+        const normalizedUrl = normalizeSearchText(url);
+        const normalizedBody = normalizeSearchText(body);
+
+        if (normalizedTitle.includes(normalizedQuery)) score += 6;
+        if (normalizedUrl.includes(normalizedQuery)) score += 4;
+        if (normalizedBody.includes(normalizedQuery)) score += 3;
+    }
+
+    return score;
+}
+
+function rankLexicalCandidates(queryText, points = [], limit = DEFAULT_HYBRID_CONFIG.lexicalLimit) {
+    const queryTokens = tokenizeSearchText(queryText);
+    const normalizedQuery = normalizeSearchText(queryText).trim();
+
+    if (!queryTokens.length) return [];
+
+    return points
+        .map((point) => ({
+            ...point,
+            score: lexicalScorePoint(point, queryTokens, normalizedQuery),
+        }))
+        .filter((point) => point.score > 0)
+        .sort((a, b) => b.score - a.score || pointId(a).localeCompare(pointId(b)))
+        .slice(0, limit);
+}
+
+function normalizeQdrantPoints(response) {
+    if (Array.isArray(response)) return response;
+    if (Array.isArray(response?.points)) return response.points;
+    return [];
+}
+
+async function scrollCollectionPayloads(qdrantClient, collectionName, config) {
+    const cacheKey = `${collectionName}:${config.lexicalMaxPoints}:${config.scrollBatchSize}`;
+    const cached = lexicalPointCache.get(cacheKey);
+
+    if (cached && cached.expiresAt > Date.now()) {
+        return cached.points;
+    }
+
+    const points = [];
+    let offset;
+
+    while (points.length < config.lexicalMaxPoints) {
+        const remaining = config.lexicalMaxPoints - points.length;
+        const response = await qdrantClient.scroll(collectionName, {
+            limit: Math.min(config.scrollBatchSize, remaining),
+            offset,
+            with_payload: true,
+            with_vector: false,
+        });
+        const batch = normalizeQdrantPoints(response);
+
+        points.push(...batch);
+
+        if (response?.next_page_offset == null || batch.length === 0) break;
+        offset = response.next_page_offset;
+    }
+
+    lexicalPointCache.set(cacheKey, {
+        points,
+        expiresAt: Date.now() + config.lexicalCacheTtlMs,
+    });
+
+    return points;
+}
+
+async function retrieveDenseCandidates(qdrantClient, collectionName, userPrompt, config, queryVector) {
+    const vector = queryVector || await generateVectorEmbeddings(userPrompt);
+
+    return normalizeQdrantPoints(await qdrantClient.query(collectionName, {
+        query: vector,
+        limit: config.denseLimit,
+        with_payload: true,
+        score_threshold: 0.35,
+    }));
+}
+
+async function retrieveLexicalCandidates(qdrantClient, collectionName, userPrompt, config) {
+    const points = await scrollCollectionPayloads(qdrantClient, collectionName, config);
+    return rankLexicalCandidates(userPrompt, points, config.lexicalLimit);
+}
+
+function mergeRankedSources(
+    densePoints = [],
+    lexicalPoints = [],
+    config = getHybridRetrievalConfig(),
+) {
+    const merged = new Map();
+
+    const addRankedPoints = (points, sourceName) => {
+        points.forEach((point, index) => {
+            const id = pointId(point);
+            if (!id) return;
+
+            const current = merged.get(id) || {
+                ...point,
+                score: 0,
+                denseRank: Number.POSITIVE_INFINITY,
+                lexicalRank: Number.POSITIVE_INFINITY,
+                rrfScore: 0,
+            };
+
+            current.payload = current.payload || point.payload;
+            current.rrfScore += 1 / (config.rrfK + index + 1);
+            if (sourceName === "dense") current.denseRank = Math.min(current.denseRank, index);
+            if (sourceName === "lexical") current.lexicalRank = Math.min(current.lexicalRank, index);
+            merged.set(id, current);
+        });
+    };
+
+    addRankedPoints(densePoints, "dense");
+    addRankedPoints(lexicalPoints, "lexical");
+
+    const ranked = Array.from(merged.values()).sort((a, b) =>
+        b.rrfScore - a.rrfScore ||
+        a.denseRank - b.denseRank ||
+        a.lexicalRank - b.lexicalRank ||
+        pointId(a).localeCompare(pointId(b)),
+    );
+    const topScore = ranked[0]?.rrfScore || 1;
+
+    return ranked.slice(0, config.finalLimit).map((point) => ({
+        id: point.id,
+        payload: point.payload,
+        score: point.rrfScore / topScore,
+    }));
+}
+
+async function retrieveHybridSources(qdrantClient, collectionName, userPrompt, options = {}) {
+    const config = getHybridRetrievalConfig(options.config);
+    let densePoints = [];
+    let lexicalPoints = [];
+
+    try {
+        densePoints = await retrieveDenseCandidates(
+            qdrantClient,
+            collectionName,
+            userPrompt,
+            config,
+            options.queryVector,
+        );
+    } catch (error) {
+        console.error("Dense retrieval failed, falling back to lexical candidates:", error.message);
+    }
+
+    try {
+        lexicalPoints = await retrieveLexicalCandidates(qdrantClient, collectionName, userPrompt, config);
+    } catch (error) {
+        console.error("Lexical retrieval failed, falling back to dense candidates:", error.message);
+    }
+
+    return {
+        points: mergeRankedSources(densePoints, lexicalPoints, config),
+    };
+}
+
+function resetHybridRetrievalCache() {
+    lexicalPointCache.clear();
 }
 
 // ---------------------------------------------------------------------------
@@ -212,4 +473,16 @@ function extractHrefsFromScripts($, rootUrl, rootHostname) {
     return hrefs;
 }
 
-export { normalizeUrl, isValidDocUrl, scrapeWebpage, scrapeTitle, generateVectorEmbeddings };
+export {
+    normalizeUrl,
+    isValidDocUrl,
+    scrapeWebpage,
+    scrapeTitle,
+    generateVectorEmbeddings,
+    getHybridRetrievalConfig,
+    tokenizeSearchText,
+    rankLexicalCandidates,
+    mergeRankedSources,
+    retrieveHybridSources,
+    resetHybridRetrievalCache,
+};
