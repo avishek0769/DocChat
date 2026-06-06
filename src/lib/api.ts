@@ -142,6 +142,7 @@ export const invalidateApiKeyCaches = () => {
     const prefix = cacheKey("");
     removeMatchingFromCache(`${prefix}/apikey/list`);
     removeMatchingFromCache(`${prefix}/apikey/count`);
+    removeMatchingFromCache(`${prefix}/message/models`);
 };
 
 export const invalidateChatCaches = () => {
@@ -239,7 +240,7 @@ export const getPagesIndexed = (chatId: string) =>
     );
 
 export const getAvailableModels = () =>
-    withCache(cacheKey("/message/models"), 24 * 60 * 60 * 1000, () =>
+    withCache(cacheKey("/message/models"), 5 * 60 * 1000, () =>
         apiRequest<{ models: string[] }>("/message/models", { method: "GET" }),
     );
 

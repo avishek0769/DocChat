@@ -51,7 +51,7 @@ import "highlight.js/styles/atom-one-dark.css";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
-    getApiKeys,
+    getAvailableModels,
     getChatDetails,
     getChatMessages,
     getMessageSources,
@@ -102,6 +102,7 @@ export const ChatPage = () => {
     });
     const [modelOptions, setModelOptions] = useState<ModelOption[]>([]);
     const [selectedModel, setSelectedModel] = useState("");
+    const [hasApiKeys, setHasApiKeys] = useState(true);
     const [isPageLoading, setIsPageLoading] = useState(true);
     const [isMessagesLoading, setIsMessagesLoading] = useState(true);
     const [error, setError] = useState("");
@@ -165,10 +166,10 @@ export const ChatPage = () => {
         setIsMessagesLoading(true);
         setError("");
         try {
-            const [chatDetails, indexedPageData, apiKeyData, messageData] = await Promise.all([
+            const [chatDetails, indexedPageData, availableModelsData, messageData] = await Promise.all([
                 getChatDetails(chatId),
                 getPagesIndexed(chatId),
-                getApiKeys(),
+                getAvailableModels(),
                 getChatMessages(chatId),
             ]);
 
@@ -212,13 +213,27 @@ export const ChatPage = () => {
                 },
             ];
 
-            const dynamicModels = (apiKeyData.apiKeys || []).flatMap((key) =>
-                (key.models || []).map((model) => ({
-                    provider: key.provider,
+            const rawModels = availableModelsData?.models || [];
+            const uniqueModels = Array.from(new Set(rawModels)).sort();
+            setHasApiKeys(uniqueModels.length > 0);
+
+            const inferProvider = (m: string) => {
+                if (m.includes("/")) return "OPENROUTER";
+                if (m.includes("gpt")) return "OPENAI";
+                if (m.includes("claude")) return "ANTHROPIC";
+                if (m.includes("gemini")) return "GOOGLE";
+                if (m.includes("grok")) return "XAI";
+                return "OPENROUTER";
+            };
+
+            const dynamicModels = uniqueModels.map((model) => {
+                const provider = inferProvider(model);
+                return {
+                    provider,
                     model,
-                    label: `${model} (${key.provider})`,
-                })),
-            );
+                    label: `${model} (${provider})`,
+                };
+            });
 
             const options = [...defaultOptions, ...dynamicModels];
             setModelOptions(options);
@@ -660,6 +675,14 @@ export const ChatPage = () => {
                             </div>
                         </div>
                         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                            {!hasApiKeys && (
+                                <button
+                                    onClick={() => navigate("/dashboard?tab=api-keys")}
+                                    className="hidden sm:inline-flex text-xs font-semibold text-accent-blue hover:text-accent-blue/80 hover:underline px-2 transition-colors"
+                                >
+                                    + Add API Key
+                                </button>
+                            )}
                             <div className="hidden sm:flex items-center mr-2">
                                 <div className="relative inline-flex items-center gap-2 rounded-xl border border-white/15 bg-linear-to-r from-white/5 to-white/2 px-2.5 py-1.5 shadow-inner shadow-black/30">
                                     <span className="text-[11px] tracking-wide uppercase text-gray-500 font-semibold">
