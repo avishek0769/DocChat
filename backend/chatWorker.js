@@ -12,115 +12,138 @@ import { treeindex, qdrant } from "./utils/ragClients.js";
 import { v4 as uuidv4 } from "uuid";
 import prisma from "./utils/prismaClient.js";
 
+function sanitizeErrorMessage(message) {
+    if (!message) return null;
+    const safe = String(message)
+        .replace(/[\r\n\t]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+    if (!safe) return null;
+    return safe.length > 200 ? `${safe.slice(0, 197)}...` : safe;
+}
+
+function getErrorCode(err) {
+    if (!err) return "UNKNOWN_ERROR";
+    if (typeof err.code === "string" && err.code.trim()) return err.code.trim().slice(0, 64);
+    if (typeof err.name === "string" && err.name.trim()) return err.name.trim().slice(0, 64);
+    return "UNKNOWN_ERROR";
+}
+
 async function processVector(docsRootUrl, chatId, collectionName, chatSourceId) {
-    const rootUrl = normalizeUrl(docsRootUrl);
-    console.log("Scraping root:", rootUrl);
+    try {
+        const rootUrl = normalizeUrl(docsRootUrl);
+        console.log("Scraping root:", rootUrl);
 
-    const { internalLinks } = await scrapeWebpage(rootUrl, rootUrl);
-    let allLinks = internalLinks.slice(0, 300); // slice 5 - Just for development, slice 300 for production
-    const totalLinks = allLinks.length;
+        const { internalLinks } = await scrapeWebpage(rootUrl, rootUrl);
+        let allLinks = internalLinks.slice(0, 300); // slice 5 - Just for development, slice 300 for production
+        const totalLinks = allLinks.length;
 
-    console.log("Total unique links found:", totalLinks);
+        console.log("Total unique links found:", totalLinks);
 
-    await redis.setex(
-        chatId,
-        3600,
-        JSON.stringify({
-            status: "PROCESSING",
-            current: 0,
-            total: totalLinks,
-            progress: 0,
-        }),
-    );
+        await redis.setex(
+            chatId,
+            3600,
+            JSON.stringify({
+                status: "PROCESSING",
+                current: 0,
+                total: totalLinks,
+                progress: 0,
+            }),
+        );
 
-    const collections = await qdrant.getCollections();
-    if (!collections.collections.some((c) => c.name === collectionName)) {
-        await qdrant.createCollection(collectionName, {
-            vectors: { size: 1536, distance: "Cosine" },
-        });
-    }
-
-    let batchPoints = [];
-    let batchPage = [];
-    let pageCount = 0;
-
-    for (const [index, link] of allLinks.entries()) {
-        if (!isValidDocUrl(link, rootUrl)) continue;
-
-        try {
-            const { body, title } = await scrapeWebpage(link, rootUrl);
-            const splitter = new RecursiveCharacterTextSplitter({
-                chunkSize: 1000,
-                chunkOverlap: 150,
+        const collections = await qdrant.getCollections();
+        if (!collections.collections.some((c) => c.name === collectionName)) {
+            await qdrant.createCollection(collectionName, {
+                vectors: { size: 1536, distance: "Cosine" },
             });
-            const chunks = await splitter.splitText(body);
+        }
 
-            batchPage.push({
-                pageUrl: link,
-                heading: title,
-            });
+        let batchPoints = [];
+        let batchPage = [];
+        let pageCount = 0;
 
-            console.log(`Processing: ${link} (${chunks.length} chunks)`);
+        for (const [index, link] of allLinks.entries()) {
+            if (!isValidDocUrl(link, rootUrl)) continue;
 
-            for (const chunk of chunks) {
-                const emb = await generateVectorEmbeddings(chunk);
-
-                batchPoints.push({
-                    id: uuidv4(),
-                    vector: emb,
-                    payload: {
-                        url: link,
-                        body: chunk,
-                        chatId,
-                        title,
-                        chatSourceId,
-                    },
+            try {
+                const { body, title } = await scrapeWebpage(link, rootUrl);
+                const splitter = new RecursiveCharacterTextSplitter({
+                    chunkSize: 1000,
+                    chunkOverlap: 150,
                 });
-            }
+                const chunks = await splitter.splitText(body);
 
-            pageCount++;
+                batchPage.push({
+                    pageUrl: link,
+                    heading: title,
+                });
 
-            if (pageCount >= 3 || index === totalLinks - 1) {
-                if (batchPoints.length > 0) {
-                    console.log(`Upserting batch of ${batchPoints.length} points...`);
-                    await qdrant.upsert(collectionName, {
-                        wait: true,
-                        points: batchPoints,
+                console.log(`Processing: ${link} (${chunks.length} chunks)`);
+
+                for (const chunk of chunks) {
+                    const emb = await generateVectorEmbeddings(chunk);
+
+                    batchPoints.push({
+                        id: uuidv4(),
+                        vector: emb,
+                        payload: {
+                            url: link,
+                            body: chunk,
+                            chatId,
+                            title,
+                            chatSourceId,
+                        },
                     });
-
-                    await prisma.documentPage
-                        .createMany({
-                            data: batchPage.map((point) => ({
-                                pageUrl: point.pageUrl,
-                                heading: point.heading,
-                                chatSourceId,
-                            })),
-                        })
-                        .catch((err) => {
-                            console.error("Failed to update indexed pages:", err.message);
-                        });
-
-                    batchPoints = [];
-                    batchPage = [];
-                    pageCount = 0;
                 }
 
-                await redis.setex(
-                    chatId,
-                    3600,
-                    JSON.stringify({
-                        status: "PROCESSING",
-                        current: index + 1,
-                        total: totalLinks,
-                        progress: Math.round(((index + 1) / totalLinks) * 100),
-                    }),
-                );
+                pageCount++;
+
+                if (pageCount >= 3 || index === totalLinks - 1) {
+                    if (batchPoints.length > 0) {
+                        console.log(`Upserting batch of ${batchPoints.length} points...`);
+                        await qdrant.upsert(collectionName, {
+                            wait: true,
+                            points: batchPoints,
+                        });
+
+                        await prisma.documentPage
+                            .createMany({
+                                data: batchPage.map((point) => ({
+                                    pageUrl: point.pageUrl,
+                                    heading: point.heading,
+                                    chatSourceId,
+                                })),
+                            })
+                            .catch((err) => {
+                                console.error("Failed to update indexed pages:", err.message);
+                            });
+
+                        batchPoints = [];
+                        batchPage = [];
+                        pageCount = 0;
+                    }
+
+                    await redis.setex(
+                        chatId,
+                        3600,
+                        JSON.stringify({
+                            status: "PROCESSING",
+                            current: index + 1,
+                            total: totalLinks,
+                            progress: Math.round(((index + 1) / totalLinks) * 100),
+                        }),
+                    );
+                }
+            } catch (err) {
+                console.error(`Failed link ${link}:`, err.message);
+                await redis.setex(chatId, 3600, JSON.stringify({ status: "FAILED" }));
+                continue;
             }
-        } catch (err) {
-            console.error(`Failed link ${link}:`, err.message);
-            await redis.setex(chatId, 3600, JSON.stringify({ status: "FAILED" }));
-            continue;
         }
+    } catch (err) {
+        await redis.setex(chatId, 3600, JSON.stringify({ status: "FAILED" }));
+        throw err;
     }
 }
 
@@ -196,6 +219,7 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId) {
     } catch (error) {
         console.error("Error VectorLess:", error);
         await redis.setex(chatId, 3600, JSON.stringify({ status: "FAILED" }));
+        throw error;
     }
 }
 
@@ -203,10 +227,41 @@ const worker = new Worker(
     "chatCreation",
     async (job) => {
         const { chatId, docsUrl, collectionName, chatSourceId, isVectorLess } = job.data;
-        if (!isVectorLess) {
-            await processVector(docsUrl, chatId, collectionName, chatSourceId);
-        } else {
-            await processVectorLess(docsUrl, chatId, chatSourceId);
+        const run = await prisma.ingestionRun.create({
+            data: {
+                chatId,
+                chatSourceId,
+                status: "STARTED",
+            },
+        });
+
+        try {
+            if (!isVectorLess) {
+                await processVector(docsUrl, chatId, collectionName, chatSourceId);
+            } else {
+                await processVectorLess(docsUrl, chatId, chatSourceId);
+            }
+
+            await prisma.ingestionRun.update({
+                where: { id: run.id },
+                data: {
+                    status: "SUCCESS",
+                    finishedAt: new Date(),
+                    errorCode: null,
+                    errorMessage: null,
+                },
+            });
+        } catch (err) {
+            await prisma.ingestionRun.update({
+                where: { id: run.id },
+                data: {
+                    status: "FAILED",
+                    finishedAt: new Date(),
+                    errorCode: getErrorCode(err),
+                    errorMessage: sanitizeErrorMessage(err?.message),
+                },
+            });
+            throw err;
         }
     },
     {

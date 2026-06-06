@@ -1,11 +1,32 @@
-import { forceSignOut, getAccessToken } from "./auth";
+import { forceSignOut, getAccessToken, getAuthUser } from "./auth";
+import {
+    getFromCache,
+    setInCache,
+    removeFromCache,
+    removeMatchingFromCache,
+} from "./cache";
+
+// Provide a minimal typing for Vite's import.meta.env to avoid TS errors when
+// this project isn't using the Vite types globally.
+declare global {
+    interface ImportMetaEnv {
+        VITE_API_BASE_URL?: string;
+        // add other env vars here as needed
+    }
+}
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api/v1";
+
+type ApiError = {
+    field: string;
+    message: string;
+};
 
 type ApiEnvelope<T> = {
     statuscode?: number;
     message?: string;
     data?: T;
+    errors?: ApiError[];
 };
 
 export type Provider = "OPENAI" | "ANTHROPIC" | "GOOGLE" | "XAI" | "OPENROUTER";
@@ -25,6 +46,7 @@ export type ChatItem = {
     status: "QUEUED" | "PROCESSING" | "READY" | "FAILED";
     createdAt: string;
     updatedAt: string;
+    shareToken?: string | null;
     chatSources: Array<{
         id: string;
         documentationUrl: string;
@@ -76,52 +98,134 @@ const apiRequest = async <T>(path: string, init?: RequestInit): Promise<T> => {
 
     const payload = (await response.json().catch(() => ({}))) as ApiEnvelope<T>;
 
-    if (!response.ok) {
+   if (!response.ok) {
         if (response.status === 401 || response.status === 403) {
             forceSignOut();
         }
-        throw new Error(payload?.message || "Request failed");
+        // Build a human-readable summary from structured errors
+        // when the backend returns them (issue #31).
+        const errors = payload?.errors;
+        let errorMessage = payload?.message || "Request failed";
+        if (Array.isArray(errors) && errors.length > 0) {
+            const firstError = `${errors[0].field}: ${errors[0].message}`;
+            if (errors.length === 1) {
+                errorMessage = firstError;
+            } else {
+                errorMessage = `${firstError} and ${errors.length - 1} more`;
+            }
+        }
+        throw new Error(errorMessage);
     }
 
     return (payload.data ?? ({} as T)) as T;
 };
 
+const cacheKey = (path: string) => {
+    const userId = getAuthUser()?.id || "anon";
+    return `api:${userId}:${path}`;
+};
+
+async function withCache<T>(key: string, ttlMs: number, fetcher: () => Promise<T>): Promise<T> {
+    const cached = getFromCache<T>(key);
+    if (cached !== null) {
+        fetcher()
+            .then((value) => setInCache(key, value, ttlMs))
+            .catch(() => {});
+        return cached;
+    }
+    const value = await fetcher();
+    setInCache(key, value, ttlMs);
+    return value;
+}
+
+export const invalidateApiKeyCaches = () => {
+    const prefix = cacheKey("");
+    removeMatchingFromCache(`${prefix}/apikey/list`);
+    removeMatchingFromCache(`${prefix}/apikey/count`);
+    removeMatchingFromCache(`${prefix}/message/models`);
+};
+
+export const invalidateChatCaches = () => {
+    const prefix = cacheKey("");
+    removeMatchingFromCache(`${prefix}/chat/list`);
+    removeMatchingFromCache(`${prefix}/chat/recent`);
+};
+
+export const invalidateChatMessages = (chatId: string) => {
+    removeFromCache(cacheKey(`/message/all/${chatId}`));
+};
+
+export const invalidatePagesIndexed = (chatId: string) => {
+    removeFromCache(cacheKey(`/chat/pages-indexed/${chatId}`));
+};
+
+export const invalidateUserCache = () => {
+    const prefix = cacheKey("");
+    removeMatchingFromCache(prefix);
+};
+
 export const getUserProfile = () =>
-    apiRequest<{
-        id: string;
-        fullname?: string | null;
-        username?: string | null;
-        email?: string | null;
-    }>("/user/profile", { method: "GET" });
+    withCache(cacheKey("/user/profile"), 30 * 60 * 1000, () =>
+        apiRequest<{
+            id: string;
+            fullname?: string | null;
+            username?: string | null;
+            email?: string | null;
+        }>("/user/profile", { method: "GET" }),
+    );
 
 export const getApiKeys = () => apiRequest<{ apiKeys: ApiKeyItem[] }>("/apikey/list", { method: "GET" });
 
-export const createApiKey = (payload: { key: string; name: string; provider: Provider }) =>
-    apiRequest("/apikey/add", {
+export const createApiKey = async (payload: { key: string; name: string; provider: Provider }) => {
+    const result = await apiRequest("/apikey/add", {
         method: "POST",
         body: JSON.stringify(payload),
     });
+    invalidateApiKeyCaches();
+    return result;
+};
 
-export const deleteApiKey = (id: string) => apiRequest(`/apikey/${id}`, { method: "DELETE" });
+export const deleteApiKey = async (id: string) => {
+    const result = await apiRequest(`/apikey/${id}`, { method: "DELETE" });
+    invalidateApiKeyCaches();
+    return result;
+};
 
 export const getApiKeyCount = () => apiRequest<{ count: number }>("/apikey/count", { method: "GET" });
 
-export const getChats = () => apiRequest<ChatItem[]>("/chat/list", { method: "GET" });
+export const getChats = () =>
+    withCache(cacheKey("/chat/list"), 5 * 60 * 1000, () =>
+        apiRequest<ChatItem[]>("/chat/list", { method: "GET" }),
+    );
 
-export const createChat = (payload: {
+export const createChat = async (payload: {
     name?: string;
     docsUrl: string;
     isVectorLess?: boolean;
-}) =>
-    apiRequest<{ chatId?: string; id?: string }>("/chat/create", {
+}) => {
+    const result = await apiRequest<{ chatId?: string; id?: string }>("/chat/create", {
         method: "POST",
         body: JSON.stringify(payload),
     });
+    invalidateChatCaches();
+    return result;
+};
 
-export const deleteChat = (chatId: string) => apiRequest(`/chat/${chatId}`, { method: "DELETE" });
+export const deleteChat = async (chatId: string) => {
+    const result = await apiRequest(`/chat/${chatId}`, { method: "DELETE" });
+    invalidateChatCaches();
+    return result;
+};
 
 export const getChatStatus = (chatId: string) =>
-    apiRequest<{ progress: { status: string; progress: number } }>(`/chat/status/${chatId}`, {
+    apiRequest<{
+        progress: {
+            status: string;
+            progress: number;
+            current: number;
+            total: number;
+        };
+    }>(`/chat/status/${chatId}`, {
         method: "GET",
     });
 
@@ -129,22 +233,30 @@ export const getChatDetails = (chatId: string) =>
     apiRequest<{ chat: ChatItem }>(`/chat/${chatId}`, { method: "GET" });
 
 export const getPagesIndexed = (chatId: string) =>
-    apiRequest<{
-        pagesIndexed: Array<{ pageUrl: string; title?: string | null }>;
-    }>(`/chat/pages-indexed/${chatId}`, { method: "GET" });
+    withCache(cacheKey(`/chat/pages-indexed/${chatId}`), 5 * 60 * 1000, () =>
+        apiRequest<{
+            pagesIndexed: Array<{ pageUrl: string; title?: string | null }>;
+        }>(`/chat/pages-indexed/${chatId}`, { method: "GET" }),
+    );
 
 export const getAvailableModels = () =>
-    apiRequest<{ models: string[] }>("/message/models", { method: "GET" });
+    withCache(cacheKey("/message/models"), 5 * 60 * 1000, () =>
+        apiRequest<{ models: string[] }>("/message/models", { method: "GET" }),
+    );
 
 export const getChatMessages = (chatId: string) =>
-    apiRequest<{ messages: ChatMessageItem[] }>(`/message/all/${chatId}`, {
-        method: "GET",
-    });
+    withCache(cacheKey(`/message/all/${chatId}`), 5 * 60 * 1000, () =>
+        apiRequest<{ messages: ChatMessageItem[] }>(`/message/all/${chatId}`, {
+            method: "GET",
+        }),
+    );
 
 export const getMessageSources = (messageId: string) =>
-    apiRequest<{ messageSources: ChatMessageSourceItem[] }>(`/message/sources/${messageId}`, {
-        method: "GET",
-    });
+    withCache(cacheKey(`/message/sources/${messageId}`), 5 * 60 * 1000, () =>
+        apiRequest<{ messageSources: ChatMessageSourceItem[] }>(`/message/sources/${messageId}`, {
+            method: "GET",
+        }),
+    );
 
 export const sendMessageStream = async (payload: {
     userPrompt: string;
@@ -192,6 +304,8 @@ export const sendMessageStream = async (payload: {
         text += tail;
         payload.onChunk?.(tail);
     }
+
+    invalidateChatMessages(payload.chatId);
     return text;
 };
 
@@ -224,28 +338,44 @@ export const exportChatMessages = async (chatId: string): Promise<void> => {
 };
 
 export const getLifetimeTokens = () =>
-    apiRequest<{
-        _sum: { inputTokens: number | null; outputTokens: number | null };
-    }>("/usage/lifetime-tokens", { method: "GET" });
+    withCache(cacheKey("/usage/lifetime-tokens"), 5 * 60 * 1000, () =>
+        apiRequest<{
+            _sum: { inputTokens: number | null; outputTokens: number | null };
+        }>("/usage/lifetime-tokens", { method: "GET" }),
+    );
 
 export const getTokensByGroup = (groupBy: "day" | "week" | "month" | "year") =>
-    apiRequest<
-        Record<
-            string,
-            {
-                period: string;
-                usageByModels: Array<{
-                    model: string;
-                    totalInput: number;
-                    totalOutput: number;
-                }>;
-            }
-        >
-    >(`/usage/tokens/${groupBy}`, { method: "GET" });
+    withCache(cacheKey(`/usage/tokens/${groupBy}`), 10 * 60 * 1000, () =>
+        apiRequest<
+            Record<
+                string,
+                {
+                    period: string;
+                    usageByModels: Array<{
+                        model: string;
+                        totalInput: number;
+                        totalOutput: number;
+                    }>;
+                }
+            >
+        >(`/usage/tokens/${groupBy}`, { method: "GET" }),
+    );
 
-export const getRecentChats = () => apiRequest<ChatItem[]>("/chat/recent", { method: "GET" });
+export const getRecentChats = () =>
+    withCache(cacheKey("/chat/recent"), 5 * 60 * 1000, () =>
+        apiRequest<ChatItem[]>("/chat/recent", { method: "GET" }),
+    );
 
 export const getTopChatsByUsage = () =>
+    withCache(cacheKey("/usage/top-chats"), 5 * 60 * 1000, () =>
+        apiRequest<
+            Array<{
+                chatId: string;
+                _sum: { inputTokens: number | null; outputTokens: number | null };
+                name?: string | null;
+            }>
+        >("/usage/top-chats", { method: "GET" }),
+    );
     apiRequest<
         Array<{
             chatId: string;
@@ -253,3 +383,46 @@ export const getTopChatsByUsage = () =>
             name?: string | null;
         }>
     >("/usage/top-chats", { method: "GET" });
+export type UsageBreakdownItem = {
+    model: string;
+    provider: string | null;
+    totalInputTokens: number;
+    totalOutputTokens: number;
+    totalTokens: number;
+    requestCount: number;
+};
+
+export const getUsageBreakdown = (params?: {
+    from?: string;
+    to?: string;
+    page?: number;
+    limit?: number;
+}) => {
+    const query = new URLSearchParams(
+        Object.entries(params || {})
+            .filter(([_, v]) => v !== undefined)
+            .map(([k, v]) => [k, String(v)])
+    ).toString();
+
+    return apiRequest<{
+        data: UsageBreakdownItem[];
+        pagination: {
+            page: number;
+            limit: number;
+            total: number;
+            totalPages: number;
+        };
+    }>(`/usage/breakdown${query ? `?${query}` : ""}`, { method: "GET" });
+};
+
+export const toggleChatShare = (chatId: string) =>
+    apiRequest<ChatItem>(`/chat/${chatId}/share`, { method: "POST" });
+
+export const getSharedChatDetails = (shareToken: string) =>
+    apiRequest<{ chat: ChatItem }>(`/chat/shared/${shareToken}`, { method: "GET" });
+
+export const getSharedChatMessages = (shareToken: string) =>
+    apiRequest<{ messages: ChatMessageItem[] }>(`/message/shared/${shareToken}/messages`, { method: "GET" });
+
+export const forkSharedChat = (shareToken: string) =>
+    apiRequest<{ chatId: string }>(`/chat/shared/${shareToken}/fork`, { method: "POST" });

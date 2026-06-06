@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Sidebar } from "../components/Sidebar";
+import Skeleton from "../components/Skeleton";
 
 import {
     MessageSquare,
@@ -21,8 +22,10 @@ import {
     getChatStatus,
     getLifetimeTokens,
     getRecentChats,
+    invalidatePagesIndexed,
     type ChatItem,
 } from "../lib/api";
+import { formatTokens } from "../lib/format";
 
 interface Chat {
     id: string;
@@ -128,7 +131,11 @@ const Dashboard = () => {
     }, []);
 
     useEffect(() => {
-        loadDashboardData();
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        const fetchData = async () => {
+            await loadDashboardData();
+        };
+        fetchData();
     }, [loadDashboardData]);
 
     useEffect(() => {
@@ -175,6 +182,18 @@ const Dashboard = () => {
 
         if (!updates.length) {
             return;
+        }
+
+        for (const update of updates) {
+            if (update.status !== "ready") continue;
+            const prevStatus = normalizeStatus(
+                chatProgressRef.current[update.id]?.status ||
+                    chatsRef.current.find((c) => c.id === update.id)?.status ||
+                    "",
+            );
+            if (prevStatus !== "ready") {
+                invalidatePagesIndexed(update.id);
+            }
         }
 
         setChatProgress((prev) => {
@@ -295,13 +314,6 @@ const Dashboard = () => {
 
     // Disabled state for the Start Processing button
     const isStartDisabled = !chatUrl;
-
-    const formatTokens = (tokens: number) => {
-        if (tokens >= 1000000) return (tokens / 1000000).toFixed(1) + "M";
-        if (tokens >= 1000) return (tokens / 1000).toFixed(1) + "k";
-        return tokens.toString();
-    };
-
     const getStatusBadge = (isVectorLess: boolean, status: string) => {
         switch (status) {
             case "ready":
@@ -348,6 +360,7 @@ const Dashboard = () => {
                                 <span className="text-white">{chats.length}</span> chats
                             </div>
                             <button
+                               
                                 onClick={() => setIsModalOpen(true)}
                                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-accent-blue hover:bg-accent-blue/90 text-white font-medium transition-colors shadow-lg shadow-accent-blue/20"
                             >
@@ -436,9 +449,18 @@ const Dashboard = () => {
                         </h2>
 
                         {isLoading ? (
-                            <div className="p-8 text-center bg-white/1 border border-white/5 border-dashed rounded-xl text-sm text-gray-400">
-                                Loading chats...
-                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+  {[1,2,3].map((i) => (
+    <div
+      key={i}
+      className="p-5 rounded-xl bg-white/2 border border-white/5"
+    >
+      <Skeleton className="h-4 w-24 mb-3" />
+      <Skeleton className="h-8 w-16 mb-3" />
+      <Skeleton className="h-3 w-20" />
+    </div>
+  ))}
+</div>
                         ) : chats.length > 0 ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                 {chats.map((chat) => {
@@ -583,6 +605,7 @@ const Dashboard = () => {
                                                     </button>
                                                 )}
                                                 <button
+                                                    aria-label="Delete"
                                                     onClick={() => setDeleteTarget(chat)}
                                                     className="p-2 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-400/10 transition-colors border border-transparent hover:border-red-400/20"
                                                 >
@@ -631,6 +654,7 @@ const Dashboard = () => {
                                 Processed Documentations
                             </h2>
                             <button
+                                aria-label="close docs list"
                                 onClick={() => setIsDocsListOpen(false)}
                                 className="p-1 rounded-md text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
                             >
@@ -701,6 +725,7 @@ const Dashboard = () => {
                                 New Chat
                             </h2>
                             <button
+                                aria-label="close modal"
                                 onClick={() => setIsModalOpen(false)}
                                 className="p-1 rounded-md text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
                             >

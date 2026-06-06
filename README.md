@@ -161,7 +161,7 @@ Stores encrypted API keys provided by users.
 ## Installation and Setup
 
 ```
-git clone https://github.com/avishek0679/DocChat.git
+git clone https://github.com/avishek0769/DocChat.git
 cd DocChat
 pnpm install
 pnpm run dev # Start the frontend development server
@@ -184,6 +184,12 @@ node chatWorker.js # Optional: Start the background worker for processing chat c
 - API keys are encrypted using a server-side encryption key
 - Keys are never stored in plaintext
 - Decryption happens only when making requests to providers
+
+---
+
+## Optional Features
+
+- **Long-term Memory (Mem0):** DocChat supports storing long-term interaction history. This feature is automatically enabled if you configure the `MEM0_API_KEY` in your `.env` file. If omitted or if Mem0 calls fail, the chat will continue to function normally without long-term context tracking.
 
 ---
 
