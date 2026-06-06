@@ -3,6 +3,7 @@ import { z } from "zod";
 const email = z.string().trim().email("Invalid email address");
 const password = z.string().min(6, "Password must be at least 6 characters");
 const chatId = z.string().uuid("Invalid chat ID");
+const sourceId = z.string().uuid("Invalid source ID");
 const url = z.string().trim().url("Invalid URL");
 const DEFAULT_MIN_AGE_DAYS = 7;
 export const VALID_GROUP_BY = ["day", "week", "month"];
@@ -67,6 +68,12 @@ export const resetPasswordSchema = {
 export const chatIdParamSchema = {
     params: z.object({
         chatId,
+    }),
+};
+
+export const sourceIdParamSchema = {
+    params: z.object({
+        sourceId,
     }),
 };
 

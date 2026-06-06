@@ -6,6 +6,7 @@ import {
     expectationQuerySchema,
     createChatSchema,
     chatIdParamSchema,
+    sourceIdParamSchema,
     qdrantCleanupSchema,
 } from "../utils/validationSchemas.js";
 import {
@@ -13,6 +14,7 @@ import {
     chatDetails,
     createChat,
     deleteChat,
+    downloadRawSource,
     expectation,
     listAllChats,
     recentChats,
@@ -36,6 +38,9 @@ chatRouter
 chatRouter.route("/ingestion-runs/failed").get(verifyStrictJWT, recentFailedIngestionRuns);
 chatRouter.route("/list").get(verifyStrictJWT, listAllChats);
 chatRouter.route("/recent").get(verifyStrictJWT, recentChats);
+chatRouter
+    .route("/sources/:sourceId/raw")
+    .get(verifyStrictJWT, validate(sourceIdParamSchema), downloadRawSource);
 
 // Shared Chat Routes
 chatRouter.route("/shared/:shareToken").get(getSharedChatDetails);

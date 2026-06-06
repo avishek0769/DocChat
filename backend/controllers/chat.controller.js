@@ -4,11 +4,113 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
 import { scrapeWebpage } from "../utils/ragUtilities.js";
 import { cleanupQdrantCollections } from "../utils/qdrantCleanup.js";
+import { qdrant } from "../utils/ragClients.js";
 import { Queue } from "bullmq";
 import redis from "../utils/redis.js";
 import crypto from "crypto";
 
 const chatCreationQueue = new Queue("chatCreation");
+
+const rawSourceFilename = (source) => {
+    const safeHeading = (source.heading || "chat-source")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 80);
+
+    return `${safeHeading || "chat-source"}-${source.id}.txt`;
+};
+
+const formatSourceItem = (item, index) => {
+    if (item === null || item === undefined) return "";
+    if (typeof item === "string") return item.trim();
+
+    const title = item.title || item.heading || item.metadata?.title || `Source ${index + 1}`;
+    const sourceUrl = item.url || item.pageUrl || item.metadata?.url;
+    const body =
+        item.body ||
+        item.text ||
+        item.content ||
+        item.pageContent ||
+        item.sourceData ||
+        JSON.stringify(item, null, 2);
+
+    return [
+        `Title: ${title}`,
+        sourceUrl ? `URL: ${sourceUrl}` : null,
+        "",
+        String(body).trim(),
+    ]
+        .filter((part) => part !== null && part !== "")
+        .join("\n");
+};
+
+const formatRawSourceText = (sourceData) => {
+    if (sourceData === null || sourceData === undefined) return "";
+
+    let data = sourceData;
+    if (typeof sourceData === "string") {
+        const trimmed = sourceData.trim();
+        if (!trimmed) return "";
+
+        try {
+            data = JSON.parse(trimmed);
+        } catch {
+            return trimmed;
+        }
+    }
+
+    const items = Array.isArray(data)
+        ? data
+        : typeof data === "object"
+          ? data.pages || data.sources || data.documents || data.items
+          : null;
+
+    if (Array.isArray(items)) {
+        return items
+            .map((item, index) => formatSourceItem(item, index))
+            .filter(Boolean)
+            .join("\n\n---\n\n")
+            .trim();
+    }
+
+    return formatSourceItem(data, 0).trim();
+};
+
+const fetchVectorRawSourceText = async (collectionName, sourceId) => {
+    if (!collectionName) return "";
+
+    const parts = [];
+    let offset;
+
+    do {
+        const result = await qdrant.scroll(collectionName, {
+            filter: {
+                must: [
+                    {
+                        key: "chatSourceId",
+                        match: {
+                            value: sourceId,
+                        },
+                    },
+                ],
+            },
+            limit: 100,
+            offset,
+            with_payload: true,
+            with_vector: false,
+        });
+
+        for (const point of result.points || []) {
+            const text = formatSourceItem(point.payload, parts.length);
+            if (text) parts.push(text);
+        }
+
+        offset = result.next_page_offset;
+    } while (offset);
+
+    return parts.join("\n\n---\n\n").trim();
+};
 
 const expectation = asyncHandler(async (req, res) => {
     const { docsUrl } = req.query;
@@ -276,6 +378,47 @@ const recentFailedIngestionRuns = asyncHandler(async (req, res) => {
     });
 
     res.status(200).json(new ApiResponse(200, { runs }, "Failed ingestion runs fetched successfully"));
+});
+
+const downloadRawSource = asyncHandler(async (req, res) => {
+    const { sourceId } = req.params;
+
+    const chatSource = await prisma.chatSource.findFirst({
+        where: {
+            id: sourceId,
+            chats: {
+                some: {
+                    userId: req.user.id,
+                },
+            },
+        },
+        select: {
+            id: true,
+            heading: true,
+            collectionName: true,
+            documentTree: {
+                select: {
+                    sourceData: true,
+                },
+            },
+        },
+    });
+
+    if (!chatSource) {
+        throw new ApiError(404, "Chat source not found");
+    }
+
+    const rawText =
+        formatRawSourceText(chatSource.documentTree?.sourceData) ||
+        (await fetchVectorRawSourceText(chatSource.collectionName, chatSource.id));
+
+    if (!rawText) {
+        throw new ApiError(404, "Raw source content is not available for this chat source");
+    }
+
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${rawSourceFilename(chatSource)}"`);
+    return res.status(200).send(rawText);
 });
 
 const qdrantCleanup = asyncHandler(async (req, res) => {
@@ -622,6 +765,7 @@ export {
     createChat,
     progressStatus,
     recentFailedIngestionRuns,
+    downloadRawSource,
     qdrantCleanup,
     listAllChats,
     chatDetails,
