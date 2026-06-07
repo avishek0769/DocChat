@@ -1,8 +1,9 @@
 import prisma from "../utils/prismaClient.js";
+import redis from "../utils/redis.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
-import { LLM_MODELS, PROVIDERS_BASE_URLS, MEM0_ENABLED } from "../utils/constants.js";
+import { LLM_MODELS, PROVIDERS_BASE_URLS, MEM0_ENABLED, DAILY_TOKEN_BUDGET } from "../utils/constants.js";
 import OpenAI from "openai";
 import { qdrant, treeindex } from "../utils/ragClients.js";
 import { decryptApiKey } from "../utils/decrypt.js";
@@ -11,6 +12,17 @@ import { buildMessagesForLLM } from "../utils/contextBuilder.js";
 import { MemoryClient } from "mem0ai";
 
 const memory = MEM0_ENABLED ? new MemoryClient({ apiKey: process.env.MEM0_API_KEY }) : null;
+
+// Daily token budget tracked per user per UTC day.
+const dailyBudgetKey = (userId) => `tokenBudget:${userId}:${new Date().toISOString().slice(0, 10)}`;
+
+const startOfUtcDay = () => {
+    const now = new Date();
+    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+};
+
+const secondsUntilUtcMidnight = () =>
+    Math.ceil((startOfUtcDay().getTime() + 86400000 - Date.now()) / 1000);
 
 const getAvailableModels = asyncHandler(async (req, res) => {
     const apikeys = await prisma.apiKey.findMany({
@@ -42,6 +54,29 @@ const getAvailableModels = asyncHandler(async (req, res) => {
 
 const sendMessage = asyncHandler(async (req, res) => {
     const { userPrompt, model, provider, chatId } = req.body;
+
+    if (DAILY_TOKEN_BUDGET) {
+        const budgetKey = dailyBudgetKey(req.user.id);
+        let tokensUsedToday = await redis.get(budgetKey);
+
+        if (tokensUsedToday === null) {
+            const usage = await prisma.usageEvents.aggregate({
+                where: { userId: req.user.id, timestamp: { gte: startOfUtcDay() } },
+                _sum: { inputTokens: true, outputTokens: true },
+            });
+            tokensUsedToday = (usage._sum.inputTokens || 0) + (usage._sum.outputTokens || 0);
+            await redis.set(budgetKey, tokensUsedToday, "EX", secondsUntilUtcMidnight());
+        } else {
+            tokensUsedToday = Number(tokensUsedToday);
+        }
+
+        if (tokensUsedToday >= DAILY_TOKEN_BUDGET) {
+            throw new ApiError(
+                429,
+                `Daily token budget reached: ${tokensUsedToday} of ${DAILY_TOKEN_BUDGET} tokens used today. Resets at 00:00 UTC.`,
+            );
+        }
+    }
 
     const chat = await prisma.chat.findUnique({
         where: { id: chatId },
@@ -272,6 +307,12 @@ const sendMessage = asyncHandler(async (req, res) => {
         await prisma.usageEvents.create({
             data: usageEventData,
         });
+
+        if (DAILY_TOKEN_BUDGET) {
+            const budgetKey = dailyBudgetKey(req.user.id);
+            await redis.incrby(budgetKey, (inputTokens || 0) + (outputTokens || 0));
+            await redis.expire(budgetKey, secondsUntilUtcMidnight());
+        }
     }
 });
 
