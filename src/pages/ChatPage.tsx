@@ -44,6 +44,7 @@ import {
     Download,
     Link as LinkIcon,
     Share2,
+    AlertCircle,
 } from "lucide-react";
 import clsx from "clsx";
 import hljs from "highlight.js";
@@ -87,6 +88,8 @@ const toModelDisplayName = (model?: string) => {
 
     return model;
 };
+
+const WARNING_LENGTH_THRESHOLD = 4000;
 
 export const ChatPage = () => {
     const navigate = useNavigate();
@@ -834,7 +837,12 @@ export const ChatPage = () => {
                         <div className="max-w-3xl mx-auto relative">
                             <form
                                 onSubmit={handleSend}
-                                className="relative bg-[#1a1a24] border border-white/10 rounded-2xl shadow-2xl overflow-hidden focus-within:border-accent-blue/50 focus-within:ring-1 focus-within:ring-accent-blue/50 transition-all"
+                                className={clsx(
+                                    "relative bg-[#1a1a24] border rounded-2xl shadow-2xl overflow-hidden focus-within:ring-1 transition-all",
+                                    input.length > WARNING_LENGTH_THRESHOLD
+                                        ? "border-amber-500/50 focus-within:border-amber-500/70 focus-within:ring-amber-500/30"
+                                        : "border-white/10 focus-within:border-accent-blue/50 focus-within:ring-accent-blue/50"
+                                )}
                             >
                                 <textarea
                                     ref={textareaRef}
@@ -849,7 +857,15 @@ export const ChatPage = () => {
                                         maxHeight: "200px",
                                     }}
                                 />
-                                <div className="absolute right-3 bottom-3 flex items-center gap-2">
+                                <div className="absolute right-3 bottom-3 flex items-center gap-3">
+                                    {input.length > WARNING_LENGTH_THRESHOLD && (
+                                        <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 bg-amber-500/10 border border-amber-500/20 rounded-md">
+                                            <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
+                                            <span className="text-xs font-medium text-amber-500">
+                                                {input.length} chars (Approaching limit)
+                                            </span>
+                                        </div>
+                                    )}
                                     <button
                                         aria-label="Send message"
                                         type="submit"
