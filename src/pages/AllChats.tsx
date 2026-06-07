@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import Skeleton from "../components/Skeleton";
 import {
     Search,
     Filter,
@@ -201,9 +202,33 @@ const AllChats = () => {
 
                     <div className="space-y-3">
                         {isLoading ? (
-                            <div className="text-center py-20 bg-white/1 rounded-xl border border-white/5 border-dashed">
-                                <p className="text-gray-400">Loading chats...</p>
-                            </div>
+                            <div className="space-y-3">
+  {[1,2,3,4,5,6].map((i) => (
+    <div
+      key={i}
+      className="flex items-center justify-between bg-white/2 border border-white/5 p-4 rounded-xl"
+    >
+      <div className="flex items-center gap-4 flex-1">
+        <Skeleton className="w-6 h-6 rounded-full" />
+
+        <div className="flex-1">
+          <Skeleton className="h-4 w-48 mb-2" />
+
+          <div className="flex gap-2">
+            <Skeleton className="h-5 w-20" />
+            <Skeleton className="h-5 w-24" />
+          </div>
+        </div>
+      </div>
+
+      <div className="flex gap-4">
+        <Skeleton className="h-4 w-12" />
+        <Skeleton className="h-4 w-16" />
+        <Skeleton className="h-8 w-20" />
+      </div>
+    </div>
+  ))}
+</div>
                         ) : filteredChats.length > 0 ? (
                             filteredChats.map((chat) => (
                                 <div

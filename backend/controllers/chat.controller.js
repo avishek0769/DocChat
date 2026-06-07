@@ -5,7 +5,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { scrapeWebpage } from "../utils/ragUtilities.js";
 import { cleanupQdrantCollections } from "../utils/qdrantCleanup.js";
 import { Queue } from "bullmq";
-import redis from "../utils/redis.js";
+import redis, { getChatProgressKey } from "../utils/redis.js";
 import crypto from "crypto";
 import { createAuditEvent } from "../utils/audit.js";
 
@@ -90,24 +90,47 @@ const createChat = asyncHandler(async (req, res) => {
     const { internalLinks, title } = await scrapeWebpage(docsUrl, docsUrl);
     name = name || title || "Untitled Chat";
 
-    const existingChatSource = await prisma.chatSource.findFirst({
-        where: {
-            documentationUrl: docsUrl,
-            isVectorLess: isVectorLessChat,
-        },
-        include: {
-            chats: { take: 1 },
-        },
-    });
+    let chatSource;
+    let isNew = false;
+    const collectionName = !isVectorLessChat ? `${name.replace(/\s+/g, "-")}-${Date.now()}` : null;
 
-    if (existingChatSource) {
+    try {
+        chatSource = await prisma.chatSource.create({
+            data: {
+                totalPages: internalLinks.length,
+                heading: name,
+                documentationUrl: docsUrl,
+                collectionName: collectionName,
+                isVectorLess: isVectorLessChat,
+            },
+        });
+        isNew = true;
+    } catch (error) {
+        if (error.code === "P2002") { // Unique constraint violation
+            chatSource = await prisma.chatSource.findUnique({
+                where: {
+                    documentationUrl_isVectorLess: {
+                        documentationUrl: docsUrl,
+                        isVectorLess: isVectorLessChat,
+                    },
+                },
+            });
+            if (!chatSource) {
+                throw new ApiError(500, "Failed to retrieve existing ChatSource after unique constraint violation.");
+            }
+        } else {
+            throw error; // Rethrow other errors
+        }
+    }
+
+    if (!isNew) {
         const chat = await prisma.chat.create({
             data: {
                 name,
-                collectionName: existingChatSource.collectionName,
+                collectionName: chatSource.collectionName,
                 chatSources: {
                     connect: {
-                        id: existingChatSource.id,
+                        id: chatSource.id,
                     },
                 },
                 status: "READY",
@@ -125,18 +148,13 @@ const createChat = asyncHandler(async (req, res) => {
                 ),
             );
     } else {
-        const collectionName = !isVectorLessChat ? `${name.replace(/\s+/g, "-")}-${Date.now()}` : null;
         const chat = await prisma.chat.create({
             data: {
                 name,
-                collectionName: collectionName,
+                collectionName: chatSource.collectionName,
                 chatSources: {
-                    create: {
-                        totalPages: internalLinks.length,
-                        heading: name,
-                        documentationUrl: docsUrl,
-                        collectionName: collectionName,
-                        isVectorLess: isVectorLessChat,
+                    connect: {
+                        id: chatSource.id,
                     },
                 },
                 status: "QUEUED",
@@ -171,11 +189,36 @@ const createChat = asyncHandler(async (req, res) => {
     }
 });
 
+const DEFAULT_PROGRESS = {
+    status: "QUEUED",
+    current: 0,
+    total: 0,
+    progress: 0,
+};
+
+const normalizeProgress = (progress = {}) => {
+    const data = progress && typeof progress === "object" ? progress : {};
+
+    return {
+        ...DEFAULT_PROGRESS,
+        ...data,
+        current: Number.isFinite(data.current) ? data.current : DEFAULT_PROGRESS.current,
+        total: Number.isFinite(data.total) ? data.total : DEFAULT_PROGRESS.total,
+        progress: Number.isFinite(data.progress) ? data.progress : DEFAULT_PROGRESS.progress,
+    };
+};
+
 const progressStatus = asyncHandler(async (req, res) => {
     const { chatId } = req.params;
 
-    const chat = await prisma.chat.findUnique({
-        where: { id: chatId },
+    const chat = await prisma.chat.findFirst({
+        where: {
+            id: chatId,
+            userId: req.user.id,
+        },
+        select: {
+            id: true,
+        },
     });
 
     if (!chat) {
@@ -183,7 +226,7 @@ const progressStatus = asyncHandler(async (req, res) => {
     }
 
     const latestIngestionRun = await prisma.ingestionRun.findFirst({
-        where: { chatId },
+        where: { chatId: chat.id },
         orderBy: { startedAt: "desc" },
         select: {
             id: true,
@@ -196,16 +239,12 @@ const progressStatus = asyncHandler(async (req, res) => {
             errorMessage: true,
         },
     });
-    
-    const redisData = await redis.get(chat.id.toString());
-    const progress = redisData ? JSON.parse(redisData) : { status: "QUEUED", progress: 0 };
+
+    const redisData = await redis.get(getChatProgressKey(chat.id));
+    const progress = normalizeProgress(redisData ? JSON.parse(redisData) : DEFAULT_PROGRESS);
 
     res.status(200).json(
-        new ApiResponse(
-            200,
-            { progress, latestIngestionRun },
-            "Progress fetched successfully",
-        ),
+        new ApiResponse(200, { progress, latestIngestionRun }, "Progress fetched successfully"),
     );
 });
 
@@ -300,8 +339,8 @@ const listAllChats = asyncHandler(async (req, res) => {
     const chatsWithUsage = chats.map((chat) => {
         const totals = chat.usageEvents.reduce(
             (acc, curr) => {
-                acc.inputTokens += curr.inputTokens;
-                acc.outputTokens += curr.outputTokens;
+                acc.inputTokens += curr.inputTokens ?? 0;
+                acc.outputTokens += curr.outputTokens ?? 0;
                 return acc;
             },
             { inputTokens: 0, outputTokens: 0 },
@@ -349,8 +388,8 @@ const recentChats = asyncHandler(async (req, res) => {
     const chatsWithUsage = chats.map((chat) => {
         const totals = chat.usageEvents.reduce(
             (acc, curr) => {
-                acc.inputTokens += curr.inputTokens;
-                acc.outputTokens += curr.outputTokens;
+                acc.inputTokens += curr.inputTokens ?? 0;
+                acc.outputTokens += curr.outputTokens ?? 0;
                 return acc;
             },
             { inputTokens: 0, outputTokens: 0 },
@@ -430,21 +469,20 @@ const cancelProcessing = asyncHandler(async (req, res) => {
 
     if (job) {
         await job.remove();
-        await redis.setex(chat.collectionName, 3600, JSON.stringify({ status: "READY", progress: 100 }));
-
-        await prisma.chat
-            .update({
-                where: { id: chatId },
-                data: { status: "READY" },
-            })
-            .catch((err) => {
-                throw new ApiError(500, `Failed Update: ${err.message}`, err);
-            });
-
-        res.status(200).json(new ApiResponse(200, null, "Chat processing cancelled successfully"));
-    } else {
-        throw new ApiError(404, "Job not found or already completed");
     }
+
+    await redis.setex(getChatProgressKey(chatId), 3600, JSON.stringify({ status: "READY", progress: 100 }));
+
+    await prisma.chat
+        .update({
+            where: { id: chatId },
+            data: { status: "READY" },
+        })
+        .catch((err) => {
+            throw new ApiError(500, `Failed Update: ${err.message}`, err);
+        });
+
+    res.status(200).json(new ApiResponse(200, null, "Chat processing cancelled successfully"));
 });
 
 const deleteChat = asyncHandler(async (req, res) => {
@@ -479,7 +517,7 @@ const toggleShare = asyncHandler(async (req, res) => {
         where: { id: chatId },
     });
 
-    if (!chat || chat.userId !== req.user.id) {
+    if (!chat) {
         throw new ApiError(404, "Chat not found");
     }
 
@@ -533,8 +571,8 @@ const forkSharedChat = asyncHandler(async (req, res) => {
             messages: {
                 include: {
                     sourceChunks: true,
-                }
-            }
+                },
+            },
         },
     });
 
@@ -550,9 +588,9 @@ const forkSharedChat = asyncHandler(async (req, res) => {
             status: "READY",
             userId: req.user.id,
             chatSources: {
-                connect: originalChat.chatSources.map(source => ({ id: source.id }))
-            }
-        }
+                connect: originalChat.chatSources.map((source) => ({ id: source.id })),
+            },
+        },
     });
 
     await createAuditEvent("chat.created", req.user.id, newChat.id, {
@@ -569,7 +607,7 @@ const forkSharedChat = asyncHandler(async (req, res) => {
                 llmResponse: msg.llmResponse,
                 llmModel: msg.llmModel,
                 createdAt: msg.createdAt,
-            }
+            },
         });
 
         if (msg.sourceChunks && msg.sourceChunks.length > 0) {
@@ -580,12 +618,14 @@ const forkSharedChat = asyncHandler(async (req, res) => {
                     pageUrl: chunk.pageUrl,
                     score: chunk.score,
                     chatMessageId: newMessage.id,
-                }))
+                })),
             });
         }
     }
 
-    res.status(200).json(new ApiResponse(200, { chatId: newChat.id }, "Chat successfully forked to your account"));
+    res.status(200).json(
+        new ApiResponse(200, { chatId: newChat.id }, "Chat successfully forked to your account"),
+    );
 });
 
 export {

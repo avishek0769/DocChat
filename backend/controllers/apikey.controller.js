@@ -187,4 +187,38 @@ const totalNumberOfApiKeys = asyncHandler(async (req, res) => {
     );
 });
 
-export { addApiKey, listApiKeys, removeApiKey, getApiKey, totalNumberOfApiKeys };
+const updateApiKey = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { name, key } = req.body;
+
+    const existingKey = await prisma.apiKey.findUnique({
+        where: { id, userId: req.user.id },
+    });
+
+    if (!existingKey) {
+        throw new ApiError(404, "API key not found");
+    }
+
+    const updateData = {};
+    if (name) updateData.name = name;
+
+    if (key) {
+        const isValid = await checkApiKeyValidity(existingKey.provider, key);
+        if (!isValid) {
+            throw new ApiError(400, "Invalid API key for the existing provider");
+        }
+        const { cipherText, tag, iv } = encryptApiKey(key);
+        updateData.encryptedKey = cipherText;
+        updateData.iv = iv;
+        updateData.tag = tag;
+    }
+
+    await prisma.apiKey.update({
+        where: { id, userId: req.user.id },
+        data: updateData,
+    });
+
+    res.status(200).json(new ApiResponse(200, {}, "API key updated successfully"));
+});
+
+export { addApiKey, listApiKeys, removeApiKey, getApiKey, totalNumberOfApiKeys, updateApiKey };

@@ -7,7 +7,7 @@ const verifyStrictJWT = async (req, res, next) => {
         const token = req.cookies?.accessToken || req.header("Authorization")?.replace("Bearer ", "");
 
         if (!token) {
-            throw new ApiError(452, "Unauthorised request");
+            throw new ApiError(401, "Unauthorised request");
         }
 
         const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
@@ -23,13 +23,13 @@ const verifyStrictJWT = async (req, res, next) => {
             },
         });
 
-        if (!user) throw new ApiError(452, "Invalid Access Token");
+        if (!user) throw new ApiError(401, "Invalid Access Token");
 
         req.user = user;
         next();
     } catch (error) {
         if (error instanceof ApiError) next(error);
-        else next(new ApiError(452, "Your Access Token expired !"));
+        else next(new ApiError(401, "Your Access Token expired !"));
     }
 };
 

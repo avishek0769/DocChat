@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { Worker } from "bullmq";
-import redis from "./utils/redis.js";
+import redis, { getChatProgressKey } from "./utils/redis.js";
 import {
     normalizeUrl,
     isValidDocUrl,
@@ -31,19 +31,33 @@ function getErrorCode(err) {
     return "UNKNOWN_ERROR";
 }
 
+function readPositiveInt(value, fallback) {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function getWorkerConfig() {
+    return {
+        maxPagesPerJob: readPositiveInt(process.env.CRAWL_MAX_PAGES_PER_JOB, 300),
+        vectorlessBatchSize: readPositiveInt(process.env.CRAWL_VECTORLESS_BATCH_SIZE, 5),
+        workerConcurrency: readPositiveInt(process.env.CHAT_WORKER_CONCURRENCY, 1),
+    };
+}
+
 async function processVector(docsRootUrl, chatId, collectionName, chatSourceId) {
     try {
+        const { maxPagesPerJob } = getWorkerConfig();
         const rootUrl = normalizeUrl(docsRootUrl);
         console.log("Scraping root:", rootUrl);
 
         const { internalLinks } = await scrapeWebpage(rootUrl, rootUrl);
-        let allLinks = internalLinks.slice(0, 300); // slice 5 - Just for development, slice 300 for production
+        let allLinks = internalLinks.slice(0, maxPagesPerJob);
         const totalLinks = allLinks.length;
 
         console.log("Total unique links found:", totalLinks);
 
         await redis.setex(
-            chatId,
+            getChatProgressKey(chatId),
             3600,
             JSON.stringify({
                 status: "PROCESSING",
@@ -126,7 +140,7 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId) 
                     }
 
                     await redis.setex(
-                        chatId,
+                        getChatProgressKey(chatId),
                         3600,
                         JSON.stringify({
                             status: "PROCESSING",
@@ -138,35 +152,36 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId) 
                 }
             } catch (err) {
                 console.error(`Failed link ${link}:`, err.message);
-                await redis.setex(chatId, 3600, JSON.stringify({ status: "FAILED" }));
+                await redis.setex(getChatProgressKey(chatId), 3600, JSON.stringify({ status: "FAILED" }));
                 continue;
             }
         }
     } catch (err) {
-        await redis.setex(chatId, 3600, JSON.stringify({ status: "FAILED" }));
+        await redis.setex(getChatProgressKey(chatId), 3600, JSON.stringify({ status: "FAILED" }));
         throw err;
     }
 }
 
 async function processVectorLess(docsRootUrl, chatId, chatSourceId) {
     try {
-        await redis.setex(chatId, 3600, JSON.stringify({ status: "PROCESSING", progress: 0 }));
+        const { maxPagesPerJob, vectorlessBatchSize } = getWorkerConfig();
+        await redis.setex(getChatProgressKey(chatId), 3600, JSON.stringify({ status: "PROCESSING", progress: 0 }));
 
         const rootUrl = normalizeUrl(docsRootUrl);
         console.log("Scraping root:", rootUrl);
 
         const { internalLinks } = await scrapeWebpage(rootUrl, rootUrl);
-        let allLinks = internalLinks.slice(0, 300); // slice 3 - Just for development, slice 300 for production
+        let allLinks = internalLinks.slice(0, maxPagesPerJob);
         const totalLinks = allLinks.length;
 
         console.log("Total unique links found:", totalLinks);
 
-        let batchLinks = allLinks.slice(0, 5);
+        let batchLinks = allLinks.slice(0, vectorlessBatchSize);
         let allData = "";
         let i = 0;
 
         while (batchLinks.length > 0) {
-            batchLinks = allLinks.slice(i, i + 5);
+            batchLinks = allLinks.slice(i, i + vectorlessBatchSize);
             const results = await Promise.all(
                 batchLinks.map(async (link) => {
                     if (!isValidDocUrl(link, rootUrl)) return "";
@@ -181,7 +196,18 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId) {
             );
 
             allData += results.join("");
-            i += 5;
+            i += vectorlessBatchSize;
+
+            await redis.setex(
+                getChatProgressKey(chatId),
+                3600,
+                JSON.stringify({
+                    status: "PROCESSING",
+                    current: Math.min(i, totalLinks),
+                    total: totalLinks,
+                    progress: totalLinks ? Math.round((Math.min(i, totalLinks) / totalLinks) * 100) : 0,
+                }),
+            );
         }
 
         if (!allData.trim()) {
@@ -200,7 +226,7 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId) {
             },
         });
 
-        await redis.setex(chatId, 3600, JSON.stringify({ status: "READY", progress: 100 }));
+        await redis.setex(getChatProgressKey(chatId), 3600, JSON.stringify({ status: "READY", progress: 100 }));
 
         await prisma.chat.update({
             where: { id: chatId },
@@ -219,7 +245,7 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId) {
         return;
     } catch (error) {
         console.error("Error VectorLess:", error);
-        await redis.setex(chatId, 3600, JSON.stringify({ status: "FAILED" }));
+        await redis.setex(getChatProgressKey(chatId), 3600, JSON.stringify({ status: "FAILED" }));
         throw error;
     }
 }
@@ -283,6 +309,7 @@ const worker = new Worker(
     },
     {
         connection: redis,
+        concurrency: getWorkerConfig().workerConcurrency,
         removeOnComplete: { count: 50 },
         removeOnFail: { count: 500 },
     },

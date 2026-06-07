@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -49,7 +49,7 @@ import {
     forkSharedChat,
     getMessageSources,
 } from "../lib/api";
-import { useAuth } from "../context/AuthContext";
+import { getAuthUser } from "../lib/auth";
 
 type CurrentLink = {
     title: string;
@@ -60,12 +60,6 @@ type CurrentLink = {
 type IndexedPage = {
     pageUrl: string;
     heading?: string | null;
-};
-
-type ModelOption = {
-    provider: string;
-    model: string;
-    label: string;
 };
 
 const toModelDisplayName = (model?: string) => {
@@ -80,7 +74,7 @@ const toModelDisplayName = (model?: string) => {
 export const SharedChatPage = () => {
     const navigate = useNavigate();
     const { shareToken = "" } = useParams();
-    const { user } = useAuth();
+    const user = getAuthUser();
 
     const [docInfo, setDocInfo] = useState({
         title: "Documentation Chat",
@@ -160,7 +154,7 @@ export const SharedChatPage = () => {
                     }))
                     .filter((link) => Boolean(link.url)),
             );
-            setIndexedPages(chat?.chatSources?.[0]?.pages || []);
+            setIndexedPages(chat?.chatSources?.[0]?.pagesIndexed || []);
 
             const messageList = messageData.messages || [];
             const messagePairs: Message[] = [];
