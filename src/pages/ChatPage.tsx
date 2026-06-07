@@ -305,9 +305,13 @@ export const ChatPage = () => {
     const pendingChunkRef = useRef("");
     const chunkRafRef = useRef<number | null>(null);
     const firstChunkReceivedRef = useRef(false);
+    const abortControllerRef = useRef<AbortController | null>(null);
 
     useEffect(() => {
         return () => {
+            abortControllerRef.current?.abort();
+            abortControllerRef.current = null;
+
             if (chunkRafRef.current !== null) {
                 window.cancelAnimationFrame(chunkRafRef.current);
                 chunkRafRef.current = null;
@@ -414,6 +418,7 @@ export const ChatPage = () => {
         ]);
 
         try {
+            abortControllerRef.current = new AbortController();
             const flushPendingChunks = () => {
                 const buffered = pendingChunkRef.current;
                 if (!buffered) return;
@@ -439,6 +444,7 @@ export const ChatPage = () => {
                 model: selectedOption.model,
                 provider: selectedOption.provider,
                 chatId,
+                signal: abortControllerRef.current.signal, 
                 onChunk: (chunk) => {
                     if (!firstChunkReceivedRef.current) {
                         firstChunkReceivedRef.current = true;

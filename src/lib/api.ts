@@ -264,6 +264,7 @@ export const sendMessageStream = async (payload: {
     provider: string;
     chatId: string;
     onChunk?: (chunk: string) => void;
+    signal?: AbortSignal; 
 }) => {
     const token = getAccessToken();
     const headers = new Headers({ "Content-Type": "application/json" });
@@ -276,6 +277,7 @@ export const sendMessageStream = async (payload: {
         headers,
         credentials: "include",
         body: JSON.stringify(payload),
+        signal: payload.signal, 
     });
 
     if (!response.ok || !response.body) {
