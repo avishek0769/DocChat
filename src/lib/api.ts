@@ -191,6 +191,15 @@ export const deleteApiKey = async (id: string) => {
     return result;
 };
 
+export const updateApiKey = async (id: string, payload: { key?: string; name?: string }) => {
+    const result = await apiRequest(`/apikey/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+    });
+    invalidateApiKeyCaches();
+    return result;
+};
+
 export const getApiKeyCount = () => apiRequest<{ count: number }>("/apikey/count", { method: "GET" });
 
 export const getChats = () =>
