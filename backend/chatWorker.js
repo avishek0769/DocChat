@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { Worker } from "bullmq";
-import redis from "./utils/redis.js";
+import redis, { getChatProgressKey } from "./utils/redis.js";
 import {
     normalizeUrl,
     isValidDocUrl,
@@ -56,7 +56,7 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId) 
         console.log("Total unique links found:", totalLinks);
 
         await redis.setex(
-            chatId,
+            getChatProgressKey(chatId),
             3600,
             JSON.stringify({
                 status: "PROCESSING",
@@ -139,7 +139,7 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId) 
                     }
 
                     await redis.setex(
-                        chatId,
+                        getChatProgressKey(chatId),
                         3600,
                         JSON.stringify({
                             status: "PROCESSING",
@@ -151,12 +151,12 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId) 
                 }
             } catch (err) {
                 console.error(`Failed link ${link}:`, err.message);
-                await redis.setex(chatId, 3600, JSON.stringify({ status: "FAILED" }));
+                await redis.setex(getChatProgressKey(chatId), 3600, JSON.stringify({ status: "FAILED" }));
                 continue;
             }
         }
     } catch (err) {
-        await redis.setex(chatId, 3600, JSON.stringify({ status: "FAILED" }));
+        await redis.setex(getChatProgressKey(chatId), 3600, JSON.stringify({ status: "FAILED" }));
         throw err;
     }
 }
@@ -164,7 +164,7 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId) 
 async function processVectorLess(docsRootUrl, chatId, chatSourceId) {
     try {
         const { maxPagesPerJob, vectorlessBatchSize } = getWorkerConfig();
-        await redis.setex(chatId, 3600, JSON.stringify({ status: "PROCESSING", progress: 0 }));
+        await redis.setex(getChatProgressKey(chatId), 3600, JSON.stringify({ status: "PROCESSING", progress: 0 }));
 
         const rootUrl = normalizeUrl(docsRootUrl);
         console.log("Scraping root:", rootUrl);
@@ -198,7 +198,7 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId) {
             i += vectorlessBatchSize;
 
             await redis.setex(
-                chatId,
+                getChatProgressKey(chatId),
                 3600,
                 JSON.stringify({
                     status: "PROCESSING",
@@ -225,7 +225,7 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId) {
             },
         });
 
-        await redis.setex(chatId, 3600, JSON.stringify({ status: "READY", progress: 100 }));
+        await redis.setex(getChatProgressKey(chatId), 3600, JSON.stringify({ status: "READY", progress: 100 }));
 
         await prisma.chat.update({
             where: { id: chatId },
@@ -244,7 +244,7 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId) {
         return;
     } catch (error) {
         console.error("Error VectorLess:", error);
-        await redis.setex(chatId, 3600, JSON.stringify({ status: "FAILED" }));
+        await redis.setex(getChatProgressKey(chatId), 3600, JSON.stringify({ status: "FAILED" }));
         throw error;
     }
 }

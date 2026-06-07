@@ -23,6 +23,7 @@ import {
     getLifetimeTokens,
     getRecentChats,
     invalidatePagesIndexed,
+    cancelChat,
     type ChatItem,
 } from "../lib/api";
 import { formatTokens } from "../lib/format";
@@ -91,6 +92,7 @@ const Dashboard = () => {
     const [error, setError] = useState("");
     const [isCreating, setIsCreating] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [isCancelling, setIsCancelling] = useState(false);
     const [lifetimeTokens, setLifetimeTokens] = useState(0);
     const [chatProgress, setChatProgress] = useState<
         Record<string, { status: string; progress: number }>
@@ -293,6 +295,19 @@ const Dashboard = () => {
             setError(err instanceof Error ? err.message : "Failed to delete chat.");
         } finally {
             setIsDeleting(false);
+        }
+    };
+
+    const handleCancelChat = async (chatId: string) => {
+        setIsCancelling(true);
+        try {
+            await cancelChat(chatId);
+            showToast("Cancellation requested. Updating state...");
+            await pollStatuses(); // Force an immediate poll to reflect READY
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to cancel chat.");
+        } finally {
+            setIsCancelling(false);
         }
     };
 
@@ -589,10 +604,12 @@ const Dashboard = () => {
                                                 )}
                                                 {liveStatus === "processing" && (
                                                     <button
-                                                        disabled
-                                                        className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors bg-white/10 text-white/40 cursor-not-allowed opacity-50"
+                                                        onClick={() => handleCancelChat(chat.id)}
+                                                        disabled={isCancelling}
+                                                        className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/10"
                                                     >
-                                                        Open Chat
+                                                        <X className="w-3.5 h-3.5" />
+                                                        {isCancelling ? "Cancelling..." : "Cancel"}
                                                     </button>
                                                 )}
                                                 {liveStatus === "failed" && (

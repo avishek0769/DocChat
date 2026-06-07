@@ -232,6 +232,13 @@ export const getChatStatus = (chatId: string) =>
 export const getChatDetails = (chatId: string) =>
     apiRequest<{ chat: ChatItem }>(`/chat/${chatId}`, { method: "GET" });
 
+export const cancelChat = async (chatId: string) => {
+    const result = await apiRequest(`/chat/${chatId}/cancel`, {
+        method: "POST",
+    });
+    return result;
+};
+
 export const getPagesIndexed = (chatId: string) =>
     withCache(cacheKey(`/chat/pages-indexed/${chatId}`), 5 * 60 * 1000, () =>
         apiRequest<{

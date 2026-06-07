@@ -5,7 +5,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { scrapeWebpage } from "../utils/ragUtilities.js";
 import { cleanupQdrantCollections } from "../utils/qdrantCleanup.js";
 import { Queue } from "bullmq";
-import redis from "../utils/redis.js";
+import redis, { getChatProgressKey } from "../utils/redis.js";
 import crypto from "crypto";
 
 const chatCreationQueue = new Queue("chatCreation");
@@ -233,7 +233,7 @@ const progressStatus = asyncHandler(async (req, res) => {
         },
     });
 
-    const redisData = await redis.get(chat.id);
+    const redisData = await redis.get(getChatProgressKey(chat.id));
     const progress = normalizeProgress(redisData ? JSON.parse(redisData) : DEFAULT_PROGRESS);
 
     res.status(200).json(
@@ -462,21 +462,20 @@ const cancelProcessing = asyncHandler(async (req, res) => {
 
     if (job) {
         await job.remove();
-        await redis.setex(chat.collectionName, 3600, JSON.stringify({ status: "READY", progress: 100 }));
-
-        await prisma.chat
-            .update({
-                where: { id: chatId },
-                data: { status: "READY" },
-            })
-            .catch((err) => {
-                throw new ApiError(500, `Failed Update: ${err.message}`, err);
-            });
-
-        res.status(200).json(new ApiResponse(200, null, "Chat processing cancelled successfully"));
-    } else {
-        throw new ApiError(404, "Job not found or already completed");
     }
+
+    await redis.setex(getChatProgressKey(chatId), 3600, JSON.stringify({ status: "READY", progress: 100 }));
+
+    await prisma.chat
+        .update({
+            where: { id: chatId },
+            data: { status: "READY" },
+        })
+        .catch((err) => {
+            throw new ApiError(500, `Failed Update: ${err.message}`, err);
+        });
+
+    res.status(200).json(new ApiResponse(200, null, "Chat processing cancelled successfully"));
 });
 
 const deleteChat = asyncHandler(async (req, res) => {
