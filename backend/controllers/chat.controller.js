@@ -252,6 +252,8 @@ const progressStatus = asyncHandler(async (req, res) => {
             finishedAt: true,
             errorCode: true,
             errorMessage: true,
+            pagesCrawled: true,
+            pagesFailed: true,
         },
     });
 

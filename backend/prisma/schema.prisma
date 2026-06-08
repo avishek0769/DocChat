@@ -93,6 +93,8 @@ model IngestionRun {
     finishedAt    DateTime?          @map("finished_at")
     errorCode     String?            @map("error_code")
     errorMessage  String?            @map("error_message")
+    pagesCrawled  Int                @default(0) @map("pages_crawled")
+    pagesFailed   Int                @default(0) @map("pages_failed")
     chat          Chat               @relation(fields: [chatId], references: [id], onDelete: Cascade)
     chatSource    ChatSource         @relation(fields: [chatSourceId], references: [id], onDelete: Cascade)
 
