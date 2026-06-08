@@ -271,6 +271,24 @@ const worker = new Worker(
     },
 );
 
+console.log("CHAT WORKER STARTED");
+
+worker.on("ready", () => {
+    console.log("WORKER READY");
+});
+
+worker.on("active", (job) => {
+    console.log("JOB ACTIVE:", job.id);
+});
+
+worker.on("completed", (job) => {
+    console.log("JOB COMPLETED:", job.id);
+});
+
+worker.on("failed", (job, err) => {
+    console.log("JOB FAILED:", job?.id, err?.message);
+});
+
 worker.on("completed", async (job) => {
     console.log(`Job ${job.id} completed!`);
     if (!job.data.isVectorLess) {

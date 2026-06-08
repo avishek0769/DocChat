@@ -8,19 +8,26 @@ import { Queue } from "bullmq";
 import redis from "../utils/redis.js";
 import crypto from "crypto";
 
-const chatCreationQueue = new Queue("chatCreation");
+const chatCreationQueue = new Queue("chatCreation", {
+    connection: redis,
+});
+
+console.log(
+  "QUEUE REDIS:",
+  chatCreationQueue.opts.connection?.options
+);
 
 const expectation = asyncHandler(async (req, res) => {
-    const { docsUrl } = req.query;
+    const { docsUrls } = req.query;
 
     try {
-        const { internalLinks } = await scrapeWebpage(docsUrl, docsUrl);
+        const { internalLinks } = await scrapeWebpage(docsUrls, docsUrls);
         let allLinks = internalLinks.slice(0, 300);
         const sampleLinks = allLinks.slice(0, 10);
 
         const existingChatSource = await prisma.chatSource.findFirst({
             where: {
-                documentationUrl: docsUrl,
+                documentationUrl: docsUrls,
             },
             include: {
                 chats: { take: 1 },
@@ -50,7 +57,7 @@ const expectation = asyncHandler(async (req, res) => {
         let totalBodyLengthOfCount = 0;
 
         for (const link of sampleLinks) {
-            const { body } = await scrapeWebpage(link, docsUrl);
+            const { body } = await scrapeWebpage(link, docsUrls);
             if (body) {
                 totalBodyLengthOfCount += body.length;
                 count++;
@@ -84,102 +91,112 @@ const expectation = asyncHandler(async (req, res) => {
 });
 
 const createChat = asyncHandler(async (req, res) => {
-    let { name, docsUrl, isVectorLess } = req.body;
+    let { name, docsUrls, isVectorLess } = req.body;
     const isVectorLessChat = Boolean(isVectorLess);
-    const { internalLinks, title } = await scrapeWebpage(docsUrl, docsUrl);
+    const firstUrl = docsUrls[0];
+const { title } = await scrapeWebpage(firstUrl, firstUrl);
     name = name || title || "Untitled Chat";
 
-    let chatSource;
-    let isNew = false;
+    const chatSources = [];
     const collectionName = !isVectorLessChat ? `${name.replace(/\s+/g, "-")}-${Date.now()}` : null;
 
-    try {
-        chatSource = await prisma.chatSource.create({
-            data: {
-                totalPages: internalLinks.length,
-                heading: name,
-                documentationUrl: docsUrl,
-                collectionName: collectionName,
-                isVectorLess: isVectorLessChat,
+for (const docsUrl of docsUrls) {
+    const { internalLinks } = await scrapeWebpage(docsUrl, docsUrl);
+
+    let source;
+
+try {
+    source = await prisma.chatSource.create({
+        data: {
+            totalPages: internalLinks.length,
+            heading: name,
+            documentationUrl: docsUrl,
+            collectionName,
+            isVectorLess: isVectorLessChat,
+        },
+    });
+}
+catch (error) {
+    if (error.code === "P2002") {
+        source = await prisma.chatSource.findUnique({
+            where: {
+                documentationUrl_isVectorLess: {
+                    documentationUrl: docsUrl,
+                    isVectorLess: isVectorLessChat,
+                },
             },
         });
-        isNew = true;
-    } catch (error) {
-        if (error.code === "P2002") { // Unique constraint violation
-            chatSource = await prisma.chatSource.findUnique({
-                where: {
-                    documentationUrl_isVectorLess: {
-                        documentationUrl: docsUrl,
-                        isVectorLess: isVectorLessChat,
-                    },
-                },
-            });
-            if (!chatSource) {
-                throw new ApiError(500, "Failed to retrieve existing ChatSource after unique constraint violation.");
-            }
-        } else {
-            throw error; // Rethrow other errors
-        }
-    }
-
-    if (!isNew) {
-        const chat = await prisma.chat.create({
-            data: {
-                name,
-                collectionName: chatSource.collectionName,
-                chatSources: {
-                    connect: {
-                        id: chatSource.id,
-                    },
-                },
-                status: "READY",
-                userId: req.user.id,
-            },
-        });
-
-        return res
-            .status(200)
-            .json(
-                new ApiResponse(
-                    200,
-                    { ...chat },
-                    "Documentation already ingested, returning existing collection with new chat",
-                ),
-            );
     } else {
-        const chat = await prisma.chat.create({
-            data: {
-                name,
-                collectionName: chatSource.collectionName,
-                chatSources: {
-                    connect: {
-                        id: chatSource.id,
-                    },
-                },
-                status: "QUEUED",
-                userId: req.user.id,
-            },
-            include: {
-                chatSources: true,
-            },
-        });
-
-        chatCreationQueue.add(
-            `${chat.id}-job`,
-            {
-                chatId: chat.id.toString(),
-                docsUrl,
-                collectionName: chat.collectionName,
-                chatSourceId: chat.chatSources[0].id.toString(),
-                isVectorLess: isVectorLessChat,
-            },
-            { jobId: chat.id },
-        );
-
-        return res
-            .status(200)
-            .json(new ApiResponse(200, { chatId: chat.id }, "Chat creation initiated successfully"));
+        throw error;
     }
+}
+
+chatSources.push(source);
+}
+
+        const chat = await prisma.chat.create({
+    data: {
+        name,
+        collectionName,
+        chatSources: {
+            connect: chatSources.map(source => ({
+                id: source.id,
+            })),
+        },
+        status: "QUEUED",
+        userId: req.user.id,
+    },
+    include: {
+        chatSources: true,
+    },
+});
+
+for (const source of chatSources) {
+    console.log("BEFORE QUEUE ADD", {
+        chatId: chat.id,
+        sourceId: source.id,
+        url: source.documentationUrl,
+    });
+
+    await chatCreationQueue.add(
+        `${chat.id}-${source.id}`,
+        {
+            chatId: chat.id,
+            docsUrl: source.documentationUrl,
+            collectionName: source.collectionName,
+            chatSourceId: source.id,
+            isVectorLess: source.isVectorLess,
+        }
+    );
+
+    const jobs = await chatCreationQueue.getJobs(
+  ["waiting", "active", "completed", "failed"],
+  0,
+  10
+);
+
+console.log(
+  "JOBS AFTER ADD:",
+  jobs.map(j => ({
+    id: j.id,
+    name: j.name,
+    data: j.data
+  }))
+);
+
+    console.log("AFTER QUEUE ADD");
+    const counts = await chatCreationQueue.getJobCounts();
+
+console.log("QUEUE COUNTS:", counts);
+}
+
+return res.status(200).json(
+    new ApiResponse(
+        200,
+        { chatId: chat.id },
+        "Chat creation initiated successfully"
+    )
+);
 });
 
 const DEFAULT_PROGRESS = {

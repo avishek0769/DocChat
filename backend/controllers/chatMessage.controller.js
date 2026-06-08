@@ -100,18 +100,36 @@ const sendMessage = asyncHandler(async (req, res) => {
         });
     }
 
-    let relevantSources = [];
-    let relevantNodes = [];
-    let relevantNodeIds = [];
-    if (!chat.chatSources[0].isVectorLess) {
-        const userPromptEmbeddings = await generateVectorEmbeddings(userPrompt);
-        relevantSources = await qdrant.query(chat.collectionName, {
+   let relevantSources = [];
+let relevantNodes = [];
+let relevantNodeIds = [];
+
+if (!chat.chatSources[0].isVectorLess) {
+    const userPromptEmbeddings = await generateVectorEmbeddings(userPrompt);
+
+    let allPoints = [];
+
+    for (const source of chat.chatSources) {
+        if (!source.collectionName) continue;
+
+        const results = await qdrant.query(source.collectionName, {
             query: userPromptEmbeddings,
             limit: 5,
             with_payload: true,
             score_threshold: 0.35,
         });
-    } else {
+
+        if (results?.points?.length) {
+            allPoints.push(...results.points);
+        }
+    }
+
+    allPoints.sort((a, b) => b.score - a.score);
+
+    relevantSources = {
+        points: allPoints.slice(0, 5),
+    };
+} else {
         const docTree = await prisma.documentTree.findUnique({
             where: { id: chat.collectionName },
         });

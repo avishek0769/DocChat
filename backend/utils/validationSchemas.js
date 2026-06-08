@@ -84,14 +84,14 @@ export const apiKeyIdParamSchema = {
 
 export const expectationQuerySchema = {
     query: z.object({
-        docsUrl: url,
+        docsUrls: z.array(url).min(1),
     }),
 };
 
 export const createChatSchema = {
     body: z.object({
         name: z.string().trim().optional(),
-        docsUrl: url,
+        docsUrls: z.array(url).min(1),
         isVectorLess: z
             .union([z.boolean(), z.string(), z.number()])
             .optional()
