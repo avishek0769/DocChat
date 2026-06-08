@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Sidebar } from "../components/Sidebar";
-import { User, Mail, LogOut, Save, Key, CheckCircle2, Trash2 } from "lucide-react";
+import { User, Mail, LogOut, Save, Key, CheckCircle2, Trash2, Pencil, X } from "lucide-react";
 import { logoutUser, forceSignOut } from "../lib/auth";
 import { getUserProfile, deleteMyData } from "../lib/api";
-
 const Profile = () => {
     const navigate = useNavigate();
     const [name, setName] = useState("");
@@ -17,6 +16,8 @@ const Profile = () => {
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [deleteError, setDeleteError] = useState("");
+    const [isEditing, setIsEditing] = useState(false);
+    const [editName, setEditName] = useState("");
 
     useEffect(() => {
         const loadProfile = async () => {
@@ -34,10 +35,23 @@ const Profile = () => {
         loadProfile();
     }, []);
 
+    const handleEdit = () => {
+        setEditName(name);
+        setIsEditing(true);
+        setSaved(false);
+    };
+
+    const handleCancel = () => {
+        setIsEditing(false);
+        setEditName("");
+    };
+
     const handleSave = () => {
         setIsSaving(true);
         setTimeout(() => {
+            setName(editName);
             setIsSaving(false);
+            setIsEditing(false);
             setSaved(true);
             setTimeout(() => setSaved(false), 2000);
         }, 800);
@@ -88,56 +102,81 @@ const Profile = () => {
                                     {isProfileLoading ? "Loading profile..." : email || "-"}
                                 </p>
                             </div>
+                            {!isEditing && (
+                                <button
+                                    onClick={handleEdit}
+                                    className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-sm font-medium text-gray-300 hover:text-white transition-colors flex items-center gap-2"
+                                >
+                                    <Pencil className="w-3.5 h-3.5" />
+                                    Edit
+                                </button>
+                            )}
                         </div>
 
-                        {/* Form Fields */}
+                        {/* Profile Fields */}
                         <div className="space-y-5">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                                 <div className="space-y-1.5">
                                     <label className="text-sm font-medium text-gray-400 flex items-center gap-1.5">
                                         <User className="w-3.5 h-3.5" /> Display Name
                                     </label>
-                                    <input
-                                        type="text"
-                                        value={name}
-                                        onChange={(e) => setName(e.target.value)}
-                                        className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-accent-blue/50 focus:ring-1 focus:ring-accent-blue/50 transition-all"
-                                    />
+                                    {isEditing ? (
+                                        <input
+                                            type="text"
+                                            value={editName}
+                                            onChange={(e) => setEditName(e.target.value)}
+                                            className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-accent-blue/50 focus:ring-1 focus:ring-accent-blue/50 transition-all"
+                                        />
+                                    ) : (
+                                        <p className="w-full bg-[#111]/50 border border-white/5 rounded-lg px-4 py-2.5 text-sm text-gray-300">
+                                            {name || "-"}
+                                        </p>
+                                    )}
                                 </div>
                                 <div className="space-y-1.5">
                                     <label className="text-sm font-medium text-gray-400 flex items-center gap-1.5">
                                         <Mail className="w-3.5 h-3.5" /> Email
                                     </label>
-                                    <input
-                                        type="email"
-                                        value={email}
-                                        disabled
-                                        className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-gray-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-                                    />
+                                    <p className="w-full bg-[#111]/50 border border-white/5 rounded-lg px-4 py-2.5 text-sm text-gray-500">
+                                        {email || "-"}
+                                    </p>
                                 </div>
                             </div>
 
-                            <div className="flex items-center justify-end pt-2">
-                                <button
-                                    onClick={handleSave}
-                                    disabled={isSaving}
-                                    className="px-5 py-2 rounded-lg bg-accent-blue hover:bg-blue-600 disabled:opacity-60 text-white text-sm font-medium transition-all flex items-center gap-2 shadow-lg shadow-accent-blue/20"
-                                >
-                                    {isSaving ? (
-                                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                    ) : saved ? (
-                                        <>
-                                            <CheckCircle2 className="w-4 h-4 text-green-300" />
-                                            Saved!
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Save className="w-4 h-4" />
-                                            Save Changes
-                                        </>
-                                    )}
-                                </button>
-                            </div>
+                            {isEditing && (
+                                <div className="flex items-center justify-end gap-3 pt-2">
+                                    <button
+                                        onClick={handleCancel}
+                                        className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-sm font-medium text-gray-400 hover:text-white transition-colors flex items-center gap-2"
+                                    >
+                                        <X className="w-4 h-4" />
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleSave}
+                                        disabled={isSaving}
+                                        className="px-5 py-2 rounded-lg bg-accent-blue hover:bg-blue-600 disabled:opacity-60 text-white text-sm font-medium transition-all flex items-center gap-2 shadow-lg shadow-accent-blue/20"
+                                    >
+                                        {isSaving ? (
+                                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                        ) : (
+                                            <>
+                                                <Save className="w-4 h-4" />
+                                                Save Changes
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            )}
+
+                            {!isEditing && saved && (
+                                <div className="flex items-center justify-end pt-2">
+                                    <span className="text-sm text-green-400 flex items-center gap-1.5">
+                                        <CheckCircle2 className="w-4 h-4" />
+                                        Changes saved successfully
+                                    </span>
+                                </div>
+                            )}
                         </div>
                     </section>
 

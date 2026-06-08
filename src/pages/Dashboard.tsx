@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Sidebar } from "../components/Sidebar";
+import Skeleton from "../components/Skeleton";
 
 import {
     MessageSquare,
@@ -22,6 +23,7 @@ import {
     getLifetimeTokens,
     getRecentChats,
     invalidatePagesIndexed,
+    cancelChat,
     type ChatItem,
 } from "../lib/api";
 import { formatTokens } from "../lib/format";
@@ -90,6 +92,7 @@ const Dashboard = () => {
     const [error, setError] = useState("");
     const [isCreating, setIsCreating] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [isCancelling, setIsCancelling] = useState(false);
     const [lifetimeTokens, setLifetimeTokens] = useState(0);
     const [chatProgress, setChatProgress] = useState<
         Record<string, { status: string; progress: number }>
@@ -295,6 +298,19 @@ const Dashboard = () => {
         }
     };
 
+    const handleCancelChat = async (chatId: string) => {
+        setIsCancelling(true);
+        try {
+            await cancelChat(chatId);
+            showToast("Cancellation requested. Updating state...");
+            await pollStatuses(); // Force an immediate poll to reflect READY
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to cancel chat.");
+        } finally {
+            setIsCancelling(false);
+        }
+    };
+
     const handleRetryFailed = async (chatId: string) => {
         const chat = chats.find((c) => c.id === chatId);
         if (!chat) return;
@@ -448,9 +464,18 @@ const Dashboard = () => {
                         </h2>
 
                         {isLoading ? (
-                            <div className="p-8 text-center bg-white/1 border border-white/5 border-dashed rounded-xl text-sm text-gray-400">
-                                Loading chats...
-                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+  {[1,2,3].map((i) => (
+    <div
+      key={i}
+      className="p-5 rounded-xl bg-white/2 border border-white/5"
+    >
+      <Skeleton className="h-4 w-24 mb-3" />
+      <Skeleton className="h-8 w-16 mb-3" />
+      <Skeleton className="h-3 w-20" />
+    </div>
+  ))}
+</div>
                         ) : chats.length > 0 ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                 {chats.map((chat) => {
@@ -579,10 +604,12 @@ const Dashboard = () => {
                                                 )}
                                                 {liveStatus === "processing" && (
                                                     <button
-                                                        disabled
-                                                        className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors bg-white/10 text-white/40 cursor-not-allowed opacity-50"
+                                                        onClick={() => handleCancelChat(chat.id)}
+                                                        disabled={isCancelling}
+                                                        className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/10"
                                                     >
-                                                        Open Chat
+                                                        <X className="w-3.5 h-3.5" />
+                                                        {isCancelling ? "Cancelling..." : "Cancel"}
                                                     </button>
                                                 )}
                                                 {liveStatus === "failed" && (
