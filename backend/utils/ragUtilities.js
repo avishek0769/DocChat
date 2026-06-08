@@ -1,14 +1,58 @@
 import * as cheerio from "cheerio";
 import OpenAI from "openai";
 import dns from "node:dns/promises";
+import Bottleneck from "bottleneck";
+import robotsParser from "robots-parser";
 
-const openai = new OpenAI({
-    baseURL: "https://openrouter.ai/api/v1",
-    apiKey: process.env.OPENROUTER_EMBEDDING_API_KEY,
-});
+const robotsCache = new Map();
+const domainLimiters = new Map();
+
+let openai;
+
+function getOpenAIClient() {
+    if (!process.env.OPENROUTER_EMBEDDING_API_KEY) {
+        throw new Error("OPENROUTER_EMBEDDING_API_KEY is required to generate vector embeddings.");
+    }
+
+    if (!openai) {
+        openai = new OpenAI({
+            baseURL: "https://openrouter.ai/api/v1",
+            apiKey: process.env.OPENROUTER_EMBEDDING_API_KEY,
+        });
+    }
+
+    return openai;
+}
+
+function readPositiveInt(value, fallback) {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function readNonNegativeInt(value, fallback) {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function readBoolean(value, fallback) {
+    if (value === undefined) return fallback;
+    return ["1", "true", "yes", "on"].includes(String(value).toLowerCase());
+}
+
+function getCrawlConfig() {
+    return {
+        userAgent: process.env.CRAWL_USER_AGENT || "DocChatBot/1.0",
+        respectRobotsTxt: readBoolean(process.env.CRAWL_RESPECT_ROBOTS_TXT, true),
+        defaultDelayMs: readNonNegativeInt(process.env.CRAWL_DELAY_MS, 1000),
+        maxConcurrencyPerDomain: readPositiveInt(process.env.CRAWL_MAX_CONCURRENCY_PER_DOMAIN, 2),
+        robotsTimeoutMs: readPositiveInt(process.env.CRAWL_ROBOTS_TIMEOUT_MS, 5000),
+        robotsCacheTtlMs: readPositiveInt(process.env.CRAWL_ROBOTS_CACHE_TTL_MS, 10 * 60 * 1000),
+        allowOnRobotsError: readBoolean(process.env.CRAWL_ALLOW_ON_ROBOTS_ERROR, false),
+    };
+}
 
 async function generateVectorEmbeddings(text) {
-    const response = await openai.embeddings.create({
+    const response = await getOpenAIClient().embeddings.create({
         model: "openai/text-embedding-3-small",
         input: text,
         encoding_format: "float",
@@ -104,16 +148,165 @@ async function validatePublicUrl(urlString) {
     }
 }
 
+function parseRobotsTxt(contents = "", robotsUrl = "https://example.com/robots.txt") {
+    return robotsParser(robotsUrl, contents);
+}
+
+function getRobotsCrawlDelayMs(parser, userAgent) {
+    const crawlDelaySeconds = parser.getCrawlDelay(userAgent);
+    return Number.isFinite(crawlDelaySeconds) && crawlDelaySeconds >= 0
+        ? Math.round(crawlDelaySeconds * 1000)
+        : null;
+}
+
+function isUrlAllowedByRobots(urlString, parser, userAgent = getCrawlConfig().userAgent) {
+    return parser.isAllowed(urlString, userAgent) !== false;
+}
+
+async function fetchTextWithTimeout(url, config) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), config.robotsTimeoutMs);
+
+    try {
+        const response = await fetch(url, {
+            signal: controller.signal,
+            headers: {
+                "User-Agent": config.userAgent,
+            },
+        });
+
+        return response;
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+async function fetchRobotsPolicy(origin, config) {
+    if (!config.respectRobotsTxt) {
+        return {
+            parser: parseRobotsTxt("", new URL("/robots.txt", origin).toString()),
+            crawlDelayMs: null,
+            failureReason: null,
+        };
+    }
+
+    const robotsUrl = new URL("/robots.txt", origin).toString();
+
+    try {
+        await validatePublicUrl(robotsUrl);
+        const response = await fetchTextWithTimeout(robotsUrl, config);
+
+        if (response.status === 404) {
+            return { parser: parseRobotsTxt("", robotsUrl), crawlDelayMs: null, failureReason: null };
+        }
+
+        if (!response.ok) {
+            const failureReason = `robots.txt returned HTTP ${response.status}`;
+            if (!config.allowOnRobotsError) {
+                return { parser: parseRobotsTxt("", robotsUrl), crawlDelayMs: null, failureReason };
+            }
+            return { parser: parseRobotsTxt("", robotsUrl), crawlDelayMs: null, failureReason: null };
+        }
+
+        const parser = parseRobotsTxt(await response.text(), robotsUrl);
+        return {
+            parser,
+            crawlDelayMs: getRobotsCrawlDelayMs(parser, config.userAgent),
+            failureReason: null,
+        };
+    } catch (error) {
+        if (config.allowOnRobotsError) {
+            return { parser: parseRobotsTxt("", robotsUrl), crawlDelayMs: null, failureReason: null };
+        }
+        return {
+            parser: parseRobotsTxt("", robotsUrl),
+            crawlDelayMs: null,
+            failureReason: `robots.txt check failed: ${error.message}`,
+        };
+    }
+}
+
+async function getRobotsPolicy(urlString, config) {
+    const origin = new URL(urlString).origin;
+    const cacheKey = `${origin}|${config.userAgent}`;
+    const cached = robotsCache.get(cacheKey);
+
+    if (cached && cached.expiresAt > Date.now()) {
+        return cached.promise;
+    }
+
+    const promise = fetchRobotsPolicy(origin, config);
+    robotsCache.set(cacheKey, {
+        expiresAt: Date.now() + config.robotsCacheTtlMs,
+        promise,
+    });
+
+    return promise;
+}
+
+function getDomainLimiter(urlString, config, crawlDelayMs) {
+    const hostname = new URL(urlString).hostname.toLowerCase();
+    if (!domainLimiters.has(hostname)) {
+        domainLimiters.set(hostname, new Bottleneck({
+            maxConcurrent: config.maxConcurrencyPerDomain,
+            minTime: crawlDelayMs,
+        }));
+    } else {
+        domainLimiters.get(hostname).updateSettings({
+            maxConcurrent: config.maxConcurrencyPerDomain,
+            minTime: crawlDelayMs,
+        });
+    }
+    return domainLimiters.get(hostname);
+}
+
+async function scheduleCrawl(urlString, task) {
+    await validatePublicUrl(urlString);
+
+    const config = getCrawlConfig();
+    const robotsPolicy = await getRobotsPolicy(urlString, config);
+
+    if (robotsPolicy.failureReason) {
+        const error = new Error(`Crawl blocked: ${robotsPolicy.failureReason}`);
+        error.code = "ROBOTS_CHECK_FAILED";
+        throw error;
+    }
+
+    if (!isUrlAllowedByRobots(urlString, robotsPolicy.parser, config.userAgent)) {
+        const error = new Error(`Crawl blocked by robots.txt: ${urlString}`);
+        error.code = "ROBOTS_DISALLOWED";
+        throw error;
+    }
+
+    const crawlDelayMs = robotsPolicy.crawlDelayMs ?? config.defaultDelayMs;
+    return getDomainLimiter(urlString, config, crawlDelayMs).schedule(task);
+}
+
+async function fetchCrawlText(urlString) {
+    return scheduleCrawl(urlString, async () => {
+        const config = getCrawlConfig();
+        const response = await fetch(urlString, {
+            headers: {
+                "User-Agent": config.userAgent,
+            },
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to fetch ${urlString}: HTTP ${response.status}`);
+        }
+
+        return response.text();
+    });
+}
+
 async function scrapeTitle(url) {
-    await validatePublicUrl(url);
-    const data = await (await fetch(url)).text();
+    const data = await fetchCrawlText(url);
     const $ = cheerio.load(data);
     return $("title").text();
 }
 
 async function scrapeWebpage(url = "", rootUrl = "") {
-    await validatePublicUrl(url);
-    const data = await (await fetch(url)).text();
+    const data = await fetchCrawlText(url);
     const $ = cheerio.load(data);
 
     const rootHostname = new URL(rootUrl).hostname;
@@ -212,4 +405,20 @@ function extractHrefsFromScripts($, rootUrl, rootHostname) {
     return hrefs;
 }
 
-export { normalizeUrl, isValidDocUrl, scrapeWebpage, scrapeTitle, generateVectorEmbeddings };
+function resetCrawlStateForTests() {
+    robotsCache.clear();
+    domainLimiters.clear();
+}
+
+export {
+    normalizeUrl,
+    isValidDocUrl,
+    scrapeWebpage,
+    scrapeTitle,
+    generateVectorEmbeddings,
+    getCrawlConfig,
+    parseRobotsTxt,
+    isUrlAllowedByRobots,
+    scheduleCrawl,
+    resetCrawlStateForTests,
+};

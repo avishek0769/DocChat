@@ -25,3 +25,8 @@ export const PROVIDERS_BASE_URLS = {
     OPENROUTER: "https://openrouter.ai/api/v1",
 };
 export const MEM0_ENABLED = Boolean(process.env.MEM0_API_KEY);
+
+// Optional tokens limit 
+const parsedDailyTokenBudget = Number(process.env.DAILY_TOKEN_BUDGET);
+export const DAILY_TOKEN_BUDGET =
+    Number.isFinite(parsedDailyTokenBudget) && parsedDailyTokenBudget > 0 ? parsedDailyTokenBudget : null;

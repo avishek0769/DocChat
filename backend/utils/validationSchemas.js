@@ -149,7 +149,7 @@ export const qdrantCleanupSchema = {
 
 export const sendMessageSchema = {
     body: z.object({
-        userPrompt: z.string().min(1, "Message is required").trim(),
+        userPrompt: z.string().min(1, "Message is required").max(4000, "Prompt is too long (maximum 4000 characters allowed)").trim(),
         model: z.string().min(1, "Model is required"),
         provider: z.string().min(1, "Provider is required"),
         chatId,

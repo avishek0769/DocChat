@@ -7,15 +7,22 @@ import bcrypt from "bcrypt";
 import redis from "../utils/redis.js";
 import { Resend } from "resend";
 
+
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 const AccessOptions = {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 1 * 24 * 60 * 60 * 1000, // 1 day
+    path: "/",
 };
 const RefreshOptions = {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 10 * 24 * 60 * 60 * 1000, // 10 days
+    path: "/",
 };
 
 const hashPassword = async (password) => {
@@ -258,7 +265,12 @@ const refreshTokens = asyncHandler(async (req, res) => {
 });
 
 const currentUserProfile = asyncHandler(async (req, res) => {
-    const user = req.user;
+    const user = {
+        id:req.user.id,
+        fullname:req.user.fullname,
+        username:req.user.username,
+        email:req.user.email,
+    }
     res.status(200).json(new ApiResponse(200, user, "Current user profile fetched successfully !"));
 });
 

@@ -142,6 +142,7 @@ export const invalidateApiKeyCaches = () => {
     const prefix = cacheKey("");
     removeMatchingFromCache(`${prefix}/apikey/list`);
     removeMatchingFromCache(`${prefix}/apikey/count`);
+    removeMatchingFromCache(`${prefix}/message/models`);
 };
 
 export const invalidateChatCaches = () => {
@@ -190,6 +191,15 @@ export const deleteApiKey = async (id: string) => {
     return result;
 };
 
+export const updateApiKey = async (id: string, payload: { key?: string; name?: string }) => {
+    const result = await apiRequest(`/apikey/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+    });
+    invalidateApiKeyCaches();
+    return result;
+};
+
 export const getApiKeyCount = () => apiRequest<{ count: number }>("/apikey/count", { method: "GET" });
 
 export const getChats = () =>
@@ -217,12 +227,26 @@ export const deleteChat = async (chatId: string) => {
 };
 
 export const getChatStatus = (chatId: string) =>
-    apiRequest<{ progress: { status: string; progress: number } }>(`/chat/status/${chatId}`, {
+    apiRequest<{
+        progress: {
+            status: string;
+            progress: number;
+            current: number;
+            total: number;
+        };
+    }>(`/chat/status/${chatId}`, {
         method: "GET",
     });
 
 export const getChatDetails = (chatId: string) =>
     apiRequest<{ chat: ChatItem }>(`/chat/${chatId}`, { method: "GET" });
+
+export const cancelChat = async (chatId: string) => {
+    const result = await apiRequest(`/chat/${chatId}/cancel`, {
+        method: "POST",
+    });
+    return result;
+};
 
 export const getPagesIndexed = (chatId: string) =>
     withCache(cacheKey(`/chat/pages-indexed/${chatId}`), 5 * 60 * 1000, () =>
@@ -232,7 +256,7 @@ export const getPagesIndexed = (chatId: string) =>
     );
 
 export const getAvailableModels = () =>
-    withCache(cacheKey("/message/models"), 24 * 60 * 60 * 1000, () =>
+    withCache(cacheKey("/message/models"), 5 * 60 * 1000, () =>
         apiRequest<{ models: string[] }>("/message/models", { method: "GET" }),
     );
 
@@ -256,6 +280,7 @@ export const sendMessageStream = async (payload: {
     provider: string;
     chatId: string;
     onChunk?: (chunk: string) => void;
+    signal?: AbortSignal; 
 }) => {
     const token = getAccessToken();
     const headers = new Headers({ "Content-Type": "application/json" });
@@ -268,6 +293,7 @@ export const sendMessageStream = async (payload: {
         headers,
         credentials: "include",
         body: JSON.stringify(payload),
+        signal: payload.signal, 
     });
 
     if (!response.ok || !response.body) {
