@@ -43,14 +43,15 @@ function getWorkerConfig() {
     };
 }
 
-async function processVector(docsRootUrl, chatId, collectionName, chatSourceId) {
+async function processVector(docsRootUrl, chatId, collectionName, chatSourceId, scrapeLimit) {
     try {
         const { maxPagesPerJob } = getWorkerConfig();
         const rootUrl = normalizeUrl(docsRootUrl);
         console.log("Scraping root:", rootUrl);
 
         const { internalLinks } = await scrapeWebpage(rootUrl, rootUrl);
-        let allLinks = internalLinks.slice(0, maxPagesPerJob);
+        const effectiveLimit = typeof scrapeLimit === 'number' && scrapeLimit > 0 ? scrapeLimit : maxPagesPerJob;
+        let allLinks = internalLinks.slice(0, effectiveLimit);
         const totalLinks = allLinks.length;
 
         console.log("Total unique links found:", totalLinks);
@@ -161,7 +162,7 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId) 
     }
 }
 
-async function processVectorLess(docsRootUrl, chatId, chatSourceId) {
+async function processVectorLess(docsRootUrl, chatId, chatSourceId, scrapeLimit) {
     try {
         const { maxPagesPerJob, vectorlessBatchSize } = getWorkerConfig();
         await redis.setex(getChatProgressKey(chatId), 3600, JSON.stringify({ status: "PROCESSING", progress: 0 }));
@@ -170,7 +171,8 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId) {
         console.log("Scraping root:", rootUrl);
 
         const { internalLinks } = await scrapeWebpage(rootUrl, rootUrl);
-        let allLinks = internalLinks.slice(0, maxPagesPerJob);
+        const effectiveLimit = typeof scrapeLimit === 'number' && scrapeLimit > 0 ? scrapeLimit : maxPagesPerJob;
+        let allLinks = internalLinks.slice(0, effectiveLimit);
         const totalLinks = allLinks.length;
 
         console.log("Total unique links found:", totalLinks);
@@ -252,7 +254,7 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId) {
 const worker = new Worker(
     "chatCreation",
     async (job) => {
-        const { chatId, docsUrl, collectionName, chatSourceId, isVectorLess } = job.data;
+        const { chatId, docsUrl, collectionName, chatSourceId, isVectorLess, scrapeLimit } = job.data;
         const run = await prisma.ingestionRun.create({
             data: {
                 chatId,
@@ -263,9 +265,9 @@ const worker = new Worker(
 
         try {
             if (!isVectorLess) {
-                await processVector(docsUrl, chatId, collectionName, chatSourceId);
+                await processVector(docsUrl, chatId, collectionName, chatSourceId, scrapeLimit);
             } else {
-                await processVectorLess(docsUrl, chatId, chatSourceId);
+                await processVectorLess(docsUrl, chatId, chatSourceId, scrapeLimit);
             }
 
             await prisma.ingestionRun.update({

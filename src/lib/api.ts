@@ -211,6 +211,7 @@ export const createChat = async (payload: {
     name?: string;
     docsUrl: string;
     isVectorLess?: boolean;
+    scrapeLimit?: number;
 }) => {
     const result = await apiRequest<{ chatId?: string; id?: string }>("/chat/create", {
         method: "POST",
