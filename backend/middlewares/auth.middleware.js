@@ -18,6 +18,7 @@ const verifyStrictJWT = async (req, res, next) => {
                 fullname: true,
                 username: true,
                 email: true,
+                isAdmin: true,
                 apikeys: true,
                 refreshToken: true,
             },
@@ -56,4 +57,16 @@ const verifyJWT = async (req, res, next) => {
     next();
 };
 
-export { verifyStrictJWT, verifyJWT };
+const verifyAdmin = async (req, res, next) => {
+    try {
+        if (req.user?.isAdmin !== true) {
+            throw new ApiError(403, "Admin privileges required");
+        }
+
+        next();
+    } catch (error) {
+        next(error instanceof ApiError ? error : new ApiError(403, "Admin privileges required"));
+    }
+};
+
+export { verifyStrictJWT, verifyJWT, verifyAdmin };
