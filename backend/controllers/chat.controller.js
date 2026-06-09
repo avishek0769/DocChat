@@ -5,7 +5,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { scrapeWebpage } from "../utils/ragUtilities.js";
 import { cleanupQdrantCollections } from "../utils/qdrantCleanup.js";
 import { Queue } from "bullmq";
-import redis, { getChatProgressKey } from "../utils/redis.js";
+import redis, { getChatProgressKey, getChatProgressChannel, progressEmitter, redisSubscriber } from "../utils/redis.js";
 import crypto from "crypto";
 
 const chatCreationQueue = new Queue("chatCreation");
@@ -239,6 +239,67 @@ const progressStatus = asyncHandler(async (req, res) => {
     res.status(200).json(
         new ApiResponse(200, { progress, latestIngestionRun }, "Progress fetched successfully"),
     );
+});
+
+const streamChatStatus = asyncHandler(async (req, res) => {
+    const { chatId } = req.params;
+
+    const chat = await prisma.chat.findFirst({
+        where: {
+            id: chatId,
+            userId: req.user.id,
+        },
+        select: { id: true },
+    });
+
+    if (!chat) {
+        throw new ApiError(404, "Chat not found");
+    }
+
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders();
+
+    const redisData = await redis.get(getChatProgressKey(chatId));
+    const initialProgress = normalizeProgress(redisData ? JSON.parse(redisData) : DEFAULT_PROGRESS);
+    
+    // Send initial status immediately
+    res.write(`data: ${JSON.stringify({ progress: initialProgress })}\n\n`);
+
+    if (["READY", "FAILED", "CANCELLED"].includes(initialProgress.status)) {
+        res.end();
+        return;
+    }
+
+    const channel = getChatProgressChannel(chatId);
+
+    // If this is the first listener for this channel, subscribe to redis
+    if (progressEmitter.listenerCount(channel) === 0) {
+        redisSubscriber.subscribe(channel);
+    }
+
+    const listener = (message) => {
+        const progress = normalizeProgress(JSON.parse(message));
+        res.write(`data: ${JSON.stringify({ progress })}\n\n`);
+        
+        if (["READY", "FAILED", "CANCELLED"].includes(progress.status)) {
+            cleanup();
+        }
+    };
+
+    progressEmitter.on(channel, listener);
+
+    const cleanup = () => {
+        progressEmitter.off(channel, listener);
+        // If no one else is listening to this channel, unsubscribe from redis
+        if (progressEmitter.listenerCount(channel) === 0) {
+            redisSubscriber.unsubscribe(channel);
+        }
+        res.end();
+    };
+
+    req.on("close", cleanup);
 });
 
 const recentFailedIngestionRuns = asyncHandler(async (req, res) => {
@@ -639,6 +700,7 @@ export {
     expectation,
     createChat,
     progressStatus,
+    streamChatStatus,
     recentFailedIngestionRuns,
     qdrantCleanup,
     listAllChats,

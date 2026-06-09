@@ -1,6 +1,6 @@
 import express from "express";
 import request from "supertest";
-import { jest } from "@jest/globals";
+import { jest } from '@jest/globals';
 
 const queryRawMock = jest.fn();
 const usageAggregateMock = jest.fn();
