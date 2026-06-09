@@ -358,7 +358,7 @@ export const exportChatMessages = async (chatId: string): Promise<void> => {
 export const getLifetimeTokens = () =>
     withCache(cacheKey("/usage/lifetime-tokens"), 5 * 60 * 1000, () =>
         apiRequest<{
-            _sum: { inputTokens: number | null; outputTokens: number | null };
+            _sum: { inputTokens: number | null; outputTokens: number | null; estimatedCostUsd: number | null };
         }>("/usage/lifetime-tokens", { method: "GET" }),
     );
 
@@ -371,8 +371,10 @@ export const getTokensByGroup = (groupBy: "day" | "week" | "month" | "year") =>
                     period: string;
                     usageByModels: Array<{
                         model: string;
+                        provider: string | null;
                         totalInput: number;
                         totalOutput: number;
+                        estimatedCostUsd: number;
                     }>;
                 }
             >
@@ -389,18 +391,11 @@ export const getTopChatsByUsage = () =>
         apiRequest<
             Array<{
                 chatId: string;
-                _sum: { inputTokens: number | null; outputTokens: number | null };
+                _sum: { inputTokens: number | null; outputTokens: number | null; estimatedCostUsd: number | null };
                 name?: string | null;
             }>
         >("/usage/top-chats", { method: "GET" }),
     );
-    apiRequest<
-        Array<{
-            chatId: string;
-            _sum: { inputTokens: number | null; outputTokens: number | null };
-            name?: string | null;
-        }>
-    >("/usage/top-chats", { method: "GET" });
 export type UsageBreakdownItem = {
     model: string;
     provider: string | null;
@@ -408,6 +403,32 @@ export type UsageBreakdownItem = {
     totalOutputTokens: number;
     totalTokens: number;
     requestCount: number;
+    estimatedCostUsd: number;
+};
+
+export type AdminUsageSummary = {
+    totalInputTokens: number;
+    totalOutputTokens: number;
+    totalEstimatedCostUsd: number;
+};
+
+export type AdminUsageUserRow = {
+    userId: string | null;
+    username?: string | null;
+    fullname?: string | null;
+    requestCount: number;
+    inputTokens: number;
+    outputTokens: number;
+    estimatedCostUsd: number;
+};
+
+export type AdminUsageModelRow = {
+    model: string;
+    provider: string | null;
+    requestCount: number;
+    inputTokens: number;
+    outputTokens: number;
+    estimatedCostUsd: number;
 };
 
 export const getUsageBreakdown = (params?: {
@@ -432,6 +453,23 @@ export const getUsageBreakdown = (params?: {
         };
     }>(`/usage/breakdown${query ? `?${query}` : ""}`, { method: "GET" });
 };
+
+export const getAdminOverview = () =>
+    apiRequest<{
+        totalUsers: number;
+        totalInputTokens: number;
+        totalOutputTokens: number;
+        totalEstimatedCostUsd: number;
+    }>("/admin/overview", { method: "GET" });
+
+export const getAdminUsage = () =>
+    apiRequest<{
+        totalInputTokens: number;
+        totalOutputTokens: number;
+        totalEstimatedCostUsd: number;
+        topUsersByTokenUsage: AdminUsageUserRow[];
+        topModelsByTokenUsage: AdminUsageModelRow[];
+    }>("/admin/usage", { method: "GET" });
 
 export const toggleChatShare = (chatId: string) =>
     apiRequest<ChatItem>(`/chat/${chatId}/share`, { method: "POST" });

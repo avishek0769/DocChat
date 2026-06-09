@@ -3,7 +3,13 @@ import redis from "../utils/redis.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
-import { LLM_MODELS, PROVIDERS_BASE_URLS, MEM0_ENABLED, DAILY_TOKEN_BUDGET } from "../utils/constants.js";
+import {
+    LLM_MODELS,
+    PROVIDERS_BASE_URLS,
+    MEM0_ENABLED,
+    DAILY_TOKEN_BUDGET,
+    estimateUsageCostUsd,
+} from "../utils/constants.js";
 import OpenAI from "openai";
 import { qdrant, treeindex } from "../utils/ragClients.js";
 import { decryptApiKey } from "../utils/decrypt.js";
@@ -291,12 +297,21 @@ const sendMessage = asyncHandler(async (req, res) => {
             });
         }
 
+        const usageCost = estimateUsageCostUsd({
+            provider: provider === "DEFAULT" ? "DEFAULT" : apiKey.provider,
+            model,
+            inputTokens,
+            outputTokens,
+        });
+
         let usageEventData = {
             userId: req.user.id,
             messageId: chatMessage.id,
             inputTokens,
             outputTokens,
             chatId: chat.id,
+            estimatedCostUsd: usageCost.estimatedCostUsd,
+            priceVersion: usageCost.priceVersion,
         };
         if (model != "default" && provider != "DEFAULT" && apiKeyId) {
             usageEventData = {
