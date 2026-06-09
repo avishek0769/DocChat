@@ -79,6 +79,7 @@ model ChatSource {
     documentTree     DocumentTree?
     createdAt        DateTime       @default(now()) @map("created_at")
     ingestionRuns    IngestionRun[]
+    scrapeLimit      Int?           @map("scrape_limit")
 
     @@unique([documentationUrl, isVectorLess])
 }
@@ -162,6 +163,8 @@ model UsageEvents {
     chatId       String?      @map("chat_id")
     inputTokens  Int          @map("input_tokens")
     outputTokens Int          @map("output_tokens")
+    estimatedCostUsd Decimal   @default(0) @map("estimated_cost_usd") @db.Decimal(12, 6)
+    priceVersion  String?     @map("price_version")
     timestamp    DateTime     @default(now())
     apiKey       ApiKey?      @relation(fields: [apikeyId], references: [id])
     message      ChatMessage? @relation(fields: [messageId], references: [id], onDelete: SetNull)

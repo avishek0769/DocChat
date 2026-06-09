@@ -74,14 +74,17 @@ function getWorkerConfig() {
     };
 }
 
-async function processVector(docsRootUrl, chatId, collectionName, chatSourceId) {
+async function processVector(docsRootUrl, chatId, collectionName, chatSourceId, scrapeLimit) {
     try {
         const { maxPagesPerJob } = getWorkerConfig();
         const rootUrl = normalizeUrl(docsRootUrl);
         console.log("Scraping root:", rootUrl);
 
         const { internalLinks } = await scrapeWebpage(rootUrl, rootUrl);
-        const allLinks = internalLinks.slice(0, maxPagesPerJob).filter(link => isValidDocUrl(link, rootUrl));
+        
+        // Combined logic: enforce effective limit, then filter valid docs
+        const effectiveLimit = typeof scrapeLimit === 'number' && scrapeLimit > 0 ? scrapeLimit : maxPagesPerJob;
+        const allLinks = internalLinks.slice(0, effectiveLimit).filter(link => isValidDocUrl(link, rootUrl));
         const totalLinks = allLinks.length;
 
         console.log("Total unique valid links found:", totalLinks);
@@ -163,7 +166,7 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId) 
                 });
             } catch (err) {
                 console.error(`Failed link ${link}:`, err.message);
-<<<<<<< feature/optimize-ingestion-concurrency
+                // Concurrency branch logic: update progress rather than throwing/breaking out
                 processedLinks++;
                 await updateChatProgress(chatId, {
                     status: "PROCESSING",
@@ -171,23 +174,15 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId) 
                     total: totalLinks,
                     progress: Math.round((processedLinks / totalLinks) * 100),
                 });
-=======
-                await markChatFailed(chatId, err);
-                continue;
->>>>>>> main
             }
         })));
     } catch (err) {
-<<<<<<< feature/optimize-ingestion-concurrency
-        await updateChatProgress(chatId, { status: "FAILED" });
-=======
         await markChatFailed(chatId, err);
->>>>>>> main
         throw err;
     }
 }
 
-async function processVectorLess(docsRootUrl, chatId, chatSourceId) {
+async function processVectorLess(docsRootUrl, chatId, chatSourceId, scrapeLimit) {
     try {
         const { maxPagesPerJob, vectorlessBatchSize } = getWorkerConfig();
         await updateChatProgress(chatId, { status: "PROCESSING", progress: 0 });
@@ -196,7 +191,8 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId) {
         console.log("Scraping root:", rootUrl);
 
         const { internalLinks } = await scrapeWebpage(rootUrl, rootUrl);
-        let allLinks = internalLinks.slice(0, maxPagesPerJob);
+        const effectiveLimit = typeof scrapeLimit === 'number' && scrapeLimit > 0 ? scrapeLimit : maxPagesPerJob;
+        let allLinks = internalLinks.slice(0, effectiveLimit);
         const totalLinks = allLinks.length;
 
         console.log("Total unique links found:", totalLinks);
@@ -266,11 +262,7 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId) {
         return;
     } catch (error) {
         console.error("Error VectorLess:", error);
-<<<<<<< feature/optimize-ingestion-concurrency
-        await updateChatProgress(chatId, { status: "FAILED" });
-=======
         await markChatFailed(chatId, error);
->>>>>>> main
         throw error;
     }
 }
@@ -278,7 +270,7 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId) {
 const worker = new Worker(
     "chatCreation",
     async (job) => {
-        const { chatId, docsUrl, collectionName, chatSourceId, isVectorLess } = job.data;
+        const { chatId, docsUrl, collectionName, chatSourceId, isVectorLess, scrapeLimit } = job.data;
         const run = await prisma.ingestionRun.create({
             data: {
                 chatId,
@@ -295,9 +287,9 @@ const worker = new Worker(
 
         try {
             if (!isVectorLess) {
-                await processVector(docsUrl, chatId, collectionName, chatSourceId);
+                await processVector(docsUrl, chatId, collectionName, chatSourceId, scrapeLimit);
             } else {
-                await processVectorLess(docsUrl, chatId, chatSourceId);
+                await processVectorLess(docsUrl, chatId, chatSourceId, scrapeLimit);
             }
 
             await prisma.ingestionRun.update({

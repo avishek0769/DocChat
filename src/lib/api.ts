@@ -212,6 +212,7 @@ export const createChat = async (payload: {
     name?: string;
     docsUrl: string;
     isVectorLess?: boolean;
+    scrapeLimit?: number;
 }) => {
     const result = await apiRequest<{ chatId?: string; id?: string }>("/chat/create", {
         method: "POST",
@@ -396,7 +397,7 @@ export const exportChatMessages = async (chatId: string): Promise<void> => {
 export const getLifetimeTokens = () =>
     withCache(cacheKey("/usage/lifetime-tokens"), 5 * 60 * 1000, () =>
         apiRequest<{
-            _sum: { inputTokens: number | null; outputTokens: number | null };
+            _sum: { inputTokens: number | null; outputTokens: number | null; estimatedCostUsd: number | null };
         }>("/usage/lifetime-tokens", { method: "GET" }),
     );
 
@@ -409,8 +410,10 @@ export const getTokensByGroup = (groupBy: "day" | "week" | "month" | "year") =>
                     period: string;
                     usageByModels: Array<{
                         model: string;
+                        provider: string | null;
                         totalInput: number;
                         totalOutput: number;
+                        estimatedCostUsd: number;
                     }>;
                 }
             >
@@ -427,7 +430,7 @@ export const getTopChatsByUsage = () =>
         apiRequest<
             Array<{
                 chatId: string;
-                _sum: { inputTokens: number | null; outputTokens: number | null };
+                _sum: { inputTokens: number | null; outputTokens: number | null; estimatedCostUsd: number | null };
                 name?: string | null;
             }>
         >("/usage/top-chats", { method: "GET" }),
@@ -439,6 +442,32 @@ export type UsageBreakdownItem = {
     totalOutputTokens: number;
     totalTokens: number;
     requestCount: number;
+    estimatedCostUsd: number;
+};
+
+export type AdminUsageSummary = {
+    totalInputTokens: number;
+    totalOutputTokens: number;
+    totalEstimatedCostUsd: number;
+};
+
+export type AdminUsageUserRow = {
+    userId: string | null;
+    username?: string | null;
+    fullname?: string | null;
+    requestCount: number;
+    inputTokens: number;
+    outputTokens: number;
+    estimatedCostUsd: number;
+};
+
+export type AdminUsageModelRow = {
+    model: string;
+    provider: string | null;
+    requestCount: number;
+    inputTokens: number;
+    outputTokens: number;
+    estimatedCostUsd: number;
 };
 
 export const getUsageBreakdown = (params?: {
@@ -470,6 +499,11 @@ export type AdminOverviewData = {
     totalMessages?: number;
     totalUsageEvents?: number;
     totalIngestionRuns?: number;
+
+    totalInputTokens?: number;
+    totalOutputTokens?: number;
+    totalEstimatedCostUsd?: number;
+
     latestAuditEvents?: Array<{
         id: string;
         type: string;
@@ -478,6 +512,36 @@ export type AdminOverviewData = {
         metadata?: unknown;
         createdAt: string;
     }>;
+};
+
+export type AdminUsageData = {
+    totalInputTokens?: number;
+    totalOutputTokens?: number;
+    totalEstimatedCostUsd?: number;
+
+    topUsersByTokenUsage?: Array<{
+        userId: string | null;
+        username?: string | null;
+        fullname?: string | null;
+        requestCount: number;
+        inputTokens: number;
+        outputTokens: number;
+        estimatedCostUsd?: number;
+    }>;
+
+    topModelsByTokenUsage?: Array<{
+        model: string;
+        provider?: string | null;
+        requestCount: number;
+        inputTokens: number;
+        outputTokens: number;
+        estimatedCostUsd?: number;
+    }>;
+
+    pagination?: {
+        page: number;
+        limit: number;
+    };
 };
 
 export type AdminUserItem = {
@@ -505,29 +569,6 @@ export type AdminUserDetailResponse = {
         createdAt: string;
     }>;
     usageBreakdown?: UsageBreakdownItem[];
-};
-
-export type AdminUsageData = {
-    totalInputTokens?: number;
-    totalOutputTokens?: number;
-    topUsersByTokenUsage?: Array<{
-        userId: string | null;
-        username?: string | null;
-        fullname?: string | null;
-        requestCount: number;
-        inputTokens: number;
-        outputTokens: number;
-    }>;
-    topModelsByTokenUsage?: Array<{
-        model: string;
-        requestCount: number;
-        inputTokens: number;
-        outputTokens: number;
-    }>;
-    pagination?: {
-        page: number;
-        limit: number;
-    };
 };
 
 export type AdminIngestionData = {
@@ -559,7 +600,12 @@ export const getAdminOverview = (range: "24h" | "7d" | "30d") =>
 export const getAdminUsers = (page = 1, limit = 10) =>
     apiRequest<{
         data: AdminUserItem[];
-        pagination: { page: number; limit: number; total: number; totalPages: number };
+        pagination: {
+            page: number;
+            limit: number;
+            total: number;
+            totalPages: number;
+        };
     }>(`/admin/users?page=${page}&limit=${limit}`, { method: "GET" });
 
 export const getAdminUser = (userId: string) =>

@@ -124,6 +124,7 @@ export const createChatSchema = {
 
                 return z.NEVER;
             }),
+        scrapeLimit: z.number().int().min(1).max(5000).optional(),
     }),
 };
 

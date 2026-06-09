@@ -85,7 +85,7 @@ const expectation = asyncHandler(async (req, res) => {
 });
 
 const createChat = asyncHandler(async (req, res) => {
-    let { name, docsUrl, isVectorLess } = req.body;
+    let { name, docsUrl, isVectorLess, scrapeLimit } = req.body;
     const isVectorLessChat = Boolean(isVectorLess);
     const { internalLinks, title } = await scrapeWebpage(docsUrl, docsUrl);
     name = name || title || "Untitled Chat";
@@ -102,6 +102,7 @@ const createChat = asyncHandler(async (req, res) => {
                 documentationUrl: docsUrl,
                 collectionName: collectionName,
                 isVectorLess: isVectorLessChat,
+                scrapeLimit,
             },
         });
         isNew = true;
@@ -173,6 +174,7 @@ const createChat = asyncHandler(async (req, res) => {
                 collectionName: chat.collectionName,
                 chatSourceId: chat.chatSources[0].id.toString(),
                 isVectorLess: isVectorLessChat,
+                scrapeLimit,
             },
             { jobId: chat.id },
         );
