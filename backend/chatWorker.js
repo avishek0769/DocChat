@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { Worker } from "bullmq";
+import Bottleneck from "bottleneck";
 import redis, { getChatProgressKey, updateChatProgress } from "./utils/redis.js";
 import {
     normalizeUrl,
@@ -50,10 +51,10 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId) 
         console.log("Scraping root:", rootUrl);
 
         const { internalLinks } = await scrapeWebpage(rootUrl, rootUrl);
-        let allLinks = internalLinks.slice(0, maxPagesPerJob);
+        const allLinks = internalLinks.slice(0, maxPagesPerJob).filter(link => isValidDocUrl(link, rootUrl));
         const totalLinks = allLinks.length;
 
-        console.log("Total unique links found:", totalLinks);
+        console.log("Total unique valid links found:", totalLinks);
 
         await updateChatProgress(chatId, {
             status: "PROCESSING",
@@ -69,13 +70,10 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId) 
             });
         }
 
-        let batchPoints = [];
-        let batchPage = [];
-        let pageCount = 0;
+        let processedLinks = 0;
+        const limiter = new Bottleneck({ maxConcurrent: 5 });
 
-        for (const [index, link] of allLinks.entries()) {
-            if (!isValidDocUrl(link, rootUrl)) continue;
-
+        await Promise.all(allLinks.map((link) => limiter.schedule(async () => {
             try {
                 const { body, title } = await scrapeWebpage(link, rootUrl);
                 const splitter = new RecursiveCharacterTextSplitter({
@@ -84,19 +82,23 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId) 
                 });
                 const chunks = await splitter.splitText(body);
 
-                batchPage.push({
-                    pageUrl: link,
-                    heading: title,
-                });
-
                 console.log(`Processing: ${link} (${chunks.length} chunks)`);
 
-                for (const chunk of chunks) {
-                    const emb = await generateVectorEmbeddings(chunk);
+                if (chunks.length > 0) {
+                    let allEmbeddings = [];
+                    // Process embeddings in batches of 100
+                    const batchSize = 100;
+                    for (let i = 0; i < chunks.length; i += batchSize) {
+                        const chunkBatch = chunks.slice(i, i + batchSize);
+                        const embeddingsBatch = await generateVectorEmbeddings(chunkBatch);
+                        // Make sure we concat correctly depending on whether generation returns an array
+                        const batchArray = Array.isArray(embeddingsBatch) ? embeddingsBatch : [embeddingsBatch];
+                        allEmbeddings = allEmbeddings.concat(batchArray);
+                    }
 
-                    batchPoints.push({
+                    const points = chunks.map((chunk, i) => ({
                         id: uuidv4(),
-                        vector: emb,
+                        vector: allEmbeddings[i],
                         payload: {
                             url: link,
                             body: chunk,
@@ -104,49 +106,42 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId) 
                             title,
                             chatSourceId,
                         },
+                    }));
+
+                    await qdrant.upsert(collectionName, {
+                        wait: true,
+                        points,
+                    });
+
+                    await prisma.documentPage.create({
+                        data: {
+                            pageUrl: link,
+                            heading: title,
+                            chatSourceId,
+                        },
+                    }).catch((err) => {
+                        console.error("Failed to update indexed pages:", err.message);
                     });
                 }
 
-                pageCount++;
-
-                if (pageCount >= 3 || index === totalLinks - 1) {
-                    if (batchPoints.length > 0) {
-                        console.log(`Upserting batch of ${batchPoints.length} points...`);
-                        await qdrant.upsert(collectionName, {
-                            wait: true,
-                            points: batchPoints,
-                        });
-
-                        await prisma.documentPage
-                            .createMany({
-                                data: batchPage.map((point) => ({
-                                    pageUrl: point.pageUrl,
-                                    heading: point.heading,
-                                    chatSourceId,
-                                })),
-                            })
-                            .catch((err) => {
-                                console.error("Failed to update indexed pages:", err.message);
-                            });
-
-                        batchPoints = [];
-                        batchPage = [];
-                        pageCount = 0;
-                    }
-
-                    await updateChatProgress(chatId, {
-                        status: "PROCESSING",
-                        current: index + 1,
-                        total: totalLinks,
-                        progress: Math.round(((index + 1) / totalLinks) * 100),
-                    });
-                }
+                processedLinks++;
+                await updateChatProgress(chatId, {
+                    status: "PROCESSING",
+                    current: processedLinks,
+                    total: totalLinks,
+                    progress: Math.round((processedLinks / totalLinks) * 100),
+                });
             } catch (err) {
                 console.error(`Failed link ${link}:`, err.message);
-                await updateChatProgress(chatId, { status: "FAILED" });
-                continue;
+                processedLinks++;
+                await updateChatProgress(chatId, {
+                    status: "PROCESSING",
+                    current: processedLinks,
+                    total: totalLinks,
+                    progress: Math.round((processedLinks / totalLinks) * 100),
+                });
             }
-        }
+        })));
     } catch (err) {
         await updateChatProgress(chatId, { status: "FAILED" });
         throw err;
