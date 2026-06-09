@@ -82,6 +82,12 @@ export const apiKeyIdParamSchema = {
     }),
 };
 
+export const userIdParamSchema = {
+    params: z.object({
+        userId: z.string().uuid("Invalid user ID"),
+    }),
+};
+
 export const expectationQuerySchema = {
     query: z.object({
         docsUrl: url,
@@ -171,5 +177,18 @@ export const tokensByGroupSchema = {
         groupBy: z.enum(["day", "week", "month", "year"], {
             errorMap: () => ({ message: "GroupBy must be one of: day, week, month, year" }),
         }),
+    }),
+};
+
+export const paginationSchema = {
+    query: z.object({
+        page: z.coerce.number().int().min(1).default(1),
+        limit: z.coerce.number().int().min(1).max(100).default(20),
+    }),
+};
+
+export const rangeSchema = {
+    query: z.object({
+        range: z.enum(["24h", "7d", "30d"]).default("7d"),
     }),
 };
