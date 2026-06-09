@@ -48,6 +48,8 @@ model Chat {
     userId         String        @map("user_id")
     status         ChatStatus    @default(QUEUED)
     createdAt      DateTime      @default(now()) @map("created_at")
+    failedAt       DateTime?     @map("failed_at")
+    failureReason  String?       @map("failure_reason")
     collectionName String?       @map("collection_name")
     shareToken     String?       @unique @map("share_token")
     createdBy      User          @relation(fields: [userId], references: [id])
