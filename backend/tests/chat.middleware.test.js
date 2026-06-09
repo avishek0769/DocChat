@@ -5,7 +5,7 @@
  * chats that belong to them. This suite mocks Prisma and the ApiError class
  * to ensure isolated unit testing.
  */
-import { jest } from '@jest/globals';
+import { jest } from "@jest/globals";
 
 const findUniqueMock = jest.fn();
 
