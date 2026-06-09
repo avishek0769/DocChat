@@ -12,18 +12,23 @@ const AdminOverview = () => {
 
     useEffect(() => {
         const load = async () => {
-            setError("");
-            try {
-                setData(await getAdminOverview());
-            } catch (err) {
-                setError(err instanceof Error ? err.message : "Failed to load admin overview.");
-            }
+                setError("");
+                try {
+                setData(await getAdminOverview(range));
+                } catch (err) {
+                    setError(err instanceof Error ? err.message : "Failed to load admin overview.");
+                }
         };
         load();
     }, [range]);
 
-    const kpis = data.kpis || [];
-    const recent = data.recentActivity || [];
+    const kpis = [
+        { label: "Users", value: data.totalUsers || 0 },
+        { label: "Chats", value: data.totalChats || 0 },
+        { label: "Messages", value: data.totalMessages || 0 },
+        { label: "Usage Events", value: data.totalUsageEvents || 0 },
+    ];
+    const recent = data.latestAuditEvents || [];
 
     return (
         <div className="min-h-screen bg-[#0b0b0f] text-gray-50 flex font-sans selection:bg-accent-purple/30">
@@ -59,12 +64,7 @@ const AdminOverview = () => {
                     )}
 
                     <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                        {(kpis.length ? kpis : [
-                            { label: "Users", value: 0 },
-                            { label: "Chats", value: 0 },
-                            { label: "Tokens", value: 0 },
-                            { label: "Errors", value: 0 },
-                        ]).map((item, idx) => {
+                        {kpis.map((item, idx) => {
                             const icons = [Users, MessageSquare, Database, Activity];
                             const Icon = icons[idx % icons.length];
                             return (
@@ -88,19 +88,19 @@ const AdminOverview = () => {
                             <table className="w-full text-sm">
                                 <thead>
                                     <tr className="text-gray-400 border-b border-white/5">
-                                        <th className="text-left pb-3 font-medium">Type</th>
-                                        <th className="text-left pb-3 font-medium">Title</th>
-                                        <th className="text-left pb-3 font-medium">User</th>
-                                        <th className="text-left pb-3 font-medium">Detail</th>
+                                    <th className="text-left pb-3 font-medium">Type</th>
+                                        <th className="text-left pb-3 font-medium">User ID</th>
+                                        <th className="text-left pb-3 font-medium">Chat ID</th>
+                                        <th className="text-left pb-3 font-medium">Metadata</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-white/5">
                                     {recent.length ? recent.map((item) => (
                                         <tr key={item.id} className="hover:bg-white/2">
                                             <td className="py-3 text-gray-300">{item.type}</td>
-                                            <td className="py-3 text-white">{item.title || "—"}</td>
-                                            <td className="py-3 text-gray-400">{item.userName || "—"}</td>
-                                            <td className="py-3 text-gray-400">{item.detail || "—"}</td>
+                                            <td className="py-3 text-gray-400">{item.userId || "—"}</td>
+                                            <td className="py-3 text-gray-400">{item.chatId || "—"}</td>
+                                            <td className="py-3 text-gray-400">{item.metadata ? JSON.stringify(item.metadata) : "—"}</td>
                                         </tr>
                                     )) : (
                                         <tr>

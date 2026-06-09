@@ -10,15 +10,40 @@ const clampPagination = (req) => {
     return { page, limit, skip };
 };
 
+const getRangeStart = (range = "7d") => {
+    const now = new Date();
+    const sinceDate = new Date(now);
+
+    switch (range) {
+        case "24h":
+            sinceDate.setHours(sinceDate.getHours() - 24);
+            break;
+        case "7d":
+            sinceDate.setDate(sinceDate.getDate() - 7);
+            break;
+        case "30d":
+            sinceDate.setDate(sinceDate.getDate() - 30);
+            break;
+        default:
+            sinceDate.setDate(sinceDate.getDate() - 7);
+            break;
+    }
+
+    return sinceDate;
+};
+
 const overview = asyncHandler(async (req, res) => {
+    const range = req.query.range || "7d";
+    const sinceDate = getRangeStart(range);
     const [totalUsers, totalChats, totalMessages, totalUsageEvents, totalIngestionRuns, latestAuditEvents] =
         await Promise.all([
-            prisma.user.count(),
-            prisma.chat.count(),
-            prisma.chatMessage.count(),
-            prisma.usageEvents.count(),
-            prisma.ingestionRun.count(),
+            prisma.user.count({ where: { createdAt: { gte: sinceDate } } }),
+            prisma.chat.count({ where: { createdAt: { gte: sinceDate } } }),
+            prisma.chatMessage.count({ where: { createdAt: { gte: sinceDate } } }),
+            prisma.usageEvents.count({ where: { timestamp: { gte: sinceDate } } }),
+            prisma.ingestionRun.count({ where: { startedAt: { gte: sinceDate } } }),
             prisma.auditEvent.findMany({
+                where: { createdAt: { gte: sinceDate } },
                 orderBy: { createdAt: "desc" },
                 take: 50,
                 select: {
@@ -124,8 +149,11 @@ const userDetails = asyncHandler(async (req, res) => {
 
 const usage = asyncHandler(async (req, res) => {
     const { page, limit, skip } = clampPagination(req);
+    const range = req.query.range || "7d";
+    const sinceDate = getRangeStart(range);
     const [totalUsage, topUsers, topModels] = await Promise.all([
         prisma.usageEvents.aggregate({
+            where: { timestamp: { gte: sinceDate } },
             _sum: {
                 inputTokens: true,
                 outputTokens: true,
@@ -140,6 +168,7 @@ const usage = asyncHandler(async (req, res) => {
                    SUM(u."output_tokens")::int AS "outputTokens"
             FROM "UsageEvents" u
             LEFT JOIN "User" usr ON usr."id" = u."user_id"
+            WHERE u."timestamp" >= ${sinceDate}
             GROUP BY u."user_id", usr."username", usr."fullname"
             ORDER BY (SUM(u."input_tokens") + SUM(u."output_tokens")) DESC
             LIMIT ${limit}
@@ -152,6 +181,7 @@ const usage = asyncHandler(async (req, res) => {
                    SUM(u."output_tokens")::int AS "outputTokens"
             FROM "UsageEvents" u
             JOIN "ChatMessage" m ON u."message_id" = m."id"
+            WHERE u."timestamp" >= ${sinceDate}
             GROUP BY m."llm_model"
             ORDER BY (SUM(u."input_tokens") + SUM(u."output_tokens")) DESC
             LIMIT ${limit}
@@ -179,16 +209,19 @@ const usage = asyncHandler(async (req, res) => {
 
 const ingestion = asyncHandler(async (req, res) => {
     const { page, limit, skip } = clampPagination(req);
+    const range = req.query.range || "7d";
+    const sinceDate = getRangeStart(range);
     const [statusCounts, totalFailed, recentFailedIngestionRuns] = await Promise.all([
         prisma.ingestionRun.groupBy({
             by: ["status"],
+            where: { startedAt: { gte: sinceDate } },
             _count: true,
         }),
         prisma.ingestionRun.count({
-            where: { status: "FAILED" },
+            where: { status: "FAILED", startedAt: { gte: sinceDate } },
         }),
         prisma.ingestionRun.findMany({
-            where: { status: "FAILED" },
+            where: { status: "FAILED", startedAt: { gte: sinceDate } },
             orderBy: { startedAt: "desc" },
             skip,
             take: limit,

@@ -428,17 +428,17 @@ export const getUsageBreakdown = (params?: {
 };
 
 export type AdminOverviewData = {
-    kpis?: Array<{
-        label: string;
-        value: number;
-        delta?: string | null;
-    }>;
-    recentActivity?: Array<{
+    totalUsers?: number;
+    totalChats?: number;
+    totalMessages?: number;
+    totalUsageEvents?: number;
+    totalIngestionRuns?: number;
+    latestAuditEvents?: Array<{
         id: string;
         type: string;
-        title?: string | null;
-        detail?: string | null;
-        userName?: string | null;
+        userId?: string | null;
+        chatId?: string | null;
+        metadata?: unknown;
         createdAt: string;
     }>;
 };
@@ -471,40 +471,53 @@ export type AdminUserDetailResponse = {
 };
 
 export type AdminUsageData = {
-    totals?: {
-        inputTokens?: number;
-        outputTokens?: number;
-    };
-    topUsers?: Array<{
-        id: string;
-        fullname?: string | null;
+    totalInputTokens?: number;
+    totalOutputTokens?: number;
+    topUsersByTokenUsage?: Array<{
+        userId: string | null;
         username?: string | null;
-        email?: string | null;
-        inputTokens?: number;
-        outputTokens?: number;
-        totalTokens?: number;
+        fullname?: string | null;
+        requestCount: number;
+        inputTokens: number;
+        outputTokens: number;
     }>;
-    topModels?: UsageBreakdownItem[];
+    topModelsByTokenUsage?: Array<{
+        model: string;
+        requestCount: number;
+        inputTokens: number;
+        outputTokens: number;
+    }>;
+    pagination?: {
+        page: number;
+        limit: number;
+    };
 };
 
 export type AdminIngestionData = {
-    status?: Array<{
-        status: string;
-        count: number;
-    }>;
-    failedRuns?: Array<{
+    READY?: number;
+    FAILED?: number;
+    PROCESSING?: number;
+    QUEUED?: number;
+    recentFailedIngestionRuns?: Array<{
         id: string;
-        chatId?: string;
-        chatName?: string | null;
-        url?: string | null;
-        error?: string | null;
-        createdAt: string;
-        updatedAt?: string;
+        chatId: string;
+        chatSourceId: string;
+        status: string;
+        startedAt: string;
+        finishedAt?: string | null;
+        errorCode?: string | null;
+        errorMessage?: string | null;
     }>;
+    pagination?: {
+        page: number;
+        limit: number;
+        total: number;
+        totalPages: number;
+    };
 };
 
-export const getAdminOverview = () =>
-    apiRequest<AdminOverviewData>("/admin/overview", { method: "GET" });
+export const getAdminOverview = (range: "24h" | "7d" | "30d") =>
+    apiRequest<AdminOverviewData>(`/admin/overview?range=${range}`, { method: "GET" });
 
 export const getAdminUsers = (page = 1, limit = 10) =>
     apiRequest<{

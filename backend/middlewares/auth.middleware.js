@@ -18,6 +18,7 @@ const verifyStrictJWT = async (req, res, next) => {
                 fullname: true,
                 username: true,
                 email: true,
+                isAdmin: true,
                 apikeys: true,
                 refreshToken: true,
             },
@@ -58,9 +59,7 @@ const verifyJWT = async (req, res, next) => {
 
 const verifyAdmin = async (req, res, next) => {
     try {
-        const adminUsername = process.env.ADMIN_USERNAME;
-
-        if (!adminUsername || req.user?.username !== adminUsername) {
+        if (req.user?.isAdmin !== true) {
             throw new ApiError(403, "Admin privileges required");
         }
 
