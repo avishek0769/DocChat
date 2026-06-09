@@ -37,9 +37,13 @@ model User {
     createdAt    DateTime      @default(now()) @map("created_at")
     email        String?       @unique
     isVerified   Boolean       @default(false) @map("is_verified")
+    isAdmin      Boolean       @default(false) @map("is_admin")
     apikeys      ApiKey[]
     chats        Chat[]
     usageEvents  UsageEvents[]
+    auditEvents  AuditEvent[]
+
+    @@index([isAdmin, createdAt])
 }
 
 model Chat {
@@ -48,6 +52,8 @@ model Chat {
     userId         String        @map("user_id")
     status         ChatStatus    @default(QUEUED)
     createdAt      DateTime      @default(now()) @map("created_at")
+    failedAt       DateTime?     @map("failed_at")
+    failureReason  String?       @map("failure_reason")
     collectionName String?       @map("collection_name")
     shareToken     String?       @unique @map("share_token")
     createdBy      User          @relation(fields: [userId], references: [id])
@@ -55,6 +61,7 @@ model Chat {
     messages       ChatMessage[]
     usageEvents    UsageEvents[]
     ingestionRuns  IngestionRun[]
+    auditEvents    AuditEvent[]
 
     @@index([userId, createdAt])
     @@index([status, createdAt])
@@ -164,4 +171,18 @@ model UsageEvents {
 @@index([userId, timestamp])
 @@index([messageId])
 @@index([apikeyId])
+}
+
+model AuditEvent {
+    id        String   @id @unique @default(uuid())
+    type      String
+    userId    String?  @map("user_id")
+    chatId    String?  @map("chat_id")
+    metadata  Json?
+    createdAt DateTime @default(now()) @map("created_at")
+    user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+    chat      Chat?    @relation(fields: [chatId], references: [id], onDelete: SetNull)
+
+    @@index([createdAt])
+    @@index([type, createdAt])
 }

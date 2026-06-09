@@ -56,6 +56,7 @@ const Settings = () => {
     const [selectedProvider, setSelectedProvider] = useState<Provider | "">("");
     const [showKey, setShowKey] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [deletingKeyId, setDeletingKeyId] = useState<string | null>(null);
     const [editingKeyId, setEditingKeyId] = useState<string | null>(null);
 
     const loadApiKeys = async () => {
@@ -130,11 +131,14 @@ const Settings = () => {
 
     const handleDeleteKey = async (id: string) => {
         setError("");
+        setDeletingKeyId(id);
         try {
             await deleteApiKey(id);
             await loadApiKeys();
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to delete API key.");
+        } finally {
+            setDeletingKeyId(null);
         }
     };
 
@@ -322,6 +326,18 @@ const Settings = () => {
                                             </div>
                                         </div>
 
+                                        <button
+                                            onClick={() => handleDeleteKey(key.id)}
+                                            disabled={deletingKeyId !== null}
+                                            className="p-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors self-end sm:self-auto shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            title="Delete Key"
+                                        >
+                                            {deletingKeyId === key.id ? (
+                                                <span className="text-xs">Deleting...</span>
+                                            ) : (
+                                                <Trash2 className="w-4 h-4" />
+                                            )}
+                                        </button>
                                         <div className="flex gap-2 self-end sm:self-auto shrink-0">
                                             <button
                                                 onClick={() => {
