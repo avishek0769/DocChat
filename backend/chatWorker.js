@@ -11,6 +11,7 @@ import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { treeindex, qdrant } from "./utils/ragClients.js";
 import { v4 as uuidv4 } from "uuid";
 import prisma from "./utils/prismaClient.js";
+import { createAuditEvent } from "./utils/audit.js";
 
 function sanitizeErrorMessage(message) {
     if (!message) return null;
@@ -21,6 +22,35 @@ function sanitizeErrorMessage(message) {
 
     if (!safe) return null;
     return safe.length > 200 ? `${safe.slice(0, 197)}...` : safe;
+}
+
+async function markChatFailed(chatId, error) {
+    const failureReason = sanitizeErrorMessage(error?.message) || "Ingestion failed";
+
+    await redis.setex(
+        getChatProgressKey(chatId),
+        3600,
+        JSON.stringify({
+            status: "FAILED",
+            progress: 0,
+            failureReason,
+        }),
+    );
+
+    await prisma.chat
+        .update({
+            where: { id: chatId },
+            data: {
+                status: "FAILED",
+                failedAt: new Date(),
+                failureReason,
+            },
+        })
+        .catch((dbError) => {
+            console.error("Failed to persist chat failure state:", dbError.message);
+        });
+
+    return failureReason;
 }
 
 function getErrorCode(err) {
@@ -43,14 +73,15 @@ function getWorkerConfig() {
     };
 }
 
-async function processVector(docsRootUrl, chatId, collectionName, chatSourceId) {
+async function processVector(docsRootUrl, chatId, collectionName, chatSourceId, scrapeLimit) {
     try {
         const { maxPagesPerJob } = getWorkerConfig();
         const rootUrl = normalizeUrl(docsRootUrl);
         console.log("Scraping root:", rootUrl);
 
         const { internalLinks } = await scrapeWebpage(rootUrl, rootUrl);
-        let allLinks = internalLinks.slice(0, maxPagesPerJob);
+        const effectiveLimit = typeof scrapeLimit === 'number' && scrapeLimit > 0 ? scrapeLimit : maxPagesPerJob;
+        let allLinks = internalLinks.slice(0, effectiveLimit);
         const totalLinks = allLinks.length;
 
         console.log("Total unique links found:", totalLinks);
@@ -151,17 +182,17 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId) 
                 }
             } catch (err) {
                 console.error(`Failed link ${link}:`, err.message);
-                await redis.setex(getChatProgressKey(chatId), 3600, JSON.stringify({ status: "FAILED" }));
+                await markChatFailed(chatId, err);
                 continue;
             }
         }
     } catch (err) {
-        await redis.setex(getChatProgressKey(chatId), 3600, JSON.stringify({ status: "FAILED" }));
+        await markChatFailed(chatId, err);
         throw err;
     }
 }
 
-async function processVectorLess(docsRootUrl, chatId, chatSourceId) {
+async function processVectorLess(docsRootUrl, chatId, chatSourceId, scrapeLimit) {
     try {
         const { maxPagesPerJob, vectorlessBatchSize } = getWorkerConfig();
         await redis.setex(getChatProgressKey(chatId), 3600, JSON.stringify({ status: "PROCESSING", progress: 0 }));
@@ -170,7 +201,8 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId) {
         console.log("Scraping root:", rootUrl);
 
         const { internalLinks } = await scrapeWebpage(rootUrl, rootUrl);
-        let allLinks = internalLinks.slice(0, maxPagesPerJob);
+        const effectiveLimit = typeof scrapeLimit === 'number' && scrapeLimit > 0 ? scrapeLimit : maxPagesPerJob;
+        let allLinks = internalLinks.slice(0, effectiveLimit);
         const totalLinks = allLinks.length;
 
         console.log("Total unique links found:", totalLinks);
@@ -244,7 +276,7 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId) {
         return;
     } catch (error) {
         console.error("Error VectorLess:", error);
-        await redis.setex(getChatProgressKey(chatId), 3600, JSON.stringify({ status: "FAILED" }));
+        await markChatFailed(chatId, error);
         throw error;
     }
 }
@@ -252,7 +284,7 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId) {
 const worker = new Worker(
     "chatCreation",
     async (job) => {
-        const { chatId, docsUrl, collectionName, chatSourceId, isVectorLess } = job.data;
+        const { chatId, docsUrl, collectionName, chatSourceId, isVectorLess, scrapeLimit } = job.data;
         const run = await prisma.ingestionRun.create({
             data: {
                 chatId,
@@ -261,11 +293,17 @@ const worker = new Worker(
             },
         });
 
+        await createAuditEvent("ingestion.started", null, chatId, {
+            ingestionRunId: run.id,
+            chatSourceId,
+            isVectorLess,
+        });
+
         try {
             if (!isVectorLess) {
-                await processVector(docsUrl, chatId, collectionName, chatSourceId);
+                await processVector(docsUrl, chatId, collectionName, chatSourceId, scrapeLimit);
             } else {
-                await processVectorLess(docsUrl, chatId, chatSourceId);
+                await processVectorLess(docsUrl, chatId, chatSourceId, scrapeLimit);
             }
 
             await prisma.ingestionRun.update({
@@ -277,7 +315,13 @@ const worker = new Worker(
                     errorMessage: null,
                 },
             });
+
+            await createAuditEvent("ingestion.completed", null, chatId, {
+                ingestionRunId: run.id,
+                status: "SUCCESS",
+            });
         } catch (err) {
+            await markChatFailed(chatId, err);
             await prisma.ingestionRun.update({
                 where: { id: run.id },
                 data: {
@@ -286,6 +330,11 @@ const worker = new Worker(
                     errorCode: getErrorCode(err),
                     errorMessage: sanitizeErrorMessage(err?.message),
                 },
+            });
+            await createAuditEvent("ingestion.failed", null, chatId, {
+                ingestionRunId: run.id,
+                errorCode: getErrorCode(err),
+                errorMessage: sanitizeErrorMessage(err?.message),
             });
             throw err;
         }

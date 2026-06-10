@@ -105,6 +105,7 @@ const Dashboard = () => {
     const [chatName, setChatName] = useState("");
     const [chatUrl, setChatUrl] = useState("");
     const [isVectorLess, setIsVectorLess] = useState(false);
+    const [scrapeLimit, setScrapeLimit] = useState<number | "">("");
 
     // Delete Confirmation
     const [deleteTarget, setDeleteTarget] = useState<Chat | null>(null);
@@ -268,11 +269,13 @@ const Dashboard = () => {
                 name: chatName || undefined,
                 docsUrl: chatUrl,
                 isVectorLess,
+                scrapeLimit: scrapeLimit || undefined,
             });
             setIsModalOpen(false);
             setChatName("");
             setChatUrl("");
             setIsVectorLess(false);
+            setScrapeLimit("");
             showToast("Chat created and processing started.");
             await loadDashboardData();
         } catch (err) {
@@ -812,11 +815,27 @@ const Dashboard = () => {
                                         }`}
                                     >
                                         <p className="text-sm font-medium text-white">Vectorless</p>
-                                        <p className="text-xs text-gray-400 mt-0.5">
-                                            Tree based retrieval without embeddings.
+                                        <p className="text-xs text-gray-400 mt-1 line-clamp-2">
+                                            Skips embeddings, slightly faster for unstructured docs.
                                         </p>
                                     </button>
                                 </div>
+                            </div>
+
+                            {/* Scrape Limit */}
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-gray-300">
+                                    Scrape Limit (Optional)
+                                </label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    max="5000"
+                                    value={scrapeLimit}
+                                    onChange={(e) => setScrapeLimit(e.target.valueAsNumber || "")}
+                                    placeholder="e.g. 50"
+                                    className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-blue/50 focus:ring-1 focus:ring-accent-blue/50 transition-all"
+                                />
                             </div>
                         </div>
 

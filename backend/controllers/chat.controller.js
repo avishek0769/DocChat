@@ -7,6 +7,7 @@ import { cleanupQdrantCollections } from "../utils/qdrantCleanup.js";
 import { Queue } from "bullmq";
 import redis, { getChatProgressKey } from "../utils/redis.js";
 import crypto from "crypto";
+import { createAuditEvent } from "../utils/audit.js";
 
 const chatCreationQueue = new Queue("chatCreation");
 
@@ -84,7 +85,7 @@ const expectation = asyncHandler(async (req, res) => {
 });
 
 const createChat = asyncHandler(async (req, res) => {
-    let { name, docsUrl, isVectorLess } = req.body;
+    let { name, docsUrl, isVectorLess, scrapeLimit } = req.body;
     const isVectorLessChat = Boolean(isVectorLess);
     const { internalLinks, title } = await scrapeWebpage(docsUrl, docsUrl);
     name = name || title || "Untitled Chat";
@@ -101,6 +102,7 @@ const createChat = asyncHandler(async (req, res) => {
                 documentationUrl: docsUrl,
                 collectionName: collectionName,
                 isVectorLess: isVectorLessChat,
+                scrapeLimit,
             },
         });
         isNew = true;
@@ -172,9 +174,16 @@ const createChat = asyncHandler(async (req, res) => {
                 collectionName: chat.collectionName,
                 chatSourceId: chat.chatSources[0].id.toString(),
                 isVectorLess: isVectorLessChat,
+                scrapeLimit,
             },
             { jobId: chat.id },
         );
+
+        await createAuditEvent("chat.created", req.user.id, chat.id, {
+            chatSourceId: chat.chatSources[0].id,
+            docsUrl,
+            isVectorLess: isVectorLessChat,
+        });
 
         return res
             .status(200)
@@ -187,6 +196,16 @@ const DEFAULT_PROGRESS = {
     current: 0,
     total: 0,
     progress: 0,
+};
+
+const sanitizeFailureReason = (value) => {
+    if (!value) return null;
+    const safe = String(value)
+        .replace(/[\r\n\t]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    if (!safe) return null;
+    return safe.length > 200 ? `${safe.slice(0, 197)}...` : safe;
 };
 
 const normalizeProgress = (progress = {}) => {
@@ -211,6 +230,9 @@ const progressStatus = asyncHandler(async (req, res) => {
         },
         select: {
             id: true,
+            status: true,
+            failedAt: true,
+            failureReason: true,
         },
     });
 
@@ -234,11 +256,31 @@ const progressStatus = asyncHandler(async (req, res) => {
     });
 
     const redisData = await redis.get(getChatProgressKey(chat.id));
-    const progress = normalizeProgress(redisData ? JSON.parse(redisData) : DEFAULT_PROGRESS);
-
-    res.status(200).json(
-        new ApiResponse(200, { progress, latestIngestionRun }, "Progress fetched successfully"),
+    const redisProgress = redisData ? JSON.parse(redisData) : null;
+    const failureReason =
+        chat.status === "FAILED"
+            ? sanitizeFailureReason(chat.failureReason) ||
+              sanitizeFailureReason(latestIngestionRun?.errorMessage) ||
+              sanitizeFailureReason(redisProgress?.failureReason)
+            : null;
+    const progress = normalizeProgress(
+        redisProgress || {
+            status: chat.status,
+            progress: chat.status === "READY" ? 100 : 0,
+            failureReason,
+        },
     );
+
+    const response = {
+        progress,
+        latestIngestionRun,
+    };
+
+    if (chat.status === "FAILED") {
+        response.failureReason = failureReason;
+    }
+
+    res.status(200).json(new ApiResponse(200, response, "Progress fetched successfully"));
 });
 
 const recentFailedIngestionRuns = asyncHandler(async (req, res) => {
@@ -603,6 +645,11 @@ const forkSharedChat = asyncHandler(async (req, res) => {
                 connect: originalChat.chatSources.map((source) => ({ id: source.id })),
             },
         },
+    });
+
+    await createAuditEvent("chat.created", req.user.id, newChat.id, {
+        forkedFromShareToken: shareToken,
+        originalChatId: originalChat.id,
     });
 
     // Copy messages so the new user has the history

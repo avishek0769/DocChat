@@ -6,6 +6,7 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import redis from "../utils/redis.js";
 import { Resend } from "resend";
+import { createAuditEvent } from "../utils/audit.js";
 
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -181,8 +182,17 @@ const userLogIn = asyncHandler(async (req, res) => {
     const loggedInUser = await prisma.user.update({
         where: { id: user.id },
         data: { refreshToken },
-        select: { id: true, fullname: true, username: true, email: true },
+        select: { id: true, fullname: true, username: true, email: true, isAdmin: true },
     });
+
+    try {
+        await createAuditEvent("user.login", user.id, null, {
+            username: user.username,
+            email: user.email,
+        });
+    } catch (error) {
+        console.error("Failed to write user.login audit event:", error.message);
+    }
 
     res.status(200)
         .cookie("accessToken", accessToken, AccessOptions)
