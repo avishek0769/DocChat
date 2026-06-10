@@ -10,4 +10,6 @@ redis.on("error", (err) => {
     console.error("Redis error:", err);
 });
 
+export const getChatProgressKey = (chatId) => `chat-progress:${chatId}`;
+
 export default redis;

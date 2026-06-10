@@ -5,8 +5,9 @@ import { ApiError } from "../utils/ApiError.js";
 import { scrapeWebpage } from "../utils/ragUtilities.js";
 import { cleanupQdrantCollections } from "../utils/qdrantCleanup.js";
 import { Queue } from "bullmq";
-import redis from "../utils/redis.js";
+import redis, { getChatProgressKey } from "../utils/redis.js";
 import crypto from "crypto";
+import { createAuditEvent } from "../utils/audit.js";
 
 const chatCreationQueue = new Queue("chatCreation", {
     connection: redis,
@@ -92,6 +93,7 @@ const expectation = asyncHandler(async (req, res) => {
 
 const createChat = asyncHandler(async (req, res) => {
     let { name, docsUrls, isVectorLess } = req.body;
+    let { name, docsUrl, isVectorLess, scrapeLimit } = req.body;
     const isVectorLessChat = Boolean(isVectorLess);
     const firstUrl = docsUrls[0];
 const { title } = await scrapeWebpage(firstUrl, firstUrl);
@@ -102,6 +104,35 @@ const { title } = await scrapeWebpage(firstUrl, firstUrl);
 
 for (const docsUrl of docsUrls) {
     const { internalLinks } = await scrapeWebpage(docsUrl, docsUrl);
+    try {
+        chatSource = await prisma.chatSource.create({
+            data: {
+                totalPages: internalLinks.length,
+                heading: name,
+                documentationUrl: docsUrl,
+                collectionName: collectionName,
+                isVectorLess: isVectorLessChat,
+                scrapeLimit,
+            },
+        });
+        isNew = true;
+    } catch (error) {
+        if (error.code === "P2002") { // Unique constraint violation
+            chatSource = await prisma.chatSource.findUnique({
+                where: {
+                    documentationUrl_isVectorLess: {
+                        documentationUrl: docsUrl,
+                        isVectorLess: isVectorLessChat,
+                    },
+                },
+            });
+            if (!chatSource) {
+                throw new ApiError(500, "Failed to retrieve existing ChatSource after unique constraint violation.");
+            }
+        } else {
+            throw error; // Rethrow other errors
+        }
+    }
 
     let source;
 
@@ -197,6 +228,29 @@ return res.status(200).json(
         "Chat creation initiated successfully"
     )
 );
+        chatCreationQueue.add(
+            `${chat.id}-job`,
+            {
+                chatId: chat.id.toString(),
+                docsUrl,
+                collectionName: chat.collectionName,
+                chatSourceId: chat.chatSources[0].id.toString(),
+                isVectorLess: isVectorLessChat,
+                scrapeLimit,
+            },
+            { jobId: chat.id },
+        );
+
+        await createAuditEvent("chat.created", req.user.id, chat.id, {
+            chatSourceId: chat.chatSources[0].id,
+            docsUrl,
+            isVectorLess: isVectorLessChat,
+        });
+
+        return res
+            .status(200)
+            .json(new ApiResponse(200, { chatId: chat.id }, "Chat creation initiated successfully"));
+    }
 });
 
 const DEFAULT_PROGRESS = {
@@ -204,6 +258,16 @@ const DEFAULT_PROGRESS = {
     current: 0,
     total: 0,
     progress: 0,
+};
+
+const sanitizeFailureReason = (value) => {
+    if (!value) return null;
+    const safe = String(value)
+        .replace(/[\r\n\t]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    if (!safe) return null;
+    return safe.length > 200 ? `${safe.slice(0, 197)}...` : safe;
 };
 
 const normalizeProgress = (progress = {}) => {
@@ -228,6 +292,9 @@ const progressStatus = asyncHandler(async (req, res) => {
         },
         select: {
             id: true,
+            status: true,
+            failedAt: true,
+            failureReason: true,
         },
     });
 
@@ -250,12 +317,32 @@ const progressStatus = asyncHandler(async (req, res) => {
         },
     });
 
-    const redisData = await redis.get(chat.id);
-    const progress = normalizeProgress(redisData ? JSON.parse(redisData) : DEFAULT_PROGRESS);
-
-    res.status(200).json(
-        new ApiResponse(200, { progress, latestIngestionRun }, "Progress fetched successfully"),
+    const redisData = await redis.get(getChatProgressKey(chat.id));
+    const redisProgress = redisData ? JSON.parse(redisData) : null;
+    const failureReason =
+        chat.status === "FAILED"
+            ? sanitizeFailureReason(chat.failureReason) ||
+              sanitizeFailureReason(latestIngestionRun?.errorMessage) ||
+              sanitizeFailureReason(redisProgress?.failureReason)
+            : null;
+    const progress = normalizeProgress(
+        redisProgress || {
+            status: chat.status,
+            progress: chat.status === "READY" ? 100 : 0,
+            failureReason,
+        },
     );
+
+    const response = {
+        progress,
+        latestIngestionRun,
+    };
+
+    if (chat.status === "FAILED") {
+        response.failureReason = failureReason;
+    }
+
+    res.status(200).json(new ApiResponse(200, response, "Progress fetched successfully"));
 });
 
 const recentFailedIngestionRuns = asyncHandler(async (req, res) => {
@@ -479,47 +566,65 @@ const cancelProcessing = asyncHandler(async (req, res) => {
 
     if (job) {
         await job.remove();
-        await redis.setex(chat.collectionName, 3600, JSON.stringify({ status: "READY", progress: 100 }));
-
-        await prisma.chat
-            .update({
-                where: { id: chatId },
-                data: { status: "READY" },
-            })
-            .catch((err) => {
-                throw new ApiError(500, `Failed Update: ${err.message}`, err);
-            });
-
-        res.status(200).json(new ApiResponse(200, null, "Chat processing cancelled successfully"));
-    } else {
-        throw new ApiError(404, "Job not found or already completed");
     }
+
+    await redis.setex(getChatProgressKey(chatId), 3600, JSON.stringify({ status: "READY", progress: 100 }));
+
+    await prisma.chat
+        .update({
+            where: { id: chatId },
+            data: { status: "READY" },
+        })
+        .catch((err) => {
+            throw new ApiError(500, `Failed Update: ${err.message}`, err);
+        });
+
+    res.status(200).json(new ApiResponse(200, null, "Chat processing cancelled successfully"));
 });
 
 const deleteChat = asyncHandler(async (req, res) => {
     const { chatId } = req.params;
 
-    const chatMessages = await prisma.chatMessage.findMany({
-        where: { chatId },
-    });
-    for await (const message of chatMessages) {
-        await prisma.chatMessageSource.deleteMany({
-            where: { chatMessageId: message.id },
-        });
-    }
-    await prisma.chatMessage.deleteMany({
-        where: { chatId },
-    });
-    const chat = await prisma.chat.delete({
+    const chat = await prisma.chat.findUnique({
         where: { id: chatId },
+        select: {
+            id: true,
+            userId: true,
+        },
     });
 
     if (!chat) {
         throw new ApiError(404, "Chat not found");
     }
 
-    res.status(200).json(new ApiResponse(200, null, "Chat deleted successfully"));
+    if (chat.userId !== req.user.id) {
+        throw new ApiError(403, "You do not have permission to delete this chat");
+    }
+
+    await prisma.$transaction(async (tx) => {
+        await tx.chatMessageSource.deleteMany({
+            where: { chatMessage: { chatId } },
+        });
+
+        await tx.chatMessage.deleteMany({
+            where: { chatId },
+        });
+
+        await tx.chat.delete({
+            where: { id: chatId },
+        });
+
+        // ChatSource rows (and their DocumentTree / DocumentPage children) are
+        // intentionally left intact — they may be shared by other chats, and the
+        // Qdrant collection they reference is preserved so no data is lost.
+        // Orphaned collections are cleaned up by the admin Qdrant sweep.
+    });
+
+    res.status(200).json(
+        new ApiResponse(200, null, "Chat deleted successfully"),
+    );
 });
+
 
 const toggleShare = asyncHandler(async (req, res) => {
     const { chatId } = req.params;
@@ -602,6 +707,11 @@ const forkSharedChat = asyncHandler(async (req, res) => {
                 connect: originalChat.chatSources.map((source) => ({ id: source.id })),
             },
         },
+    });
+
+    await createAuditEvent("chat.created", req.user.id, newChat.id, {
+        forkedFromShareToken: shareToken,
+        originalChatId: originalChat.id,
     });
 
     // Copy messages so the new user has the history

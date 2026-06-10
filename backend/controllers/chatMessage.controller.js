@@ -1,16 +1,35 @@
 import prisma from "../utils/prismaClient.js";
+import redis from "../utils/redis.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
-import { LLM_MODELS, PROVIDERS_BASE_URLS, MEM0_ENABLED } from "../utils/constants.js";
+import {
+    LLM_MODELS,
+    PROVIDERS_BASE_URLS,
+    MEM0_ENABLED,
+    DAILY_TOKEN_BUDGET,
+    estimateUsageCostUsd,
+} from "../utils/constants.js";
 import OpenAI from "openai";
 import { qdrant, treeindex } from "../utils/ragClients.js";
 import { decryptApiKey } from "../utils/decrypt.js";
 import { generateVectorEmbeddings } from "../utils/ragUtilities.js";
 import { buildMessagesForLLM } from "../utils/contextBuilder.js";
 import { MemoryClient } from "mem0ai";
+import { createAuditEvent } from "../utils/audit.js";
 
 const memory = MEM0_ENABLED ? new MemoryClient({ apiKey: process.env.MEM0_API_KEY }) : null;
+
+// Daily token budget tracked per user per UTC day.
+const dailyBudgetKey = (userId) => `tokenBudget:${userId}:${new Date().toISOString().slice(0, 10)}`;
+
+const startOfUtcDay = () => {
+    const now = new Date();
+    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+};
+
+const secondsUntilUtcMidnight = () =>
+    Math.ceil((startOfUtcDay().getTime() + 86400000 - Date.now()) / 1000);
 
 const getAvailableModels = asyncHandler(async (req, res) => {
     const apikeys = await prisma.apiKey.findMany({
@@ -42,6 +61,29 @@ const getAvailableModels = asyncHandler(async (req, res) => {
 
 const sendMessage = asyncHandler(async (req, res) => {
     const { userPrompt, model, provider, chatId } = req.body;
+
+    if (DAILY_TOKEN_BUDGET) {
+        const budgetKey = dailyBudgetKey(req.user.id);
+        let tokensUsedToday = await redis.get(budgetKey);
+
+        if (tokensUsedToday === null) {
+            const usage = await prisma.usageEvents.aggregate({
+                where: { userId: req.user.id, timestamp: { gte: startOfUtcDay() } },
+                _sum: { inputTokens: true, outputTokens: true },
+            });
+            tokensUsedToday = (usage._sum.inputTokens || 0) + (usage._sum.outputTokens || 0);
+            await redis.set(budgetKey, tokensUsedToday, "EX", secondsUntilUtcMidnight());
+        } else {
+            tokensUsedToday = Number(tokensUsedToday);
+        }
+
+        if (tokensUsedToday >= DAILY_TOKEN_BUDGET) {
+            throw new ApiError(
+                429,
+                `Daily token budget reached: ${tokensUsedToday} of ${DAILY_TOKEN_BUDGET} tokens used today. Resets at 00:00 UTC.`,
+            );
+        }
+    }
 
     const chat = await prisma.chat.findUnique({
         where: { id: chatId },
@@ -274,12 +316,21 @@ if (!chat.chatSources[0].isVectorLess) {
             });
         }
 
+        const usageCost = estimateUsageCostUsd({
+            provider: provider === "DEFAULT" ? "DEFAULT" : apiKey.provider,
+            model,
+            inputTokens,
+            outputTokens,
+        });
+
         let usageEventData = {
             userId: req.user.id,
             messageId: chatMessage.id,
             inputTokens,
             outputTokens,
             chatId: chat.id,
+            estimatedCostUsd: usageCost.estimatedCostUsd,
+            priceVersion: usageCost.priceVersion,
         };
         if (model != "default" && provider != "DEFAULT" && apiKeyId) {
             usageEventData = {
@@ -290,6 +341,19 @@ if (!chat.chatSources[0].isVectorLess) {
         await prisma.usageEvents.create({
             data: usageEventData,
         });
+
+        await createAuditEvent("message.sent", req.user.id, chat.id, {
+            chatMessageId: chatMessage.id,
+            model,
+            provider,
+            inputTokens,
+            outputTokens,
+        });
+        if (DAILY_TOKEN_BUDGET) {
+            const budgetKey = dailyBudgetKey(req.user.id);
+            await redis.incrby(budgetKey, (inputTokens || 0) + (outputTokens || 0));
+            await redis.expire(budgetKey, secondsUntilUtcMidnight());
+        }
     }
 });
 
@@ -359,33 +423,50 @@ const exportChatMessages = asyncHandler(async (req, res) => {
     res.end();
 });
 
-const getChatMessages = asyncHandler(async (req, res) => {
-    const { chatId } = req.params;
+const getChatMessageSources = asyncHandler(async (req, res) => {
+    const { messageId } = req.params;
 
-    const chat = await prisma.chat.findUnique({
-        where: { id: chatId },
+    // Fetch the message with its parent chat to check ownership
+    const message = await prisma.chatMessage.findUnique({
+        where: { id: messageId },
+        include: {
+            chat: {
+                select: { userId: true },
+            },
+        },
     });
 
-    if (!chat) {
-        throw new ApiError(404, "Chat not found.");
+    // Message does not exist
+    if (!message) {
+        throw new ApiError(404, "Message not found.");
     }
 
-    const messages = await prisma.chatMessage.findMany({
-        where: { chatId },
+    // Message exists but caller does not own the parent chat
+    // Return 404 (not 403) so we don't reveal the resource exists
+    if (message.chat.userId !== req.user.id) {
+        throw new ApiError(404, "Message not found.");
+    }
+
+    // Ownership verified — fetch sources
+    const messageSources = await prisma.chatMessageSource.findMany({
+        where: { chatMessageId: messageId },
         orderBy: { createdAt: "asc" },
     });
 
-    if (!messages.length) {
+    if (!messageSources.length) {
         return res
             .status(200)
-            .json(new ApiResponse(200, { messages: [] }, "No messages found for this chat."));
+            .json(
+                new ApiResponse(200, { messageSources: [] }, "No sources found for this chat message."),
+            );
     }
 
     return res
         .status(200)
-        .json(new ApiResponse(200, { messages: messages }, "Chat messages retrieved successfully."));
+        .json(
+            new ApiResponse(200, { messageSources }, "Chat message sources retrieved successfully."),
+        );
 });
-
 const getChatMessageSources = asyncHandler(async (req, res) => {
     const { messageId } = req.params;
 

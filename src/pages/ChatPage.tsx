@@ -37,19 +37,18 @@ import {
     Search,
     ArrowLeft,
     Check,
-    Code,
     X,
     Loader2,
     Database,
     Download,
     Link as LinkIcon,
     Share2,
+    AlertCircle,
 } from "lucide-react";
 import clsx from "clsx";
-import hljs from "highlight.js";
-import "highlight.js/styles/atom-one-dark.css";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import CodeBlock from "../components/CodeBlock";
 import {
     getAvailableModels,
     getChatDetails,
@@ -87,6 +86,8 @@ const toModelDisplayName = (model?: string) => {
 
     return model;
 };
+
+const WARNING_LENGTH_THRESHOLD = 4000;
 
 export const ChatPage = () => {
     const navigate = useNavigate();
@@ -305,9 +306,13 @@ export const ChatPage = () => {
     const pendingChunkRef = useRef("");
     const chunkRafRef = useRef<number | null>(null);
     const firstChunkReceivedRef = useRef(false);
+    const abortControllerRef = useRef<AbortController | null>(null);
 
     useEffect(() => {
         return () => {
+            abortControllerRef.current?.abort();
+            abortControllerRef.current = null;
+
             if (chunkRafRef.current !== null) {
                 window.cancelAnimationFrame(chunkRafRef.current);
                 chunkRafRef.current = null;
@@ -414,6 +419,7 @@ export const ChatPage = () => {
         ]);
 
         try {
+            abortControllerRef.current = new AbortController();
             const flushPendingChunks = () => {
                 const buffered = pendingChunkRef.current;
                 if (!buffered) return;
@@ -439,6 +445,7 @@ export const ChatPage = () => {
                 model: selectedOption.model,
                 provider: selectedOption.provider,
                 chatId,
+                signal: abortControllerRef.current.signal, 
                 onChunk: (chunk) => {
                     if (!firstChunkReceivedRef.current) {
                         firstChunkReceivedRef.current = true;
@@ -828,7 +835,12 @@ export const ChatPage = () => {
                         <div className="max-w-3xl mx-auto relative">
                             <form
                                 onSubmit={handleSend}
-                                className="relative bg-[#1a1a24] border border-white/10 rounded-2xl shadow-2xl overflow-hidden focus-within:border-accent-blue/50 focus-within:ring-1 focus-within:ring-accent-blue/50 transition-all"
+                                className={clsx(
+                                    "relative bg-[#1a1a24] border rounded-2xl shadow-2xl overflow-hidden focus-within:ring-1 transition-all",
+                                    input.length > WARNING_LENGTH_THRESHOLD
+                                        ? "border-amber-500/50 focus-within:border-amber-500/70 focus-within:ring-amber-500/30"
+                                        : "border-white/10 focus-within:border-accent-blue/50 focus-within:ring-accent-blue/50"
+                                )}
                             >
                                 <textarea
                                     ref={textareaRef}
@@ -843,7 +855,15 @@ export const ChatPage = () => {
                                         maxHeight: "200px",
                                     }}
                                 />
-                                <div className="absolute right-3 bottom-3 flex items-center gap-2">
+                                <div className="absolute right-3 bottom-3 flex items-center gap-3">
+                                    {input.length > WARNING_LENGTH_THRESHOLD && (
+                                        <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 bg-amber-500/10 border border-amber-500/20 rounded-md">
+                                            <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
+                                            <span className="text-xs font-medium text-amber-500">
+                                                {input.length} chars (Approaching limit)
+                                            </span>
+                                        </div>
+                                    )}
                                     <button
                                         aria-label="Send message"
                                         type="submit"
@@ -1420,19 +1440,6 @@ export const ChatPage = () => {
     );
 };
 
-// Helper Components
-
-const highlightCode = (language: string, code: string) => {
-    try {
-        if (language && hljs.getLanguage(language)) {
-            return hljs.highlight(code, { language }).value;
-        }
-        return hljs.highlightAuto(code).value;
-    } catch {
-        return code.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    }
-};
-
 const ChatMessage = ({
     message,
     onViewSources,
@@ -1551,33 +1558,7 @@ const ChatMessage = ({
                                             );
                                         }
 
-                                        return (
-                                            <div className="my-4 rounded-xl overflow-hidden bg-[#0a0a0e] border border-white/10 shadow-xl">
-                                                <div className="flex items-center justify-between px-4 py-2 bg-white/5 border-b border-white/5">
-                                                    <div className="flex items-center gap-2 text-sm font-medium text-gray-400">
-                                                        <Code className="w-3.5 h-3.5" />
-                                                        {language || "code"}
-                                                    </div>
-                                                    <button
-                                                        onClick={() =>
-                                                            navigator.clipboard.writeText(code)
-                                                        }
-                                                        className="text-sm uppercase font-bold tracking-wider text-gray-500 hover:text-white transition-colors cursor-pointer"
-                                                    >
-                                                        Copy
-                                                    </button>
-                                                </div>
-                                                <div className="p-4 overflow-x-auto text-sm font-mono leading-relaxed text-gray-300 custom-scrollbar w-full max-w-full">
-                                                    <pre>
-                                                        <code
-                                                            dangerouslySetInnerHTML={{
-                                                                __html: highlightCode(language, code),
-                                                            }}
-                                                        />
-                                                    </pre>
-                                                </div>
-                                            </div>
-                                        );
+                                        return <CodeBlock language={language} code={code} />;
                                     },
                                 }}
                             >

@@ -9,6 +9,7 @@ type AuthUser = {
     fullname?: string | null;
     username?: string | null;
     email?: string | null;
+    isAdmin?: boolean;
 };
 
 type AuthSession = {
@@ -24,6 +25,7 @@ type LoginResponse = {
     fullname?: string | null;
     username?: string | null;
     email?: string | null;
+    isAdmin?: boolean;
 };
 
 type ApiEnvelope<T> = {
@@ -186,6 +188,7 @@ export const signIn = async (identifier: string, password: string) => {
             fullname: response.data.fullname,
             username: response.data.username,
             email: response.data.email,
+            isAdmin: response.data.isAdmin,
         },
     };
 

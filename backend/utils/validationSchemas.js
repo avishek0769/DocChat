@@ -82,6 +82,12 @@ export const apiKeyIdParamSchema = {
     }),
 };
 
+export const userIdParamSchema = {
+    params: z.object({
+        userId: z.string().uuid("Invalid user ID"),
+    }),
+};
+
 export const expectationQuerySchema = {
     query: z.object({
         docsUrls: z.array(url).min(1),
@@ -118,6 +124,7 @@ export const createChatSchema = {
 
                 return z.NEVER;
             }),
+        scrapeLimit: z.number().int().min(1).max(5000).optional(),
     }),
 };
 
@@ -149,7 +156,7 @@ export const qdrantCleanupSchema = {
 
 export const sendMessageSchema = {
     body: z.object({
-        userPrompt: z.string().min(1, "Message is required").trim(),
+        userPrompt: z.string().min(1, "Message is required").max(4000, "Prompt is too long (maximum 4000 characters allowed)").trim(),
         model: z.string().min(1, "Model is required"),
         provider: z.string().min(1, "Provider is required"),
         chatId,
@@ -171,5 +178,18 @@ export const tokensByGroupSchema = {
         groupBy: z.enum(["day", "week", "month", "year"], {
             errorMap: () => ({ message: "GroupBy must be one of: day, week, month, year" }),
         }),
+    }),
+};
+
+export const paginationSchema = {
+    query: z.object({
+        page: z.coerce.number().int().min(1).default(1),
+        limit: z.coerce.number().int().min(1).max(100).default(20),
+    }),
+};
+
+export const rangeSchema = {
+    query: z.object({
+        range: z.enum(["24h", "7d", "30d"]).default("7d"),
     }),
 };

@@ -23,6 +23,7 @@ import {
     getLifetimeTokens,
     getRecentChats,
     invalidatePagesIndexed,
+    cancelChat,
     type ChatItem,
 } from "../lib/api";
 import { formatTokens } from "../lib/format";
@@ -91,6 +92,7 @@ const Dashboard = () => {
     const [error, setError] = useState("");
     const [isCreating, setIsCreating] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [isCancelling, setIsCancelling] = useState(false);
     const [lifetimeTokens, setLifetimeTokens] = useState(0);
     const [chatProgress, setChatProgress] = useState<
         Record<string, { status: string; progress: number }>
@@ -103,6 +105,7 @@ const Dashboard = () => {
     const [chatName, setChatName] = useState("");
     const [chatUrls, setChatUrls] = useState([""]);
     const [isVectorLess, setIsVectorLess] = useState(false);
+    const [scrapeLimit, setScrapeLimit] = useState<number | "">("");
 
     // Delete Confirmation
     const [deleteTarget, setDeleteTarget] = useState<Chat | null>(null);
@@ -266,11 +269,13 @@ const Dashboard = () => {
                 name: chatName || undefined,
                 docsUrls: chatUrls.filter(Boolean),
                 isVectorLess,
+                scrapeLimit: scrapeLimit || undefined,
             });
             setIsModalOpen(false);
             setChatName("");
             setChatUrls([""]);
             setIsVectorLess(false);
+            setScrapeLimit("");
             showToast("Chat created and processing started.");
             await loadDashboardData();
         } catch (err) {
@@ -293,6 +298,19 @@ const Dashboard = () => {
             setError(err instanceof Error ? err.message : "Failed to delete chat.");
         } finally {
             setIsDeleting(false);
+        }
+    };
+
+    const handleCancelChat = async (chatId: string) => {
+        setIsCancelling(true);
+        try {
+            await cancelChat(chatId);
+            showToast("Cancellation requested. Updating state...");
+            await pollStatuses(); // Force an immediate poll to reflect READY
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to cancel chat.");
+        } finally {
+            setIsCancelling(false);
         }
     };
 
@@ -592,10 +610,12 @@ const Dashboard = () => {
                                                 )}
                                                 {liveStatus === "processing" && (
                                                     <button
-                                                        disabled
-                                                        className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors bg-white/10 text-white/40 cursor-not-allowed opacity-50"
+                                                        onClick={() => handleCancelChat(chat.id)}
+                                                        disabled={isCancelling}
+                                                        className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/10"
                                                     >
-                                                        Open Chat
+                                                        <X className="w-3.5 h-3.5" />
+                                                        {isCancelling ? "Cancelling..." : "Cancel"}
                                                     </button>
                                                 )}
                                                 {liveStatus === "failed" && (
@@ -798,11 +818,27 @@ const Dashboard = () => {
                                             }`}
                                     >
                                         <p className="text-sm font-medium text-white">Vectorless</p>
-                                        <p className="text-xs text-gray-400 mt-0.5">
-                                            Tree based retrieval without embeddings.
+                                        <p className="text-xs text-gray-400 mt-1 line-clamp-2">
+                                            Skips embeddings, slightly faster for unstructured docs.
                                         </p>
                                     </button>
                                 </div>
+                            </div>
+
+                            {/* Scrape Limit */}
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-gray-300">
+                                    Scrape Limit (Optional)
+                                </label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    max="5000"
+                                    value={scrapeLimit}
+                                    onChange={(e) => setScrapeLimit(e.target.valueAsNumber || "")}
+                                    placeholder="e.g. 50"
+                                    className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-blue/50 focus:ring-1 focus:ring-accent-blue/50 transition-all"
+                                />
                             </div>
                         </div>
 
