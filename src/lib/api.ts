@@ -79,6 +79,25 @@ export type ChatMessageSourceItem = {
     score: number;
 };
 
+export type FailedIngestionRunItem = {
+    id: string;
+    chatId: string;
+    chatSourceId?: string | null;
+    status: string;
+    startedAt: string;
+    finishedAt?: string | null;
+    errorCode?: string | null;
+    errorMessage?: string | null;
+    chat?: {
+        name?: string | null;
+        userId?: string | null;
+    };
+    chatSource?: {
+        heading?: string | null;
+        documentationUrl?: string | null;
+    };
+};
+
 const apiRequest = async <T>(path: string, init?: RequestInit): Promise<T> => {
     const headers = new Headers(init?.headers || {});
     if (!headers.has("Content-Type") && init?.body) {
@@ -206,6 +225,12 @@ export const getApiKeyCount = () => apiRequest<{ count: number }>("/apikey/count
 export const getChats = () =>
     withCache(cacheKey("/chat/list"), 5 * 60 * 1000, () =>
         apiRequest<ChatItem[]>("/chat/list", { method: "GET" }),
+    );
+
+export const getRecentFailedIngestionRuns = (limit = 5) =>
+    apiRequest<{ runs: FailedIngestionRunItem[] }>(
+        `/chat/ingestion-runs/failed?limit=${limit}`,
+        { method: "GET" },
     );
 
 export const createChat = async (payload: {
