@@ -4,7 +4,12 @@
     "description": "",
     "main": "index.js",
     "scripts": {
-        "dev": "node --watch index.js"
+        "dev": "node --watch index.js",
+        "test": "vitest",
+        "test:ci": "vitest run",
+        "db:test:up": "docker-compose -f docker-compose.test.yml up -d",
+        "db:test:down": "docker-compose -f docker-compose.test.yml down -v",
+        "pretest": "pnpm run db:test:up && pnpm prisma migrate deploy"
     },
     "keywords": [],
     "author": "",
