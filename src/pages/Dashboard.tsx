@@ -20,6 +20,7 @@ import {
     createChat,
     deleteChat,
     getChatStatus,
+    subscribeToChatStatus,
     getLifetimeTokens,
     getRecentChats,
     invalidatePagesIndexed,
@@ -100,6 +101,8 @@ const Dashboard = () => {
     const chatsRef = useRef<Chat[]>([]);
     const chatProgressRef = useRef<Record<string, { status: string; progress: number }>>({});
     const pollIntervalRef = useRef<number | null>(null);
+    const sseCleanupsRef = useRef<Record<string, () => void>>({});
+    const [usePollingFallback, setUsePollingFallback] = useState(false);
 
     // New Chat Form State
     const [chatName, setChatName] = useState("");
@@ -234,29 +237,98 @@ const Dashboard = () => {
         );
     }, []);
 
+    const handleProgressUpdate = useCallback((chatId: string, statusData: { status: string; progress: number }) => {
+        const status = normalizeStatus(statusData.status);
+        const progress = clampProgress(statusData.progress);
+        
+        if (status === "ready") {
+            const prevStatus = normalizeStatus(
+                chatProgressRef.current[chatId]?.status ||
+                    chatsRef.current.find((c) => c.id === chatId)?.status ||
+                    ""
+            );
+            if (prevStatus !== "ready") {
+                invalidatePagesIndexed(chatId);
+            }
+        }
+
+        setChatProgress((prev) => ({
+            ...prev,
+            [chatId]: { status, progress }
+        }));
+
+        setChats((prev) =>
+            prev.map((chat) => {
+                if (chat.id !== chatId) return chat;
+
+                const estimatedPages = chat.totalPages > 0
+                    ? Math.round((progress / 100) * chat.totalPages)
+                    : chat.pages;
+
+                const nextPages = status === "ready"
+                    ? chat.totalPages || chat.pages
+                    : Math.max(chat.pages, estimatedPages);
+
+                return {
+                    ...chat,
+                    status,
+                    pages: nextPages,
+                };
+            })
+        );
+    }, []);
+
     useEffect(() => {
-        const hasInFlightChats = chats.some(
+        const inFlightChats = chats.filter(
             (chat) =>
                 normalizeStatus(chatProgress[chat.id]?.status || chat.status) !== "ready" &&
                 normalizeStatus(chatProgress[chat.id]?.status || chat.status) !== "failed",
         );
 
-        if (hasInFlightChats && pollIntervalRef.current === null) {
-            pollStatuses();
-            pollIntervalRef.current = window.setInterval(pollStatuses, 3000);
-        }
+        if (usePollingFallback) {
+            // Polling Fallback Logic
+            if (inFlightChats.length > 0 && pollIntervalRef.current === null) {
+                pollStatuses();
+                pollIntervalRef.current = window.setInterval(pollStatuses, 3000);
+            } else if (inFlightChats.length === 0 && pollIntervalRef.current !== null) {
+                clearInterval(pollIntervalRef.current);
+                pollIntervalRef.current = null;
+            }
+        } else {
+            // SSE Logic
+            const currentInFlightIds = new Set(inFlightChats.map(c => c.id));
 
-        if (!hasInFlightChats && pollIntervalRef.current !== null) {
-            clearInterval(pollIntervalRef.current);
-            pollIntervalRef.current = null;
+            // Clean up completed/removed chats
+            Object.keys(sseCleanupsRef.current).forEach(chatId => {
+                if (!currentInFlightIds.has(chatId)) {
+                    sseCleanupsRef.current[chatId]();
+                    delete sseCleanupsRef.current[chatId];
+                }
+            });
+
+            // Start SSE for new in-flight chats
+            inFlightChats.forEach(chat => {
+                if (!sseCleanupsRef.current[chat.id]) {
+                    sseCleanupsRef.current[chat.id] = subscribeToChatStatus(
+                        chat.id,
+                        (progress) => handleProgressUpdate(chat.id, progress),
+                        () => {
+                            // On error, fallback to polling
+                            setUsePollingFallback(true);
+                        }
+                    );
+                }
+            });
         }
-    }, [chats, chatProgress, pollStatuses]);
+    }, [chats, chatProgress, pollStatuses, usePollingFallback, handleProgressUpdate]);
 
     useEffect(() => {
         return () => {
             if (pollIntervalRef.current !== null) {
                 clearInterval(pollIntervalRef.current);
             }
+            const cleanups = sseCleanupsRef.current;
+            Object.values(cleanups).forEach(cleanup => cleanup());
         };
     }, []);
 

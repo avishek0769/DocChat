@@ -240,6 +240,43 @@ export const getChatStatus = (chatId: string) =>
         method: "GET",
     });
 
+export const subscribeToChatStatus = (
+    chatId: string,
+    onMessage: (progress: { status: string; progress: number; current: number; total: number }) => void,
+    onError: (error: Event) => void
+) => {
+    const token = getAccessToken();
+    const url = new URL(`${API_BASE_URL}/chat/status/stream/${chatId}`);
+    if (token) {
+        url.searchParams.append("token", token);
+    }
+
+    const eventSource = new EventSource(url.toString(), { withCredentials: true });
+
+    eventSource.onmessage = (event) => {
+        try {
+            const data = JSON.parse(event.data);
+            if (data.progress) {
+                onMessage(data.progress);
+                if (["READY", "FAILED", "CANCELLED"].includes(data.progress.status)) {
+                    eventSource.close();
+                }
+            }
+        } catch (e) {
+            console.error("Error parsing SSE message", e);
+        }
+    };
+
+    eventSource.onerror = (error) => {
+        onError(error);
+        eventSource.close();
+    };
+
+    return () => {
+        eventSource.close();
+    };
+};
+
 export const getChatDetails = (chatId: string) =>
     apiRequest<{ chat: ChatItem }>(`/chat/${chatId}`, { method: "GET" });
 
@@ -588,6 +625,11 @@ export const getSharedChatDetails = (shareToken: string) =>
 
 export const getSharedChatMessages = (shareToken: string) =>
     apiRequest<{ messages: ChatMessageItem[] }>(`/message/shared/${shareToken}/messages`, { method: "GET" });
+
+export const getSharedMessageSources = (shareToken: string, messageId: string) =>
+    withCache(cacheKey(`/message/shared/${shareToken}/messages/${messageId}/sources`), 5 * 60 * 1000, () =>
+        apiRequest<{ messageSources: ChatMessageSourceItem[] }>(`/message/shared/${shareToken}/messages/${messageId}/sources`, { method: "GET" })
+    );
 
 export const forkSharedChat = (shareToken: string) =>
     apiRequest<{ chatId: string }>(`/chat/shared/${shareToken}/fork`, { method: "POST" });

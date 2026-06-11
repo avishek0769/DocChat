@@ -449,8 +449,24 @@ const getChatMessageSources = asyncHandler(async (req, res) => {
             new ApiResponse(200, { messageSources }, "Chat message sources retrieved successfully."),
         );
 });
-const getChatMessageSources = asyncHandler(async (req, res) => {
-    const { messageId } = req.params;
+const getSharedChatMessageSources = asyncHandler(async (req, res) => {
+    const { shareToken, messageId } = req.params;
+
+    const chat = await prisma.chat.findUnique({
+        where: { shareToken },
+    });
+
+    if (!chat) {
+        throw new ApiError(404, "Shared chat not found");
+    }
+
+    const message = await prisma.chatMessage.findUnique({
+        where: { id: messageId },
+    });
+
+    if (!message || message.chatId !== chat.id) {
+        throw new ApiError(404, "Message not found.");
+    }
 
     const messageSources = await prisma.chatMessageSource.findMany({
         where: { chatMessageId: messageId },
@@ -504,4 +520,5 @@ export {
     getChatMessageSources,
     exportChatMessages,
     getSharedChatMessages,
+    getSharedChatMessageSources,
 };

@@ -23,6 +23,7 @@ import {
     getSharedChatDetails,
     forkSharedChat,
     qdrantCleanup,
+    streamChatStatus,
 } from "../controllers/chat.controller.js";
 
 const chatRouter = Router();
@@ -33,6 +34,9 @@ chatRouter.route("/qdrant-cleanup").get(verifyStrictJWT, validate(qdrantCleanupS
 chatRouter
     .route("/status/:chatId")
     .get(verifyStrictJWT, validate(chatIdParamSchema), progressStatus);
+chatRouter
+    .route("/status/stream/:chatId")
+    .get(verifyStrictJWT, validate(chatIdParamSchema), streamChatStatus);
 chatRouter.route("/ingestion-runs/failed").get(verifyStrictJWT, recentFailedIngestionRuns);
 chatRouter.route("/list").get(verifyStrictJWT, listAllChats);
 chatRouter.route("/recent").get(verifyStrictJWT, recentChats);
