@@ -16,7 +16,6 @@ import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import { createChat, deleteChat, getChats } from "../api/endpoints";
-import { useAuth } from "../auth/AuthContext";
 import { colors } from "../theme";
 import type { RootStackParamList } from "../navigation";
 import type { ChatItem } from "../types";
@@ -24,7 +23,6 @@ import type { ChatItem } from "../types";
 type Props = NativeStackScreenProps<RootStackParamList, "Chats">;
 
 export default function ChatsScreen({ navigation }: Props) {
-    const { signOut } = useAuth();
     const [chats, setChats] = useState<ChatItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -57,23 +55,21 @@ export default function ChatsScreen({ navigation }: Props) {
 
     useLayoutEffect(() => {
         navigation.setOptions({
-            headerLeft: () => (
-                <TouchableOpacity onPress={() => void signOut()}>
-                    <Text style={styles.headerAction}>Sign out</Text>
-                </TouchableOpacity>
-            ),
             headerRight: () => (
                 <View style={styles.headerRight}>
                     <TouchableOpacity onPress={() => setModalVisible(true)}>
                         <Text style={styles.headerAction}>New</Text>
                     </TouchableOpacity>
+                    <TouchableOpacity onPress={() => navigation.navigate("ApiKeys")}>
+                        <Text style={styles.headerAction}>Keys</Text>
+                    </TouchableOpacity>
                     <TouchableOpacity onPress={() => navigation.navigate("Usage")}>
-                        <Text style={styles.headerAction}>Usage</Text>
+                        <Text style={styles.headerAction}>Account</Text>
                     </TouchableOpacity>
                 </View>
             ),
         });
-    }, [navigation, signOut]);
+    }, [navigation]);
 
     const onRefresh = useCallback(() => {
         setRefreshing(true);

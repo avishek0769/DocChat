@@ -10,6 +10,7 @@ import ForgotPasswordScreen from "./screens/ForgotPasswordScreen";
 import ChatsScreen from "./screens/ChatsScreen";
 import ChatScreen from "./screens/ChatScreen";
 import UsageScreen from "./screens/UsageScreen";
+import ApiKeysScreen from "./screens/ApiKeysScreen";
 
 export type RootStackParamList = {
     SignIn: undefined;
@@ -18,6 +19,7 @@ export type RootStackParamList = {
     Chats: undefined;
     Chat: { chatId: string; name: string };
     Usage: undefined;
+    ApiKeys: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -52,7 +54,8 @@ export default function RootNavigator() {
                 <>
                     <Stack.Screen name="Chats" component={ChatsScreen} options={{ title: "DocChat" }} />
                     <Stack.Screen name="Chat" component={ChatScreen} />
-                    <Stack.Screen name="Usage" component={UsageScreen} options={{ title: "Usage" }} />
+                    <Stack.Screen name="Usage" component={UsageScreen} options={{ title: "Account" }} />
+                    <Stack.Screen name="ApiKeys" component={ApiKeysScreen} options={{ title: "API Keys" }} />
                 </>
             ) : (
                 <>
