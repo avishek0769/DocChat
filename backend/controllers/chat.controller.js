@@ -191,6 +191,16 @@ const createChat = asyncHandler(async (req, res) => {
     }
 });
 
+/**
+ * Redis Ingestion Progress Payload Shape:
+ * {
+ *   "status": "QUEUED" | "PROCESSING" | "READY" | "FAILED",
+ *   "progress": number,       // 0 to 100 percentage
+ *   "current": number,        // number of pages processed so far
+ *   "total": number,          // total pages to be processed
+ *   "failureReason": string   // optional message if failed
+ * }
+ */
 const DEFAULT_PROGRESS = {
     status: "QUEUED",
     current: 0,

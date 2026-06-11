@@ -1,6 +1,17 @@
 import "dotenv/config";
 import { Worker } from "bullmq";
 import redis, { getChatProgressKey } from "./utils/redis.js";
+
+/**
+ * Redis Ingestion Progress Payload Shape:
+ * {
+ *   "status": "QUEUED" | "PROCESSING" | "READY" | "FAILED",
+ *   "progress": number,       // 0 to 100 percentage
+ *   "current": number,        // number of pages processed so far
+ *   "total": number,          // total pages to be processed
+ *   "failureReason": string   // optional message if failed
+ * }
+ */
 import {
     normalizeUrl,
     isValidDocUrl,
@@ -349,13 +360,13 @@ const worker = new Worker(
 
 worker.on("completed", async (job) => {
     console.log(`Job ${job.id} completed!`);
-    if (!job.data.isVectorLess) {
-        await redis.setex(
-            job.data.collectionName,
-            3600,
-            JSON.stringify({ status: "READY", progress: 100 }),
-        );
-    }
+    
+    // Always write the final READY status in Redis using the chatId progress key.
+    await redis.setex(
+        getChatProgressKey(job.data.chatId),
+        3600,
+        JSON.stringify({ status: "READY", progress: 100 }),
+    );
 
     await prisma.chat
         .update({
@@ -367,7 +378,9 @@ worker.on("completed", async (job) => {
         });
 });
 
-worker.on("failed", (job, err) => {
-    console.log(err);
+worker.on("failed", async (job, err) => {
     console.error(`Job ${job?.id} failed: ${err.message}`);
+    if (job?.data?.chatId) {
+        await markChatFailed(job.data.chatId, err);
+    }
 });
