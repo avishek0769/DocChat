@@ -17,6 +17,7 @@ export default function SignInScreen() {
     const { signIn } = useAuth();
     const [identifier, setIdentifier] = useState("");
     const [password, setPassword] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -51,17 +52,32 @@ export default function SignInScreen() {
                     placeholderTextColor={colors.muted}
                     autoCapitalize="none"
                     autoCorrect={false}
+                    returnKeyType="next"
                     value={identifier}
                     onChangeText={setIdentifier}
                 />
-                <TextInput
-                    style={styles.input}
-                    placeholder="Password"
-                    placeholderTextColor={colors.muted}
-                    secureTextEntry
-                    value={password}
-                    onChangeText={setPassword}
-                />
+                <View style={styles.passwordRow}>
+                    <TextInput
+                        style={styles.passwordInput}
+                        placeholder="Password"
+                        placeholderTextColor={colors.muted}
+                        secureTextEntry={!showPassword}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        returnKeyType="go"
+                        value={password}
+                        onChangeText={setPassword}
+                        onSubmitEditing={onSubmit}
+                    />
+                    <TouchableOpacity
+                        style={styles.toggle}
+                        onPress={() => setShowPassword((prev) => !prev)}
+                        accessibilityRole="button"
+                        accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+                    >
+                        <Text style={styles.toggleText}>{showPassword ? "Hide" : "Show"}</Text>
+                    </TouchableOpacity>
+                </View>
 
                 {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -107,6 +123,23 @@ const styles = StyleSheet.create({
         color: colors.text,
         marginBottom: 12,
     },
+    passwordRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: colors.background,
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: 10,
+        marginBottom: 12,
+    },
+    passwordInput: {
+        flex: 1,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        color: colors.text,
+    },
+    toggle: { paddingHorizontal: 14, paddingVertical: 12 },
+    toggleText: { color: colors.primary, fontWeight: "600", fontSize: 13 },
     error: { color: colors.danger, fontSize: 13, marginBottom: 12 },
     button: {
         backgroundColor: colors.primary,

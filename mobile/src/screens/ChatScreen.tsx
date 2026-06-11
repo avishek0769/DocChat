@@ -4,6 +4,7 @@ import {
     FlatList,
     KeyboardAvoidingView,
     Platform,
+    ScrollView,
     StyleSheet,
     Text,
     TextInput,
@@ -12,14 +13,16 @@ import {
 } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
-import { getApiKeys, getChatMessages, sendMessage } from "../api/endpoints";
+import { getApiKeys, getChatMessages, getMessageSources, sendMessage } from "../api/endpoints";
 import { colors } from "../theme";
 import type { RootStackParamList } from "../navigation";
-import type { ChatMessageItem } from "../types";
+import type { ChatMessageItem, ChatMessageSourceItem } from "../types";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
 
-type Selection = { provider: string; model: string } | null;
+type SourcesState = ChatMessageSourceItem[] | "loading" | undefined;
+
+const isPending = (id: string) => id.startsWith("pending-");
 
 export default function ChatScreen({ route, navigation }: Props) {
     const { chatId, name } = route.params;
@@ -28,7 +31,12 @@ export default function ChatScreen({ route, navigation }: Props) {
     const [error, setError] = useState<string | null>(null);
     const [prompt, setPrompt] = useState("");
     const [sending, setSending] = useState(false);
-    const [selection, setSelection] = useState<Selection>(null);
+
+    const [provider, setProvider] = useState<string | null>(null);
+    const [models, setModels] = useState<string[]>([]);
+    const [selectedModel, setSelectedModel] = useState<string | null>(null);
+
+    const [sources, setSources] = useState<Record<string, SourcesState>>({});
     const listRef = useRef<FlatList<ChatMessageItem>>(null);
 
     useLayoutEffect(() => {
@@ -44,8 +52,10 @@ export default function ChatScreen({ route, navigation }: Props) {
             ]);
             setMessages(loaded ?? []);
             const firstKey = apiKeys?.[0];
-            if (firstKey?.models?.[0]) {
-                setSelection({ provider: firstKey.provider, model: firstKey.models[0] });
+            if (firstKey?.models?.length) {
+                setProvider(firstKey.provider);
+                setModels(firstKey.models);
+                setSelectedModel(firstKey.models[0]);
             }
         } catch (e) {
             setError(e instanceof Error ? e.message : "Failed to load messages");
@@ -58,10 +68,25 @@ export default function ChatScreen({ route, navigation }: Props) {
         void load();
     }, [load]);
 
+    const toggleSources = async (messageId: string) => {
+        const current = sources[messageId];
+        if (current) {
+            setSources((prev) => ({ ...prev, [messageId]: undefined }));
+            return;
+        }
+        setSources((prev) => ({ ...prev, [messageId]: "loading" }));
+        try {
+            const { messageSources } = await getMessageSources(messageId);
+            setSources((prev) => ({ ...prev, [messageId]: messageSources ?? [] }));
+        } catch {
+            setSources((prev) => ({ ...prev, [messageId]: [] }));
+        }
+    };
+
     const onSend = async () => {
         const userPrompt = prompt.trim();
         if (!userPrompt || sending) return;
-        if (!selection) {
+        if (!selectedModel || !provider) {
             setError("Add an API key on the DocChat web app to send messages.");
             return;
         }
@@ -75,18 +100,13 @@ export default function ChatScreen({ route, navigation }: Props) {
             chatId,
             userPrompt,
             llmResponse: "",
-            llmModel: selection.model,
+            llmModel: selectedModel,
             createdAt: new Date().toISOString(),
         };
         setMessages((prev) => [...prev, optimistic]);
 
         try {
-            const reply = await sendMessage({
-                chatId,
-                userPrompt,
-                model: selection.model,
-                provider: selection.provider,
-            });
+            const reply = await sendMessage({ chatId, userPrompt, model: selectedModel, provider });
             setMessages((prev) =>
                 prev.map((m) => (m.id === optimistic.id ? { ...m, llmResponse: reply } : m)),
             );
@@ -113,6 +133,32 @@ export default function ChatScreen({ route, navigation }: Props) {
             behavior={Platform.OS === "ios" ? "padding" : undefined}
             keyboardVerticalOffset={90}
         >
+            {models.length > 1 ? (
+                <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.modelBar}
+                    contentContainerStyle={styles.modelBarContent}
+                >
+                    {models.map((model) => (
+                        <TouchableOpacity
+                            key={model}
+                            style={[styles.modelChip, model === selectedModel && styles.modelChipActive]}
+                            onPress={() => setSelectedModel(model)}
+                        >
+                            <Text
+                                style={[
+                                    styles.modelChipText,
+                                    model === selectedModel && styles.modelChipTextActive,
+                                ]}
+                            >
+                                {model}
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
+                </ScrollView>
+            ) : null}
+
             <FlatList
                 ref={listRef}
                 contentContainerStyle={styles.listContent}
@@ -122,22 +168,56 @@ export default function ChatScreen({ route, navigation }: Props) {
                 ListEmptyComponent={
                     <Text style={styles.empty}>Ask a question about this documentation.</Text>
                 }
-                renderItem={({ item }) => (
-                    <View style={styles.turn}>
-                        <View style={[styles.bubble, styles.userBubble]}>
-                            <Text style={styles.userText}>{item.userPrompt}</Text>
+                renderItem={({ item }) => {
+                    const messageSources = sources[item.id];
+                    return (
+                        <View style={styles.turn}>
+                            <View style={[styles.bubble, styles.userBubble]}>
+                                <Text style={styles.userText}>{item.userPrompt}</Text>
+                            </View>
+                            {item.llmResponse ? (
+                                <View style={[styles.bubble, styles.assistantBubble]}>
+                                    <Text style={styles.assistantText}>{item.llmResponse}</Text>
+                                </View>
+                            ) : (
+                                <View style={[styles.bubble, styles.assistantBubble]}>
+                                    <ActivityIndicator color={colors.muted} />
+                                </View>
+                            )}
+
+                            {item.llmResponse && !isPending(item.id) ? (
+                                <TouchableOpacity onPress={() => void toggleSources(item.id)}>
+                                    <Text style={styles.sourcesToggle}>
+                                        {messageSources ? "Hide sources" : "View sources"}
+                                    </Text>
+                                </TouchableOpacity>
+                            ) : null}
+
+                            {messageSources === "loading" ? (
+                                <ActivityIndicator color={colors.muted} style={styles.sourcesLoading} />
+                            ) : null}
+
+                            {Array.isArray(messageSources)
+                                ? messageSources.map((source) => (
+                                      <View key={source.id} style={styles.sourceCard}>
+                                          <Text style={styles.sourceHeading} numberOfLines={1}>
+                                              {source.heading}
+                                          </Text>
+                                          <Text style={styles.sourceUrl} numberOfLines={1}>
+                                              {source.pageUrl}
+                                          </Text>
+                                          <Text style={styles.sourceChunk} numberOfLines={3}>
+                                              {source.chunkText}
+                                          </Text>
+                                      </View>
+                                  ))
+                                : null}
+                            {Array.isArray(messageSources) && messageSources.length === 0 ? (
+                                <Text style={styles.sourcesEmpty}>No sources recorded.</Text>
+                            ) : null}
                         </View>
-                        {item.llmResponse ? (
-                            <View style={[styles.bubble, styles.assistantBubble]}>
-                                <Text style={styles.assistantText}>{item.llmResponse}</Text>
-                            </View>
-                        ) : (
-                            <View style={[styles.bubble, styles.assistantBubble]}>
-                                <ActivityIndicator color={colors.muted} />
-                            </View>
-                        )}
-                    </View>
-                )}
+                    );
+                }}
             />
 
             {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -168,6 +248,19 @@ const styles = StyleSheet.create({
     centered: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background },
     listContent: { padding: 16, flexGrow: 1 },
     empty: { color: colors.muted, textAlign: "center", marginTop: 40 },
+    modelBar: { maxHeight: 52, borderBottomWidth: 1, borderBottomColor: colors.border },
+    modelBarContent: { paddingHorizontal: 12, paddingVertical: 10, gap: 8 },
+    modelChip: {
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: 16,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        backgroundColor: colors.surface,
+    },
+    modelChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+    modelChipText: { color: colors.muted, fontSize: 12 },
+    modelChipTextActive: { color: colors.primaryText, fontWeight: "600" },
     turn: { marginBottom: 16 },
     bubble: { borderRadius: 12, padding: 12, marginBottom: 8, maxWidth: "90%" },
     userBubble: { backgroundColor: colors.primary, alignSelf: "flex-end" },
@@ -179,6 +272,20 @@ const styles = StyleSheet.create({
         alignSelf: "flex-start",
     },
     assistantText: { color: colors.text, fontSize: 15, lineHeight: 21 },
+    sourcesToggle: { color: colors.primary, fontSize: 12, fontWeight: "600", marginBottom: 6 },
+    sourcesLoading: { alignSelf: "flex-start", marginBottom: 6 },
+    sourcesEmpty: { color: colors.muted, fontSize: 12, marginBottom: 6 },
+    sourceCard: {
+        backgroundColor: colors.surface,
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: 10,
+        padding: 10,
+        marginBottom: 6,
+    },
+    sourceHeading: { color: colors.text, fontSize: 13, fontWeight: "600" },
+    sourceUrl: { color: colors.primary, fontSize: 11, marginTop: 2 },
+    sourceChunk: { color: colors.muted, fontSize: 12, marginTop: 6, lineHeight: 17 },
     error: { color: colors.danger, fontSize: 13, paddingHorizontal: 16, paddingBottom: 6 },
     composer: {
         flexDirection: "row",

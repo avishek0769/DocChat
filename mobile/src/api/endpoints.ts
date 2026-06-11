@@ -10,6 +10,7 @@ import type {
     AuthSession,
     ChatItem,
     ChatMessageItem,
+    ChatMessageSourceItem,
     LifetimeTokens,
     LoginResponse,
 } from "../types";
@@ -47,8 +48,31 @@ export const logout = () => apiRequest("/user/logout", { method: "GET" });
 
 export const getChats = () => apiRequest<ChatItem[]>("/chat/list", { method: "GET" });
 
+/** POST /chat/create — ingest a new documentation URL. */
+export const createChat = (payload: {
+    name?: string;
+    docsUrl: string;
+    isVectorLess?: boolean;
+    scrapeLimit?: number;
+}) =>
+    apiRequest<{ chatId?: string; id?: string }>("/chat/create", {
+        method: "POST",
+        body: JSON.stringify(payload),
+    });
+
+export const deleteChat = (chatId: string) =>
+    apiRequest(`/chat/${chatId}`, { method: "DELETE" });
+
 export const getChatMessages = (chatId: string) =>
     apiRequest<{ messages: ChatMessageItem[] }>(`/message/all/${chatId}`, { method: "GET" });
+
+export const getMessageSources = (messageId: string) =>
+    apiRequest<{ messageSources: ChatMessageSourceItem[] }>(`/message/sources/${messageId}`, {
+        method: "GET",
+    });
+
+export const getAvailableModels = () =>
+    apiRequest<{ models: string[] }>("/message/models", { method: "GET" });
 
 export const getApiKeys = () =>
     apiRequest<{ apiKeys: ApiKeyItem[] }>("/apikey/list", { method: "GET" });

@@ -3,11 +3,14 @@
 A native mobile client for DocChat that reuses the existing backend API. It does
 **not** modify the web app — it only consumes the same `/api/v1` endpoints.
 
-## Scope (initial version)
+## Scope
 
-- Sign in with email/username + password (`POST /user/login`)
+- Sign in with email/username + password, with a **show/hide password** toggle and submit-on-enter (`POST /user/login`)
 - Browse your chats / dashboard (`GET /chat/list`)
+- **Create a chat** by ingesting a documentation URL, with a Vector / Vectorless mode toggle (`POST /chat/create`)
+- **Delete a chat** via long-press (`DELETE /chat/:id`)
 - Open a chat, read messages, and send a message (`GET /message/all/:chatId`, `POST /message/send`)
+- **Pick the model** when more than one is available, and **view the source chunks** behind each answer (`GET /message/sources/:messageId`)
 - View lifetime usage summary (`GET /usage/lifetime-tokens`)
 - Access token stored securely with `expo-secure-store`
 

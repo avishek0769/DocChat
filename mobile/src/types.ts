@@ -64,6 +64,14 @@ export type ChatMessageItem = {
     createdAt: string;
 };
 
+export type ChatMessageSourceItem = {
+    id: string;
+    heading: string;
+    pageUrl: string;
+    chunkText: string;
+    score: number;
+};
+
 export type LifetimeTokens = {
     _sum: {
         inputTokens: number | null;
