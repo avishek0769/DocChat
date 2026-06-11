@@ -5,12 +5,16 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useAuth } from "./auth/AuthContext";
 import { colors } from "./theme";
 import SignInScreen from "./screens/SignInScreen";
+import SignUpScreen from "./screens/SignUpScreen";
+import ForgotPasswordScreen from "./screens/ForgotPasswordScreen";
 import ChatsScreen from "./screens/ChatsScreen";
 import ChatScreen from "./screens/ChatScreen";
 import UsageScreen from "./screens/UsageScreen";
 
 export type RootStackParamList = {
     SignIn: undefined;
+    SignUp: undefined;
+    ForgotPassword: undefined;
     Chats: undefined;
     Chat: { chatId: string; name: string };
     Usage: undefined;
@@ -51,7 +55,15 @@ export default function RootNavigator() {
                     <Stack.Screen name="Usage" component={UsageScreen} options={{ title: "Usage" }} />
                 </>
             ) : (
-                <Stack.Screen name="SignIn" component={SignInScreen} options={{ headerShown: false }} />
+                <>
+                    <Stack.Screen name="SignIn" component={SignInScreen} options={{ headerShown: false }} />
+                    <Stack.Screen name="SignUp" component={SignUpScreen} options={{ title: "Create account" }} />
+                    <Stack.Screen
+                        name="ForgotPassword"
+                        component={ForgotPasswordScreen}
+                        options={{ title: "Reset password" }}
+                    />
+                </>
             )}
         </Stack.Navigator>
     );

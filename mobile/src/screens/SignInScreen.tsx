@@ -9,11 +9,15 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import { useAuth } from "../auth/AuthContext";
 import { colors } from "../theme";
+import type { RootStackParamList } from "../navigation";
 
-export default function SignInScreen() {
+type Props = NativeStackScreenProps<RootStackParamList, "SignIn">;
+
+export default function SignInScreen({ navigation }: Props) {
     const { signIn } = useAuth();
     const [identifier, setIdentifier] = useState("");
     const [password, setPassword] = useState("");
@@ -54,7 +58,10 @@ export default function SignInScreen() {
                     autoCorrect={false}
                     returnKeyType="next"
                     value={identifier}
-                    onChangeText={setIdentifier}
+                    onChangeText={(text) => {
+                        setIdentifier(text);
+                        if (error) setError(null);
+                    }}
                 />
                 <View style={styles.passwordRow}>
                     <TextInput
@@ -66,7 +73,10 @@ export default function SignInScreen() {
                         autoCorrect={false}
                         returnKeyType="go"
                         value={password}
-                        onChangeText={setPassword}
+                        onChangeText={(text) => {
+                            setPassword(text);
+                            if (error) setError(null);
+                        }}
                         onSubmitEditing={onSubmit}
                     />
                     <TouchableOpacity
@@ -92,6 +102,20 @@ export default function SignInScreen() {
                         <Text style={styles.buttonText}>Sign in</Text>
                     )}
                 </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={styles.linkRow}
+                    onPress={() => navigation.navigate("ForgotPassword")}
+                >
+                    <Text style={styles.link}>Forgot password?</Text>
+                </TouchableOpacity>
+
+                <View style={styles.footer}>
+                    <Text style={styles.footerText}>Don&apos;t have an account? </Text>
+                    <TouchableOpacity onPress={() => navigation.navigate("SignUp")}>
+                        <Text style={styles.link}>Sign up</Text>
+                    </TouchableOpacity>
+                </View>
             </View>
         </KeyboardAvoidingView>
     );
@@ -150,4 +174,8 @@ const styles = StyleSheet.create({
     },
     buttonDisabled: { opacity: 0.6 },
     buttonText: { color: colors.primaryText, fontWeight: "600", fontSize: 16 },
+    linkRow: { alignSelf: "center", marginTop: 16 },
+    link: { color: colors.primary, fontWeight: "600", fontSize: 14 },
+    footer: { flexDirection: "row", justifyContent: "center", alignItems: "center", marginTop: 20 },
+    footerText: { color: colors.muted, fontSize: 14 },
 });

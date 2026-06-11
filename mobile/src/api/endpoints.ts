@@ -46,6 +46,48 @@ export async function login(identifier: string, password: string): Promise<AuthS
 
 export const logout = () => apiRequest("/user/logout", { method: "GET" });
 
+// --- Registration flow (matches the backend: send code -> verify -> register) ---
+
+/** Step 1: POST /user/send-verification-code — emails a code to a new address. */
+export const sendVerificationCode = (email: string) =>
+    apiRequest<{ emailSent: boolean }>("/user/send-verification-code", {
+        method: "POST",
+        body: JSON.stringify({ email }),
+    });
+
+/** Step 2: POST /user/verify-email — confirms the emailed code. */
+export const verifyEmail = (email: string, code: string) =>
+    apiRequest("/user/verify-email", {
+        method: "POST",
+        body: JSON.stringify({ email, code }),
+    });
+
+/** Step 3: POST /user/register — completes a verified account. */
+export const register = (payload: {
+    fullname: string;
+    username: string;
+    email: string;
+    password: string;
+}) =>
+    apiRequest("/user/register", {
+        method: "POST",
+        body: JSON.stringify(payload),
+    });
+
+// --- Password reset flow ---
+
+export const sendResetCode = (email: string) =>
+    apiRequest<{ emailSent: boolean }>("/user/send-reset-code", {
+        method: "POST",
+        body: JSON.stringify({ email }),
+    });
+
+export const resetPassword = (email: string, code: string, password: string) =>
+    apiRequest<{ reset: boolean }>("/user/reset-password", {
+        method: "PATCH",
+        body: JSON.stringify({ email, code, password }),
+    });
+
 export const getChats = () => apiRequest<ChatItem[]>("/chat/list", { method: "GET" });
 
 /** POST /chat/create — ingest a new documentation URL. */
