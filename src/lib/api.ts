@@ -589,5 +589,10 @@ export const getSharedChatDetails = (shareToken: string) =>
 export const getSharedChatMessages = (shareToken: string) =>
     apiRequest<{ messages: ChatMessageItem[] }>(`/message/shared/${shareToken}/messages`, { method: "GET" });
 
+export const getSharedMessageSources = (shareToken: string, messageId: string) =>
+    withCache(cacheKey(`/message/shared/${shareToken}/messages/${messageId}/sources`), 5 * 60 * 1000, () =>
+        apiRequest<{ messageSources: ChatMessageSourceItem[] }>(`/message/shared/${shareToken}/messages/${messageId}/sources`, { method: "GET" })
+    );
+
 export const forkSharedChat = (shareToken: string) =>
     apiRequest<{ chatId: string }>(`/chat/shared/${shareToken}/fork`, { method: "POST" });
