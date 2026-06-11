@@ -268,8 +268,21 @@ const qdrantCleanup = asyncHandler(async (req, res) => {
 });
 
 const listAllChats = asyncHandler(async (req, res) => {
+    const { limit, cursor } = req.query;
+
+    const where = { userId: req.user.id };
+
+    if (cursor) {
+        const decoded = JSON.parse(Buffer.from(cursor, "base64").toString());
+        const cursorDate = new Date(decoded.createdAt);
+        where.OR = [
+            { createdAt: { lt: cursorDate } },
+            { createdAt: cursorDate, id: { lt: decoded.id } },
+        ];
+    }
+
     const chats = await prisma.chat.findMany({
-        where: { userId: req.user.id },
+        where,
         include: {
             chatSources: {
                 include: {
@@ -278,41 +291,50 @@ const listAllChats = asyncHandler(async (req, res) => {
                     },
                 },
             },
-            usageEvents: {
-                select: {
-                    inputTokens: true,
-                    outputTokens: true,
-                },
-            },
         },
-        orderBy: {
-            createdAt: "desc",
-        },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: limit + 1,
     });
 
+    const hasMore = chats.length > limit;
+    if (hasMore) chats.pop();
+
+    const chatIds = chats.map((c) => c.id);
+    const usageAggs = await prisma.usageEvents.groupBy({
+        by: ["chatId"],
+        where: { chatId: { in: chatIds } },
+        _sum: { inputTokens: true, outputTokens: true },
+    });
+    const usageMap = new Map(
+        usageAggs.map((u) => [
+            u.chatId,
+            { input: u._sum.inputTokens || 0, output: u._sum.outputTokens || 0 },
+        ]),
+    );
+
     const chatsWithUsage = chats.map((chat) => {
-        const totals = chat.usageEvents.reduce(
-            (acc, curr) => {
-                acc.inputTokens += curr.inputTokens;
-                acc.outputTokens += curr.outputTokens;
-                return acc;
-            },
-            { inputTokens: 0, outputTokens: 0 },
-        );
-
-        const { usageEvents, ...chatData } = chat;
-
+        const totals = usageMap.get(chat.id) || { input: 0, output: 0 };
         return {
-            ...chatData,
+            ...chat,
             totalUsage: {
-                input: totals.inputTokens,
-                output: totals.outputTokens,
-                total: totals.inputTokens + totals.outputTokens,
+                input: totals.input,
+                output: totals.output,
+                total: totals.input + totals.output,
             },
         };
     });
 
-    res.status(200).json(new ApiResponse(200, chatsWithUsage, "Chats fetched successfully"));
+    let nextCursor = null;
+    if (hasMore) {
+        const last = chats[chats.length - 1];
+        nextCursor = Buffer.from(
+            JSON.stringify({ createdAt: last.createdAt.toISOString(), id: last.id }),
+        ).toString("base64");
+    }
+
+    res.status(200).json(
+        new ApiResponse(200, { chats: chatsWithUsage, hasMore, nextCursor }, "Chats fetched successfully"),
+    );
 });
 
 const recentChats = asyncHandler(async (req, res) => {

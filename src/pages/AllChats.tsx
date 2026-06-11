@@ -59,7 +59,10 @@ const AllChats = () => {
     const [search, setSearch] = useState("");
     const [filter, setFilter] = useState("all");
     const [isLoading, setIsLoading] = useState(true);
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [error, setError] = useState("");
+    const [hasMore, setHasMore] = useState(false);
+    const [nextCursor, setNextCursor] = useState<string | null>(null);
 
     // Delete Confirmation State
     const [deleteTarget, setDeleteTarget] = useState<ChatRow | null>(null);
@@ -70,12 +73,29 @@ const AllChats = () => {
         setIsLoading(true);
         setError("");
         try {
-            const data = await getChats();
-            setChats((data || []).map(mapChat));
+            const res = await getChats({ limit: 25 });
+            setChats((res.chats || []).map(mapChat));
+            setHasMore(res.hasMore);
+            setNextCursor(res.nextCursor);
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to load chats.");
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const loadMore = async () => {
+        if (!nextCursor || isLoadingMore) return;
+        setIsLoadingMore(true);
+        try {
+            const res = await getChats({ limit: 25, cursor: nextCursor });
+            setChats((prev) => [...prev, ...(res.chats || []).map(mapChat)]);
+            setHasMore(res.hasMore);
+            setNextCursor(res.nextCursor);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to load more chats.");
+        } finally {
+            setIsLoadingMore(false);
         }
     };
 
@@ -292,6 +312,25 @@ const AllChats = () => {
                         )}
                     </div>
                 </div>
+
+                {hasMore && !isLoading && (
+                    <div className="flex justify-center pt-2">
+                        <button
+                            onClick={loadMore}
+                            disabled={isLoadingMore}
+                            className="px-6 py-2.5 rounded-lg text-sm font-medium bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-gray-300 hover:text-white transition-all inline-flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {isLoadingMore ? (
+                                <>
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    Loading...
+                                </>
+                            ) : (
+                                "Load More"
+                            )}
+                        </button>
+                    </div>
+                )}
 
                 {/* Delete Confirmation Modal */}
                 {deleteTarget && (
