@@ -19,10 +19,11 @@ function App() {
             <Route
                 path="/"
                 element={
-                    <Navigate
-                        to={isAuthenticated() ? "/dashboard" : "/signup"}
-                        replace
-                    />
+                    isAuthenticated() ? (
+                    <Navigate to="/dashboard" replace />
+                     ) : (
+                    <LandingPage/>
+                    )
                 }
             />
                 <Route
