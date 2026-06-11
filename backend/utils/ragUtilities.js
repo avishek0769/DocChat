@@ -44,7 +44,7 @@ function getCrawlConfig() {
         userAgent: process.env.CRAWL_USER_AGENT || "DocChatBot/1.0",
         respectRobotsTxt: readBoolean(process.env.CRAWL_RESPECT_ROBOTS_TXT, true),
         defaultDelayMs: readNonNegativeInt(process.env.CRAWL_DELAY_MS, 1000),
-        maxConcurrencyPerDomain: readPositiveInt(process.env.CRAWL_MAX_CONCURRENCY_PER_DOMAIN, 2),
+        maxConcurrencyPerDomain: readPositiveInt(process.env.CRAWL_MAX_CONCURRENCY_PER_DOMAIN, 3),
         robotsTimeoutMs: readPositiveInt(process.env.CRAWL_ROBOTS_TIMEOUT_MS, 5000),
         robotsCacheTtlMs: readPositiveInt(process.env.CRAWL_ROBOTS_CACHE_TTL_MS, 10 * 60 * 1000),
         allowOnRobotsError: readBoolean(process.env.CRAWL_ALLOW_ON_ROBOTS_ERROR, false),

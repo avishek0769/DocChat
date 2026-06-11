@@ -69,20 +69,22 @@ function readPositiveInt(value, fallback) {
 function getWorkerConfig() {
     return {
         maxPagesPerJob: readPositiveInt(process.env.CRAWL_MAX_PAGES_PER_JOB, 300),
-        vectorlessBatchSize: readPositiveInt(process.env.CRAWL_VECTORLESS_BATCH_SIZE, 5),
+        vectorlessBatchSize: readPositiveInt(process.env.CRAWL_VECTORLESS_BATCH_SIZE, 10),
         workerConcurrency: readPositiveInt(process.env.CHAT_WORKER_CONCURRENCY, 1),
+        scrapeConcurrency: readPositiveInt(process.env.CRAWL_SCRAPE_CONCURRENCY, 10),
+        embeddingBatchSize: readPositiveInt(process.env.EMBEDDING_BATCH_SIZE, 500),
+        qdrantBatchSize: readPositiveInt(process.env.QDRANT_BATCH_SIZE, 500),
     };
 }
 
 async function processVector(docsRootUrl, chatId, collectionName, chatSourceId, scrapeLimit) {
     try {
-        const { maxPagesPerJob } = getWorkerConfig();
+        const { maxPagesPerJob, scrapeConcurrency, embeddingBatchSize, qdrantBatchSize } = getWorkerConfig();
         const rootUrl = normalizeUrl(docsRootUrl);
         console.log("Scraping root:", rootUrl);
 
         const { internalLinks } = await scrapeWebpage(rootUrl, rootUrl);
-        
-        // Combined logic: enforce effective limit, then filter valid docs
+
         const effectiveLimit = typeof scrapeLimit === 'number' && scrapeLimit > 0 ? scrapeLimit : maxPagesPerJob;
         const allLinks = internalLinks.slice(0, effectiveLimit).filter(link => isValidDocUrl(link, rootUrl));
         const totalLinks = allLinks.length;
@@ -90,7 +92,7 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId, 
         console.log("Total unique valid links found:", totalLinks);
 
         await updateChatProgress(chatId, {
-            status: "PROCESSING",
+            status: "SCRAPING",
             current: 0,
             total: totalLinks,
             progress: 0,
@@ -103,79 +105,113 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId, 
             });
         }
 
-        let processedLinks = 0;
-        const limiter = new Bottleneck({ maxConcurrent: 5 });
+        // Phase 1: Scrape + split all pages concurrently
+        const splitter = new RecursiveCharacterTextSplitter({ chunkSize: 1000, chunkOverlap: 150 });
+        const limiter = new Bottleneck({ maxConcurrent: scrapeConcurrency });
+        let scrapedCount = 0;
 
-        await Promise.all(allLinks.map((link) => limiter.schedule(async () => {
+        const scrapedPages = await Promise.all(allLinks.map((link) => limiter.schedule(async () => {
             try {
                 const { body, title } = await scrapeWebpage(link, rootUrl);
-                const splitter = new RecursiveCharacterTextSplitter({
-                    chunkSize: 1000,
-                    chunkOverlap: 150,
-                });
                 const chunks = await splitter.splitText(body);
+                console.log(`Scraped: ${link} (${chunks.length} chunks)`);
 
-                console.log(`Processing: ${link} (${chunks.length} chunks)`);
-
-                if (chunks.length > 0) {
-                    let allEmbeddings = [];
-                    // Process embeddings in batches of 100
-                    const batchSize = 100;
-                    for (let i = 0; i < chunks.length; i += batchSize) {
-                        const chunkBatch = chunks.slice(i, i + batchSize);
-                        const embeddingsBatch = await generateVectorEmbeddings(chunkBatch);
-                        // Make sure we concat correctly depending on whether generation returns an array
-                        const batchArray = Array.isArray(embeddingsBatch) ? embeddingsBatch : [embeddingsBatch];
-                        allEmbeddings = allEmbeddings.concat(batchArray);
-                    }
-
-                    const points = chunks.map((chunk, i) => ({
-                        id: uuidv4(),
-                        vector: allEmbeddings[i],
-                        payload: {
-                            url: link,
-                            body: chunk,
-                            chatId,
-                            title,
-                            chatSourceId,
-                        },
-                    }));
-
-                    await qdrant.upsert(collectionName, {
-                        wait: true,
-                        points,
-                    });
-
-                    await prisma.documentPage.create({
-                        data: {
-                            pageUrl: link,
-                            heading: title,
-                            chatSourceId,
-                        },
-                    }).catch((err) => {
-                        console.error("Failed to update indexed pages:", err.message);
-                    });
-                }
-
-                processedLinks++;
+                scrapedCount++;
                 await updateChatProgress(chatId, {
-                    status: "PROCESSING",
-                    current: processedLinks,
+                    status: "SCRAPING",
+                    current: scrapedCount,
                     total: totalLinks,
-                    progress: Math.round((processedLinks / totalLinks) * 100),
+                    progress: Math.round((scrapedCount / totalLinks) * 50),
                 });
+
+                return { chunks, title, link };
             } catch (err) {
                 console.error(`Failed link ${link}:`, err.message);
-                // Concurrency branch logic: update progress rather than throwing/breaking out
-                processedLinks++;
+                scrapedCount++;
                 await updateChatProgress(chatId, {
-                    status: "PROCESSING",
-                    current: processedLinks,
+                    status: "SCRAPING",
+                    current: scrapedCount,
                     total: totalLinks,
-                    progress: Math.round((processedLinks / totalLinks) * 100),
+                    progress: Math.round((scrapedCount / totalLinks) * 50),
                 });
+                return null;
             }
         })));
+
+        const validPages = scrapedPages.filter(Boolean);
+        if (validPages.length === 0) {
+            throw new Error("No pages were successfully scraped.");
+        }
+
+        // Phase 2: Embed + index in batches
+        let indexedCount = 0;
+        const totalIndexPages = validPages.length;
+
+        await updateChatProgress(chatId, {
+            status: "INDEXING",
+            current: 0,
+            total: totalIndexPages,
+            progress: 50,
+        });
+
+        const pendingPoints = [];
+        const pendingDbRecords = [];
+
+        async function flushBatch() {
+            if (pendingPoints.length === 0) return;
+            const points = pendingPoints.splice(0);
+            const dbRecords = pendingDbRecords.splice(0);
+
+            await qdrant.upsert(collectionName, { wait: true, points });
+            await prisma.documentPage.createMany({ data: dbRecords }).catch((err) => {
+                console.error("Failed to update indexed pages:", err.message);
+            });
+        }
+
+        for (const page of validPages) {
+            const { chunks, title, link } = page;
+
+            if (chunks.length > 0) {
+                const batchPromises = [];
+                for (let i = 0; i < chunks.length; i += embeddingBatchSize) {
+                    const chunkBatch = chunks.slice(i, i + embeddingBatchSize);
+                    batchPromises.push(generateVectorEmbeddings(chunkBatch));
+                }
+                const batchResults = await Promise.all(batchPromises);
+                const allEmbeddings = batchResults.flatMap((r) =>
+                    Array.isArray(r) ? r : [r],
+                );
+
+                const points = chunks.map((chunk, i) => ({
+                    id: uuidv4(),
+                    vector: allEmbeddings[i],
+                    payload: {
+                        url: link,
+                        body: chunk,
+                        chatId,
+                        title,
+                        chatSourceId,
+                    },
+                }));
+
+                pendingPoints.push(...points);
+                pendingDbRecords.push({ pageUrl: link, heading: title, chatSourceId });
+
+                if (pendingPoints.length >= qdrantBatchSize) {
+                    await flushBatch();
+                }
+            }
+
+            indexedCount++;
+            await updateChatProgress(chatId, {
+                status: "INDEXING",
+                current: indexedCount,
+                total: totalIndexPages,
+                progress: 50 + Math.round((indexedCount / totalIndexPages) * 50),
+            });
+        }
+
+        await flushBatch();
     } catch (err) {
         await markChatFailed(chatId, err);
         throw err;
@@ -185,7 +221,7 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId, 
 async function processVectorLess(docsRootUrl, chatId, chatSourceId, scrapeLimit) {
     try {
         const { maxPagesPerJob, vectorlessBatchSize } = getWorkerConfig();
-        await updateChatProgress(chatId, { status: "PROCESSING", progress: 0 });
+        await updateChatProgress(chatId, { status: "SCRAPING", progress: 0 });
 
         const rootUrl = normalizeUrl(docsRootUrl);
         console.log("Scraping root:", rootUrl);
@@ -197,12 +233,11 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId, scrapeLimit)
 
         console.log("Total unique links found:", totalLinks);
 
-        let batchLinks = allLinks.slice(0, vectorlessBatchSize);
         let allData = "";
         let i = 0;
 
-        while (batchLinks.length > 0) {
-            batchLinks = allLinks.slice(i, i + vectorlessBatchSize);
+        while (i < totalLinks) {
+            const batchLinks = allLinks.slice(i, i + vectorlessBatchSize);
             const results = await Promise.all(
                 batchLinks.map(async (link) => {
                     if (!isValidDocUrl(link, rootUrl)) return "";
@@ -220,7 +255,7 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId, scrapeLimit)
             i += vectorlessBatchSize;
 
             await updateChatProgress(chatId, {
-                status: "PROCESSING",
+                status: "SCRAPING",
                 current: Math.min(i, totalLinks),
                 total: totalLinks,
                 progress: totalLinks ? Math.round((Math.min(i, totalLinks) / totalLinks) * 100) : 0,
