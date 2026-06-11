@@ -175,6 +175,7 @@ const createChat = asyncHandler(async (req, res) => {
                 chatSourceId: chat.chatSources[0].id.toString(),
                 isVectorLess: isVectorLessChat,
                 scrapeLimit,
+                requestId: req.id,
             },
             { jobId: chat.id },
         );
