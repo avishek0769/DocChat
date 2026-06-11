@@ -13,6 +13,7 @@ import {
     chatDetails,
     createChat,
     deleteChat,
+    restoreChat,
     expectation,
     listAllChats,
     recentChats,
@@ -60,5 +61,8 @@ chatRouter
 chatRouter
     .route("/cancel/:chatId")
     .get(verifyStrictJWT, validate(chatIdParamSchema), verifyChatOwnership, cancelProcessing);
+chatRouter
+    .route("/restore/:chatId")
+    .post(verifyStrictJWT, validate(chatIdParamSchema), verifyChatOwnership, restoreChat);
 
 export default chatRouter;
