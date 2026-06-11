@@ -222,25 +222,6 @@ export const createChat = async (payload: {
     return result;
 };
 
-export const getChatExpectation = (payload: { docsUrl: string; isVectorLess?: boolean }) => {
-    const query = new URLSearchParams({
-        docsUrl: payload.docsUrl,
-    });
-
-    if (payload.isVectorLess !== undefined) {
-        query.set("isVectorLess", String(payload.isVectorLess));
-    }
-
-    return apiRequest<{
-        alreadyIngested: boolean;
-        expectedTokens: number;
-        expectedCost: number | string;
-        totalPages: number;
-        pagesIndexed: number;
-        pageLimitWarning: boolean;
-    }>(`/chat/expectation?${query.toString()}`, { method: "GET" });
-};
-
 export const deleteChat = async (chatId: string) => {
     const result = await apiRequest(`/chat/${chatId}`, { method: "DELETE" });
     invalidateChatCaches();

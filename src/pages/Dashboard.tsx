@@ -18,7 +18,6 @@ import {
 } from "lucide-react";
 import {
     createChat,
-    getChatExpectation,
     deleteChat,
     getChatStatus,
     subscribeToChatStatus,
@@ -338,10 +337,6 @@ const Dashboard = () => {
         setIsCreating(true);
         setError("");
         try {
-            await getChatExpectation({
-                docsUrl: chatUrl,
-                isVectorLess,
-            });
             await createChat({
                 name: chatName || undefined,
                 docsUrl: chatUrl,
