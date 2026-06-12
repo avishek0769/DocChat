@@ -331,6 +331,23 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId, scrapeLimit)
         await prisma.chatSource.update({
             where: { id: chatSourceId },
             data: { collectionName: docTree.id },
+        const actualPages = pages.length;
+
+        await prisma.chat.update({
+            where: { id: chatId },
+            data: {
+                collectionName: docTree.id,
+                status: "READY",
+                chatSources: {
+                    update: {
+                        where: { id: chatSourceId },
+                        data: {
+                            collectionName: docTree.id,
+                            totalPages: actualPages,
+                        },
+                    },
+                },
+            },
         });
 
         return { pagesCrawled, pagesFailed };

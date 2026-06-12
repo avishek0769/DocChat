@@ -324,6 +324,13 @@ collectionName: isVectorLessChat
                 chatSourceId: chatSource.id,
                 attached: true,
                 status: needsIngestion ? "QUEUED" : "READY",
+                chatId: chat.id.toString(),
+                docsUrl,
+                collectionName: chat.collectionName,
+                chatSourceId: chat.chatSources[0].id.toString(),
+                isVectorLess: isVectorLessChat,
+                scrapeLimit,
+                requestId: req.id,
             },
             "Source attached successfully",
         ),
@@ -416,10 +423,15 @@ const progressStatus = asyncHandler(async (req, res) => {
             status: true,
             failedAt: true,
             failureReason: true,
+            deletedAt: true,
         },
     });
 
     if (!chat) {
+        throw new ApiError(404, "Chat not found");
+    }
+
+    if (chat.deletedAt) {
         throw new ApiError(404, "Chat not found");
     }
 
@@ -476,10 +488,14 @@ const streamChatStatus = asyncHandler(async (req, res) => {
             id: chatId,
             userId: req.user.id,
         },
-        select: { id: true },
+        select: { id: true, deletedAt: true },
     });
 
     if (!chat) {
+        throw new ApiError(404, "Chat not found");
+    }
+
+    if (chat.deletedAt) {
         throw new ApiError(404, "Chat not found");
     }
 
@@ -596,7 +612,7 @@ const qdrantCleanup = asyncHandler(async (req, res) => {
 
 const listAllChats = asyncHandler(async (req, res) => {
     const chats = await prisma.chat.findMany({
-        where: { userId: req.user.id },
+        where: { userId: req.user.id, deletedAt: null },
         include: {
             chatSources: {
                 include: {
@@ -644,7 +660,7 @@ const listAllChats = asyncHandler(async (req, res) => {
 
 const recentChats = asyncHandler(async (req, res) => {
     const chats = await prisma.chat.findMany({
-        where: { userId: req.user.id },
+        where: { userId: req.user.id, deletedAt: null },
         include: {
             chatSources: {
                 include: {
@@ -706,6 +722,14 @@ const chatDetails = asyncHandler(async (req, res) => {
         },
     });
 
+    if (!chat) {
+        throw new ApiError(404, "Chat not found");
+    }
+
+    if (chat.deletedAt) {
+        throw new ApiError(404, "Chat not found");
+    }
+
     res.status(200).json(new ApiResponse(200, { chat }, "Chat details fetched successfully"));
 });
 
@@ -722,6 +746,14 @@ const listAllPagesIndexed = asyncHandler(async (req, res) => {
             },
         },
     });
+
+    if (!chat) {
+        throw new ApiError(404, "Chat not found");
+    }
+
+    if (chat.deletedAt) {
+        throw new ApiError(404, "Chat not found");
+    }
 
     res.status(200).json(
         new ApiResponse(
@@ -742,6 +774,10 @@ const cancelProcessing = asyncHandler(async (req, res) => {
     });
 
     if (!chat) {
+        throw new ApiError(404, "Chat not found");
+    }
+
+    if (chat.deletedAt) {
         throw new ApiError(404, "Chat not found");
     }
 
@@ -774,6 +810,7 @@ const deleteChat = asyncHandler(async (req, res) => {
         select: {
             id: true,
             userId: true,
+            deletedAt: true,
         },
     });
 
@@ -785,30 +822,58 @@ const deleteChat = asyncHandler(async (req, res) => {
         throw new ApiError(403, "You do not have permission to delete this chat");
     }
 
-    await prisma.$transaction(async (tx) => {
-        await tx.chatMessageSource.deleteMany({
-            where: { chatMessage: { chatId } },
-        });
+    if (chat.deletedAt) {
+        throw new ApiError(400, "Chat is already deleted");
+    }
 
-        await tx.chatMessage.deleteMany({
-            where: { chatId },
-        });
-
-        await tx.chat.delete({
-            where: { id: chatId },
-        });
-
-        // ChatSource rows (and their DocumentTree / DocumentPage children) are
-        // intentionally left intact — they may be shared by other chats, and the
-        // Qdrant collection they reference is preserved so no data is lost.
-        // Orphaned collections are cleaned up by the admin Qdrant sweep.
+    await prisma.chat.update({
+        where: { id: chatId },
+        data: { deletedAt: new Date() },
     });
+
+    await createAuditEvent("chat.deleted", req.user.id, chatId, {});
 
     res.status(200).json(
         new ApiResponse(200, null, "Chat deleted successfully"),
     );
 });
 
+
+const restoreChat = asyncHandler(async (req, res) => {
+    const { chatId } = req.params;
+
+    const chat = await prisma.chat.findUnique({
+        where: { id: chatId },
+        select: {
+            id: true,
+            userId: true,
+            deletedAt: true,
+        },
+    });
+
+    if (!chat) {
+        throw new ApiError(404, "Chat not found");
+    }
+
+    if (chat.userId !== req.user.id) {
+        throw new ApiError(403, "You do not have permission to restore this chat");
+    }
+
+    if (!chat.deletedAt) {
+        throw new ApiError(400, "Chat is not deleted");
+    }
+
+    await prisma.chat.update({
+        where: { id: chatId },
+        data: { deletedAt: null },
+    });
+
+    await createAuditEvent("chat.restored", req.user.id, chatId, {});
+
+    res.status(200).json(
+        new ApiResponse(200, null, "Chat restored successfully"),
+    );
+});
 
 const toggleShare = asyncHandler(async (req, res) => {
     const { chatId } = req.params;
@@ -819,6 +884,10 @@ const toggleShare = asyncHandler(async (req, res) => {
 
     if (!chat) {
         throw new ApiError(404, "Chat not found");
+    }
+
+    if (chat.deletedAt) {
+        throw new ApiError(400, "Cannot share a deleted chat");
     }
 
     if (chat.shareToken) {
@@ -941,6 +1010,7 @@ export {
     chatDetails,
     cancelProcessing,
     deleteChat,
+    restoreChat,
     listAllPagesIndexed,
     recentChats,
     toggleShare,
