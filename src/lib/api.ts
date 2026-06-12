@@ -171,7 +171,7 @@ export const invalidateChatCaches = () => {
 };
 
 export const invalidateChatMessages = (chatId: string) => {
-    removeFromCache(cacheKey(`/message/all/${chatId}`));
+    removeMatchingFromCache(`${cacheKey("")}/message/all/${chatId}`);
 };
 
 export const invalidatePagesIndexed = (chatId: string) => {
@@ -337,12 +337,19 @@ export const getAvailableModels = () =>
         apiRequest<{ models: string[] }>("/message/models", { method: "GET" }),
     );
 
-export const getChatMessages = (chatId: string) =>
-    withCache(cacheKey(`/message/all/${chatId}`), 5 * 60 * 1000, () =>
-        apiRequest<{ messages: ChatMessageItem[] }>(`/message/all/${chatId}`, {
+export const getChatMessages = (chatId: string, limit = 50, cursor?: string) => {
+    const query = new URLSearchParams();
+    query.set("limit", String(limit));
+    if (cursor) query.set("cursor", cursor);
+
+    const path = `/message/all/${chatId}${query.toString() ? `?${query.toString()}` : ""}`;
+
+    return withCache(cacheKey(path), 5 * 60 * 1000, () =>
+        apiRequest<{ messages: ChatMessageItem[]; nextCursor: string | null; hasMore: boolean }>(path, {
             method: "GET",
         }),
     );
+};
 
 export const getMessageSources = (messageId: string) =>
     withCache(cacheKey(`/message/sources/${messageId}`), 5 * 60 * 1000, () =>

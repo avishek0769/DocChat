@@ -391,6 +391,8 @@ const sendMessage = asyncHandler(async (req, res) => {
 
 const getChatMessages = asyncHandler(async (req, res) => {
     const { chatId } = req.params;
+    const limit = req.query.limit ?? 50;
+    const cursor = req.query.cursor || undefined;
 
     const chat = await prisma.chat.findUnique({
         where: { id: chatId },
@@ -402,18 +404,25 @@ const getChatMessages = asyncHandler(async (req, res) => {
 
     const messages = await prisma.chatMessage.findMany({
         where: { chatId },
-        orderBy: { createdAt: "asc" },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: limit + 1,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     });
 
-    if (!messages.length) {
+    const hasMore = messages.length > limit;
+    const pageMessages = hasMore ? messages.slice(0, limit) : messages;
+    const nextCursor = hasMore ? pageMessages[pageMessages.length - 1]?.id || null : null;
+    const orderedMessages = pageMessages.reverse();
+
+    if (!orderedMessages.length) {
         return res
             .status(200)
-            .json(new ApiResponse(200, { messages: [] }, "No messages found for this chat."));
+            .json(new ApiResponse(200, { messages: [], nextCursor: null, hasMore: false }, "No messages found for this chat."));
     }
 
     return res
         .status(200)
-        .json(new ApiResponse(200, { messages: messages }, "Chat messages retrieved successfully."));
+        .json(new ApiResponse(200, { messages: orderedMessages, nextCursor, hasMore }, "Chat messages retrieved successfully."));
 });
 
 

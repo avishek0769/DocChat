@@ -70,6 +70,13 @@ export const chatIdParamSchema = {
     }),
 };
 
+export const chatMessagesQuerySchema = {
+    query: z.object({
+        limit: z.coerce.number().int().min(1).max(100).default(50),
+        cursor: z.string().trim().optional(),
+    }),
+};
+
 export const messageIdParamSchema = {
     params: z.object({
         messageId: z.string().uuid("Invalid message ID"),
