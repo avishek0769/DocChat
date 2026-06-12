@@ -9,6 +9,7 @@ import { decryptApiKey } from "../utils/decrypt.js";
 import { generateVectorEmbeddings } from "../utils/ragUtilities.js";
 import { buildMessagesForLLM } from "../utils/contextBuilder.js";
 import { MemoryClient } from "mem0ai";
+import PDFDocument from "pdfkit";
 
 const memory = MEM0_ENABLED ? new MemoryClient({ apiKey: process.env.MEM0_API_KEY }) : null;
 
@@ -277,6 +278,7 @@ const sendMessage = asyncHandler(async (req, res) => {
 
 // NOTE: No relation between ChatMessage and Chat in the current schema
 const exportChatMessages = asyncHandler(async (req, res) => {
+    const { format = "txt" } = req.query;
     const { chatId } = req.params;
 
     const chat = await prisma.chat.findUnique({
@@ -295,6 +297,23 @@ const exportChatMessages = asyncHandler(async (req, res) => {
     const escapeForPlainText = (text) => text || "";
 
     const chatName = chat.name || "Untitled Chat";
+    if (format === "md") {
+    let markdown = `# ${chatName}\n\n`;
+
+    messages.forEach((msg, index) => {
+        markdown += `## Message ${index + 1}\n\n`;
+        markdown += `### User\n\n${msg.userPrompt}\n\n`;
+        markdown += `### Assistant\n\n${msg.llmResponse}\n\n`;
+    });
+
+    res.setHeader("Content-Type", "text/markdown; charset=utf-8");
+    res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="chat-export-${chatId}.md"`
+    );
+
+    return res.send(markdown);
+}
     const exportDate = new Date();
     const header = [
         "DocChat Conversation Export",
@@ -305,6 +324,37 @@ const exportChatMessages = asyncHandler(async (req, res) => {
         `Total Messages: ${messages.length * 2}`,
         "",
     ].join("\n");
+
+    if (format === "pdf") {
+    const doc = new PDFDocument();
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="chat-export-${chatId}.pdf"`
+    );
+
+    doc.pipe(res);
+
+    doc.fontSize(18).text(chatName);
+    doc.moveDown();
+
+    messages.forEach((msg, index) => {
+        doc.fontSize(14).text(`Message ${index + 1}`);
+        doc.moveDown(0.5);
+
+        doc.fontSize(12).text("User:");
+        doc.text(msg.userPrompt || "");
+        doc.moveDown();
+
+        doc.text("Assistant:");
+        doc.text(msg.llmResponse || "");
+        doc.moveDown();
+    });
+
+    doc.end();
+    return;
+}
 
     res.setHeader("Content-Type", "text/plain; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename="chat-export-${chatId}.txt"`);

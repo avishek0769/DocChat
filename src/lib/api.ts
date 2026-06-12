@@ -309,18 +309,24 @@ export const sendMessageStream = async (payload: {
     return text;
 };
 
-export const exportChatMessages = async (chatId: string): Promise<void> => {
+export const exportChatMessages = async (
+  chatId: string,
+  format: "txt" | "md" | "pdf"
+): Promise<void> => {
     const token = getAccessToken();
     const headers = new Headers();
     if (token) {
         headers.set("Authorization", `Bearer ${token}`);
     }
 
-    const response = await fetch(`${API_BASE_URL}/message/export/${chatId}`, {
-        method: "GET",
-        headers,
-        credentials: "include",
-    });
+    const response = await fetch(
+  `${API_BASE_URL}/message/export/${chatId}?format=${format}`,
+  {
+    method: "GET",
+    headers,
+    credentials: "include",
+  }
+);
 
     if (!response.ok) {
         throw new Error("Failed to export chat");
@@ -330,7 +336,7 @@ export const exportChatMessages = async (chatId: string): Promise<void> => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `chat-export-${chatId}.txt`;
+    a.download = `chat-export-${chatId}.${format}`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
