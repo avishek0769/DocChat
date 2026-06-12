@@ -5,15 +5,19 @@ import { verifyChatOwnership } from "../middlewares/chat.middleware.js";
 import {
     expectationQuerySchema,
     createChatSchema,
+    addChatSourceSchema,
     chatIdParamSchema,
     qdrantCleanupSchema,
 } from "../utils/validationSchemas.js";
 import {
     cancelProcessing,
+    addChatSource,
     chatDetails,
     createChat,
     deleteChat,
+    restoreChat,
     expectation,
+    removeChatSource,
     listAllChats,
     recentChats,
     listAllPagesIndexed,
@@ -23,16 +27,24 @@ import {
     getSharedChatDetails,
     forkSharedChat,
     qdrantCleanup,
+    streamChatStatus,
 } from "../controllers/chat.controller.js";
 
 const chatRouter = Router();
 
 chatRouter.route("/expectation").get(verifyStrictJWT, validate(expectationQuerySchema), expectation);
 chatRouter.route("/create").post(verifyStrictJWT, validate(createChatSchema), createChat);
+chatRouter
+    .route("/:chatId/sources")
+    .post(verifyStrictJWT, validate(chatIdParamSchema), validate(addChatSourceSchema), verifyChatOwnership, addChatSource)
+    .delete(verifyStrictJWT, validate(chatIdParamSchema), validate(addChatSourceSchema), verifyChatOwnership, removeChatSource);
 chatRouter.route("/qdrant-cleanup").get(verifyStrictJWT, validate(qdrantCleanupSchema), qdrantCleanup);
 chatRouter
     .route("/status/:chatId")
     .get(verifyStrictJWT, validate(chatIdParamSchema), progressStatus);
+chatRouter
+    .route("/status/stream/:chatId")
+    .get(verifyStrictJWT, validate(chatIdParamSchema), streamChatStatus);
 chatRouter.route("/ingestion-runs/failed").get(verifyStrictJWT, recentFailedIngestionRuns);
 chatRouter.route("/list").get(verifyStrictJWT, listAllChats);
 chatRouter.route("/recent").get(verifyStrictJWT, recentChats);
@@ -56,5 +68,8 @@ chatRouter
 chatRouter
     .route("/cancel/:chatId")
     .get(verifyStrictJWT, validate(chatIdParamSchema), verifyChatOwnership, cancelProcessing);
+chatRouter
+    .route("/restore/:chatId")
+    .post(verifyStrictJWT, validate(chatIdParamSchema), verifyChatOwnership, restoreChat);
 
 export default chatRouter;

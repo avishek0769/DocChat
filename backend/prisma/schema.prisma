@@ -37,9 +37,13 @@ model User {
     createdAt    DateTime      @default(now()) @map("created_at")
     email        String?       @unique
     isVerified   Boolean       @default(false) @map("is_verified")
+    isAdmin      Boolean       @default(false) @map("is_admin")
     apikeys      ApiKey[]
     chats        Chat[]
     usageEvents  UsageEvents[]
+    auditEvents  AuditEvent[]
+
+    @@index([isAdmin, createdAt])
 }
 
 model Chat {
@@ -48,13 +52,17 @@ model Chat {
     userId         String        @map("user_id")
     status         ChatStatus    @default(QUEUED)
     createdAt      DateTime      @default(now()) @map("created_at")
+    failedAt       DateTime?     @map("failed_at")
+    failureReason  String?       @map("failure_reason")
     collectionName String?       @map("collection_name")
     shareToken     String?       @unique @map("share_token")
+    deletedAt      DateTime?     @map("deleted_at")
     createdBy      User          @relation(fields: [userId], references: [id])
     chatSources    ChatSource[]  @relation("ChatToChatSource")
     messages       ChatMessage[]
     usageEvents    UsageEvents[]
     ingestionRuns  IngestionRun[]
+    auditEvents    AuditEvent[]
 
     @@index([userId, createdAt])
     @@index([status, createdAt])
@@ -72,6 +80,7 @@ model ChatSource {
     documentTree     DocumentTree?
     createdAt        DateTime       @default(now()) @map("created_at")
     ingestionRuns    IngestionRun[]
+    scrapeLimit      Int?           @map("scrape_limit")
 
     @@unique([documentationUrl, isVectorLess])
 }
@@ -85,6 +94,8 @@ model IngestionRun {
     finishedAt    DateTime?          @map("finished_at")
     errorCode     String?            @map("error_code")
     errorMessage  String?            @map("error_message")
+    pagesCrawled  Int                @default(0) @map("pages_crawled")
+    pagesFailed   Int                @default(0) @map("pages_failed")
     chat          Chat               @relation(fields: [chatId], references: [id], onDelete: Cascade)
     chatSource    ChatSource         @relation(fields: [chatSourceId], references: [id], onDelete: Cascade)
 
@@ -98,7 +109,9 @@ model DocumentPage {
     heading      String
     pageUrl      String     @map("page_url")
     chatSourceId String     @map("chat_source_id")
-    chatSource   ChatSource @relation(fields: [chatSourceId], references: [id])
+    startIndex   Int?       @map("start_index")
+    endIndex     Int?       @map("end_index")
+    chatSource   ChatSource @relation(fields: [chatSourceId], references: [id], onDelete: Cascade)
 }
 
 model DocumentTree {
@@ -107,7 +120,7 @@ model DocumentTree {
     sourceData   String     @map("source_data")
     treeData     Json       @map("tree_data")
     createdAt    DateTime   @default(now()) @map("created_at")
-    chatSource   ChatSource @relation(fields: [chatSourceId], references: [id])
+    chatSource   ChatSource @relation(fields: [chatSourceId], references: [id], onDelete: Cascade)
 }
 
 model ChatMessage {
@@ -155,6 +168,8 @@ model UsageEvents {
     chatId       String?      @map("chat_id")
     inputTokens  Int          @map("input_tokens")
     outputTokens Int          @map("output_tokens")
+    estimatedCostUsd Decimal   @default(0) @map("estimated_cost_usd") @db.Decimal(12, 6)
+    priceVersion  String?     @map("price_version")
     timestamp    DateTime     @default(now())
     apiKey       ApiKey?      @relation(fields: [apikeyId], references: [id])
     message      ChatMessage? @relation(fields: [messageId], references: [id], onDelete: SetNull)
@@ -164,4 +179,18 @@ model UsageEvents {
 @@index([userId, timestamp])
 @@index([messageId])
 @@index([apikeyId])
+}
+
+model AuditEvent {
+    id        String   @id @unique @default(uuid())
+    type      String
+    userId    String?  @map("user_id")
+    chatId    String?  @map("chat_id")
+    metadata  Json?
+    createdAt DateTime @default(now()) @map("created_at")
+    user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+    chat      Chat?    @relation(fields: [chatId], references: [id], onDelete: SetNull)
+
+    @@index([createdAt])
+    @@index([type, createdAt])
 }

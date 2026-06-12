@@ -37,20 +37,21 @@ import {
     Search,
     ArrowLeft,
     Check,
-    Code,
     X,
     Loader2,
     Database,
     Download,
     Link as LinkIcon,
     Share2,
+    AlertCircle,
 } from "lucide-react";
 import clsx from "clsx";
-import hljs from "highlight.js";
-import "highlight.js/styles/atom-one-dark.css";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import CodeBlock from "../components/CodeBlock";
 import {
+    addChatSource,
+    removeChatSource,
     getAvailableModels,
     getChatDetails,
     getChatMessages,
@@ -88,6 +89,38 @@ const toModelDisplayName = (model?: string) => {
     return model;
 };
 
+const mapApiMessagesToUiMessages = (messageList: Array<{
+    id: string;
+    userPrompt: string;
+    llmResponse: string;
+    llmModel: string;
+    createdAt: string;
+}>) => {
+    const messagePairs: Message[] = [];
+    for (const msg of messageList) {
+        messagePairs.push({
+            id: `${msg.id}-user`,
+            role: "user",
+            content: msg.userPrompt,
+            timestamp: new Date(msg.createdAt),
+        });
+
+        messagePairs.push({
+            id: `${msg.id}-ai`,
+            messageId: msg.id,
+            role: "ai",
+            content: msg.llmResponse,
+            model: toModelDisplayName(msg.llmModel),
+            sources: [],
+            sourcesLoaded: false,
+            timestamp: new Date(msg.createdAt),
+        });
+    }
+    return messagePairs;
+};
+
+const WARNING_LENGTH_THRESHOLD = 4000;
+
 export const ChatPage = () => {
     const navigate = useNavigate();
     const { id: chatId = "" } = useParams();
@@ -115,6 +148,9 @@ export const ChatPage = () => {
     // Chat state
     const [input, setInput] = useState("");
     const [messages, setMessages] = useState<Message[]>([]);
+    const [nextCursor, setNextCursor] = useState<string | null>(null);
+    const [hasMore, setHasMore] = useState(false);
+    const [isLoadingOlder, setIsLoadingOlder] = useState(false);
     const [isTyping, setIsTyping] = useState(false);
     const [isAwaitingFirstChunk, setIsAwaitingFirstChunk] = useState(false);
     const [selectedSources, setSelectedSources] = useState<Source[]>([]);
@@ -125,6 +161,7 @@ export const ChatPage = () => {
     const [isIndexedModalOpen, setIsIndexedModalOpen] = useState(false);
     const [currentLinks, setCurrentLinks] = useState<CurrentLink[]>([]);
     const [indexedPages, setIndexedPages] = useState<IndexedPage[]>([]);
+    const [newSourceUrl, setNewSourceUrl] = useState("");
 
     const [isSharing, setIsSharing] = useState(false);
     const [shareToken, setShareToken] = useState<string | null>(null);
@@ -174,7 +211,7 @@ export const ChatPage = () => {
                 getChatDetails(chatId),
                 getPagesIndexed(chatId),
                 getAvailableModels(),
-                getChatMessages(chatId),
+                getChatMessages(chatId, 50),
             ]);
 
             const chat = chatDetails.chat;
@@ -243,34 +280,53 @@ export const ChatPage = () => {
             setModelOptions(options);
             setSelectedModel((prev) => prev || options[0]?.model || "default-1");
 
-            const messageList = messageData.messages || [];
-            const messagePairs: Message[] = [];
-            for (const msg of messageList) {
-                messagePairs.push({
-                    id: `${msg.id}-user`,
-                    role: "user",
-                    content: msg.userPrompt,
-                    timestamp: new Date(msg.createdAt),
-                });
-
-                messagePairs.push({
-                    id: `${msg.id}-ai`,
-                    messageId: msg.id,
-                    role: "ai",
-                    content: msg.llmResponse,
-                    model: toModelDisplayName(msg.llmModel),
-                    sources: [],
-                    sourcesLoaded: false,
-                    timestamp: new Date(msg.createdAt),
-                });
-            }
-            setMessages(messagePairs);
+            setMessages(mapApiMessagesToUiMessages(messageData.messages || []));
+            setNextCursor(messageData.nextCursor || null);
+            setHasMore(Boolean(messageData.hasMore));
             setIsMessagesLoading(false);
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to load chat data.");
             setIsMessagesLoading(false);
         } finally {
             setIsPageLoading(false);
+        }
+    };
+
+    const handleAddSource = async () => {
+        const value = newSourceUrl.trim();
+        if (!value) return;
+        try {
+            await addChatSource(chatId, { docsUrl: value });
+            setNewSourceUrl("");
+            await loadChatPage();
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to add source.");
+        }
+    };
+
+    const handleRemoveSource = async (docsUrl: string) => {
+        try {
+            await removeChatSource(chatId, { docsUrl });
+            await loadChatPage();
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to remove source.");
+        }
+    };
+
+    const loadOlderMessages = async () => {
+        if (!chatId || !nextCursor || isLoadingOlder) return;
+        setIsLoadingOlder(true);
+        try {
+            skipNextAutoScrollRef.current = true;
+            const olderData = await getChatMessages(chatId, 50, nextCursor);
+            const olderMessages = mapApiMessagesToUiMessages(olderData.messages || []);
+            setMessages((prev) => [...olderMessages, ...prev]);
+            setNextCursor(olderData.nextCursor || null);
+            setHasMore(Boolean(olderData.hasMore));
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to load older messages.");
+        } finally {
+            setIsLoadingOlder(false);
         }
     };
 
@@ -309,9 +365,14 @@ export const ChatPage = () => {
     const pendingChunkRef = useRef("");
     const chunkRafRef = useRef<number | null>(null);
     const firstChunkReceivedRef = useRef(false);
+    const abortControllerRef = useRef<AbortController | null>(null);
+    const skipNextAutoScrollRef = useRef(false);
 
     useEffect(() => {
         return () => {
+            abortControllerRef.current?.abort();
+            abortControllerRef.current = null;
+
             if (chunkRafRef.current !== null) {
                 window.cancelAnimationFrame(chunkRafRef.current);
                 chunkRafRef.current = null;
@@ -369,6 +430,10 @@ export const ChatPage = () => {
 
     // Scroll to bottom on new message
     useEffect(() => {
+        if (skipNextAutoScrollRef.current) {
+            skipNextAutoScrollRef.current = false;
+            return;
+        }
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages, isTyping]);
 
@@ -418,6 +483,7 @@ export const ChatPage = () => {
         ]);
 
         try {
+            abortControllerRef.current = new AbortController();
             const flushPendingChunks = () => {
                 const buffered = pendingChunkRef.current;
                 if (!buffered) return;
@@ -443,6 +509,7 @@ export const ChatPage = () => {
                 model: selectedOption.model,
                 provider: selectedOption.provider,
                 chatId,
+                signal: abortControllerRef.current.signal, 
                 onChunk: (chunk) => {
                     if (!firstChunkReceivedRef.current) {
                         firstChunkReceivedRef.current = true;
@@ -464,7 +531,7 @@ export const ChatPage = () => {
 
             setMessages((prev) => prev.map((m) => (m.id === aiId ? { ...m, isStreaming: false } : m)));
 
-            const latestMessages = await getChatMessages(chatId);
+            const latestMessages = await getChatMessages(chatId, 50);
             const latestAi = (latestMessages.messages || []).at(-1);
             if (latestAi) {
                 setMessages((prev) =>
@@ -599,6 +666,25 @@ export const ChatPage = () => {
                                     <FileText className="w-4 h-4 text-accent-blue" />
                                     Show all pages
                                 </button>
+                                <div className="mt-4 space-y-2">
+                                    <label className="text-xs uppercase tracking-wider text-gray-500 font-semibold">
+                                        Add Source
+                                    </label>
+                                    <input
+                                        type="url"
+                                        value={newSourceUrl}
+                                        onChange={(e) => setNewSourceUrl(e.target.value)}
+                                        placeholder="https://docs.example.com"
+                                        className="w-full bg-[#111] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-blue/50 focus:ring-1 focus:ring-accent-blue/50 transition-all font-mono"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={handleAddSource}
+                                        className="w-full px-3 py-2 rounded-lg bg-accent-blue hover:bg-accent-blue/90 text-white text-sm font-medium transition-colors"
+                                    >
+                                        Add to Chat
+                                    </button>
+                                </div>
                             </div>
 
                             {/* Scraped Pages List */}
@@ -613,16 +699,24 @@ export const ChatPage = () => {
                                                 key={i}
                                                 className="px-3 py-2 rounded-lg text-sm transition-colors border border-transparent text-gray-400"
                                             >
-                                                <div className="flex items-center justify-between">
-                                                    <span className="truncate pr-2 text-gray-300">
+                                                <div className="flex items-center justify-between gap-2 min-w-0">
+                                                    <span className="truncate pr-2 text-gray-300" title={page.title}>
                                                         {page.title}
                                                     </span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleRemoveSource(page.url)}
+                                                        className="text-[11px] text-red-400 hover:text-red-300 shrink-0"
+                                                    >
+                                                        Remove
+                                                    </button>
                                                 </div>
                                                 <a
                                                     href={page.url}
                                                     target="_blank"
                                                     rel="noreferrer"
                                                     className="text-sm opacity-60 truncate mt-0.5 font-mono hover:text-accent-blue hover:underline block"
+                                                    title={page.url}
                                                 >
                                                     {page.url}
                                                 </a>
@@ -814,13 +908,34 @@ export const ChatPage = () => {
                                     </div>
                                 </div>
                             ) : (
-                                messages.map((msg) => (
-                                    <ChatMessage
-                                        key={msg.id}
-                                        message={msg}
-                                        onViewSources={handleViewSources}
-                                    />
-                                ))
+                                <>
+                                    {hasMore && (
+                                        <div className="flex justify-center">
+                                            <button
+                                                type="button"
+                                                onClick={loadOlderMessages}
+                                                disabled={isLoadingOlder}
+                                                className="px-4 py-2 rounded-full border border-white/10 bg-white/5 text-sm text-gray-300 hover:bg-white/10 hover:border-white/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                            >
+                                                {isLoadingOlder ? (
+                                                    <>
+                                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                                        Loading older...
+                                                    </>
+                                                ) : (
+                                                    "Load older messages"
+                                                )}
+                                            </button>
+                                        </div>
+                                    )}
+                                    {messages.map((msg) => (
+                                        <ChatMessage
+                                            key={msg.id}
+                                            message={msg}
+                                            onViewSources={handleViewSources}
+                                        />
+                                    ))}
+                                </>
                             )}
 
                             {isTyping && isAwaitingFirstChunk && (
@@ -844,7 +959,12 @@ export const ChatPage = () => {
                         <div className="max-w-3xl mx-auto relative">
                             <form
                                 onSubmit={handleSend}
-                                className="relative bg-[#1a1a24] border border-white/10 rounded-2xl shadow-2xl overflow-hidden focus-within:border-accent-blue/50 focus-within:ring-1 focus-within:ring-accent-blue/50 transition-all"
+                                className={clsx(
+                                    "relative bg-[#1a1a24] border rounded-2xl shadow-2xl overflow-hidden focus-within:ring-1 transition-all",
+                                    input.length > WARNING_LENGTH_THRESHOLD
+                                        ? "border-amber-500/50 focus-within:border-amber-500/70 focus-within:ring-amber-500/30"
+                                        : "border-white/10 focus-within:border-accent-blue/50 focus-within:ring-accent-blue/50"
+                                )}
                             >
                                 <textarea
                                     ref={textareaRef}
@@ -859,7 +979,15 @@ export const ChatPage = () => {
                                         maxHeight: "200px",
                                     }}
                                 />
-                                <div className="absolute right-3 bottom-3 flex items-center gap-2">
+                                <div className="absolute right-3 bottom-3 flex items-center gap-3">
+                                    {input.length > WARNING_LENGTH_THRESHOLD && (
+                                        <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 bg-amber-500/10 border border-amber-500/20 rounded-md">
+                                            <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
+                                            <span className="text-xs font-medium text-amber-500">
+                                                {input.length} chars (Approaching limit)
+                                            </span>
+                                        </div>
+                                    )}
                                     <button
                                         aria-label="Send message"
                                         type="submit"
@@ -1208,6 +1336,25 @@ export const ChatPage = () => {
                                         <FileText className="w-4 h-4 text-accent-blue" />
                                         Show all pages
                                     </button>
+                                    <div className="mt-4 space-y-2">
+                                        <label className="text-xs uppercase tracking-wider text-gray-500 font-semibold">
+                                            Add Source
+                                        </label>
+                                        <input
+                                            type="url"
+                                            value={newSourceUrl}
+                                            onChange={(e) => setNewSourceUrl(e.target.value)}
+                                            placeholder="https://docs.example.com"
+                                            className="w-full bg-[#111] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-blue/50 focus:ring-1 focus:ring-accent-blue/50 transition-all font-mono"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={handleAddSource}
+                                            className="w-full px-3 py-2 rounded-lg bg-accent-blue hover:bg-accent-blue/90 text-white text-sm font-medium transition-colors"
+                                        >
+                                            Add to Chat
+                                        </button>
+                                    </div>
                                 </div>
                                 <div className="flex-1 overflow-y-auto p-4">
                                     <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">
@@ -1220,9 +1367,18 @@ export const ChatPage = () => {
                                                     key={i}
                                                     className="px-3 py-2 rounded-lg text-sm border border-white/10 bg-white/5"
                                                 >
-                                                    <span className="block text-gray-300 wrap-break-word">
-                                                        {page.title}
-                                                    </span>
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <span className="block text-gray-300 wrap-break-word">
+                                                            {page.title}
+                                                        </span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleRemoveSource(page.url)}
+                                                            className="text-[11px] text-red-400 hover:text-red-300 shrink-0"
+                                                        >
+                                                            Remove
+                                                        </button>
+                                                    </div>
                                                     <a
                                                         href={page.url}
                                                         target="_blank"
@@ -1436,19 +1592,6 @@ export const ChatPage = () => {
     );
 };
 
-// Helper Components
-
-const highlightCode = (language: string, code: string) => {
-    try {
-        if (language && hljs.getLanguage(language)) {
-            return hljs.highlight(code, { language }).value;
-        }
-        return hljs.highlightAuto(code).value;
-    } catch {
-        return code.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    }
-};
-
 const ChatMessage = ({
     message,
     onViewSources,
@@ -1567,33 +1710,7 @@ const ChatMessage = ({
                                             );
                                         }
 
-                                        return (
-                                            <div className="my-4 rounded-xl overflow-hidden bg-[#0a0a0e] border border-white/10 shadow-xl">
-                                                <div className="flex items-center justify-between px-4 py-2 bg-white/5 border-b border-white/5">
-                                                    <div className="flex items-center gap-2 text-sm font-medium text-gray-400">
-                                                        <Code className="w-3.5 h-3.5" />
-                                                        {language || "code"}
-                                                    </div>
-                                                    <button
-                                                        onClick={() =>
-                                                            navigator.clipboard.writeText(code)
-                                                        }
-                                                        className="text-sm uppercase font-bold tracking-wider text-gray-500 hover:text-white transition-colors cursor-pointer"
-                                                    >
-                                                        Copy
-                                                    </button>
-                                                </div>
-                                                <div className="p-4 overflow-x-auto text-sm font-mono leading-relaxed text-gray-300 custom-scrollbar w-full max-w-full">
-                                                    <pre>
-                                                        <code
-                                                            dangerouslySetInnerHTML={{
-                                                                __html: highlightCode(language, code),
-                                                            }}
-                                                        />
-                                                    </pre>
-                                                </div>
-                                            </div>
-                                        );
+                                        return <CodeBlock language={language} code={code} />;
                                     },
                                 }}
                             >

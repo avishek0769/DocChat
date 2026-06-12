@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Sidebar } from "../components/Sidebar";
-import { User, Mail, LogOut, Save, Key, CheckCircle2, Pencil, X } from "lucide-react";
-import { logoutUser } from "../lib/auth";
-import { getUserProfile } from "../lib/api";
-
+import { User, Mail, LogOut, Save, Key, CheckCircle2, Trash2, Pencil, X } from "lucide-react";
+import { logoutUser, forceSignOut } from "../lib/auth";
+import { getUserProfile, deleteMyData } from "../lib/api";
 const Profile = () => {
     const navigate = useNavigate();
     const [name, setName] = useState("");
@@ -14,6 +13,9 @@ const Profile = () => {
     const [saved, setSaved] = useState(false);
     const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
     const [error, setError] = useState("");
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [deleteError, setDeleteError] = useState("");
     const [isEditing, setIsEditing] = useState(false);
     const [editName, setEditName] = useState("");
 
@@ -53,6 +55,19 @@ const Profile = () => {
             setSaved(true);
             setTimeout(() => setSaved(false), 2000);
         }, 800);
+    };
+
+    const handleDeleteData = async () => {
+        setIsDeleting(true);
+        setDeleteError("");
+        try {
+            await deleteMyData();
+            forceSignOut();
+        } catch (err) {
+            setDeleteError(err instanceof Error ? err.message : "Failed to delete data.");
+            setIsDeleting(false);
+            setShowDeleteConfirm(false);
+        }
     };
 
     const handleLogout = async () => {
@@ -189,6 +204,28 @@ const Profile = () => {
                         </div>
                     </section>
 
+                    {/* Danger Zone — Delete Data */}
+                    <section className="bg-red-500/3 border border-red-500/10 rounded-2xl p-6 md:p-8">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div>
+                                <p className="text-sm font-medium text-gray-200">Delete all my data</p>
+                                <p className="text-xs text-gray-500">
+                                    Permanently deletes your chats, messages, API keys, and usage history.
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setShowDeleteConfirm(true)}
+                                className="px-5 py-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 text-sm font-medium transition-colors flex items-center gap-2 shrink-0"
+                            >
+                                <Trash2 className="w-4 h-4" />
+                                Delete My Data
+                            </button>
+                        </div>
+                        {deleteError && (
+                            <p className="mt-3 text-xs text-red-400">{deleteError}</p>
+                        )}
+                    </section>
+
                     {/* Logout */}
                     <section className="bg-red-500/3 border border-red-500/10 rounded-2xl p-6 md:p-8">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -211,6 +248,45 @@ const Profile = () => {
                     </section>
                 </div>
             </main>
+
+            {/* Delete Data Confirmation Modal */}
+            {showDeleteConfirm && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div
+                        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                        onClick={() => !isDeleting && setShowDeleteConfirm(false)}
+                    />
+                    <div className="relative w-full max-w-sm bg-[#0b0b0f] border border-white/10 rounded-2xl shadow-2xl p-6 text-center">
+                        <div className="w-14 h-14 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-4">
+                            <Trash2 className="w-6 h-6 text-red-400" />
+                        </div>
+                        <h3 className="text-lg font-semibold mb-2">Delete all data?</h3>
+                        <p className="text-sm text-gray-400 mb-6">
+                            This will permanently delete all your chats, messages, API keys, and usage history. This cannot be undone.
+                        </p>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setShowDeleteConfirm(false)}
+                                disabled={isDeleting}
+                                className="flex-1 px-4 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 transition-colors disabled:opacity-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleDeleteData}
+                                disabled={isDeleting}
+                                className="flex-1 px-4 py-2 rounded-lg text-sm font-medium text-white bg-red-500 hover:bg-red-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                            >
+                                {isDeleting ? (
+                                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                ) : (
+                                    "Delete Everything"
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Logout Confirmation Modal */}
             {showLogoutConfirm && (

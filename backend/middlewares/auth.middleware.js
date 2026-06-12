@@ -4,7 +4,7 @@ import { ApiError } from "../utils/ApiError.js";
 
 const verifyStrictJWT = async (req, res, next) => {
     try {
-        const token = req.cookies?.accessToken || req.header("Authorization")?.replace("Bearer ", "");
+        const token = req.cookies?.accessToken || req.header("Authorization")?.replace("Bearer ", "") || req.query?.token;
 
         if (!token) {
             throw new ApiError(401, "Unauthorised request");
@@ -18,6 +18,7 @@ const verifyStrictJWT = async (req, res, next) => {
                 fullname: true,
                 username: true,
                 email: true,
+                isAdmin: true,
                 apikeys: true,
                 refreshToken: true,
             },
@@ -34,7 +35,7 @@ const verifyStrictJWT = async (req, res, next) => {
 };
 
 const verifyJWT = async (req, res, next) => {
-    const token = req.cookies?.accessToken || req.header("Authorization")?.replace("Bearer ", "");
+    const token = req.cookies?.accessToken || req.header("Authorization")?.replace("Bearer ", "") || req.query?.token;
 
     if (token) {
         try {
@@ -56,4 +57,16 @@ const verifyJWT = async (req, res, next) => {
     next();
 };
 
-export { verifyStrictJWT, verifyJWT };
+const verifyAdmin = async (req, res, next) => {
+    try {
+        if (req.user?.isAdmin !== true) {
+            throw new ApiError(403, "Admin privileges required");
+        }
+
+        next();
+    } catch (error) {
+        next(error instanceof ApiError ? error : new ApiError(403, "Admin privileges required"));
+    }
+};
+
+export { verifyStrictJWT, verifyJWT, verifyAdmin };

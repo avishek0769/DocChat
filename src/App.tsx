@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import LandingPage from "./pages/LandingPage";
 import Dashboard from "./pages/Dashboard";
 import AllChats from "./pages/AllChats";
@@ -9,20 +9,28 @@ import Profile from "./pages/Profile";
 import { ChatPage } from "./pages/ChatPage";
 import { SharedChatPage } from "./pages/SharedChatPage";
 import { Usage } from "./pages/Usage";
+import AdminOverview from "./pages/AdminOverview";
+import AdminUsers from "./pages/AdminUsers";
+import AdminUserDetail from "./pages/AdminUserDetail";
+import AdminUsage from "./pages/AdminUsage";
+import AdminIngestion from "./pages/AdminIngestion";
 import { ProtectedRoute, PublicOnlyRoute } from "./components/ProtectedRoute";
+import { isAuthenticated } from "./lib/auth";
 
 function App() {
     return (
         <BrowserRouter>
             <Routes>
-                <Route
-                    path="/"
-                    element={
-                        <PublicOnlyRoute>
-                            <LandingPage />
-                        </PublicOnlyRoute>
-                    }
-                />
+            <Route
+                path="/"
+                element={
+                    isAuthenticated() ? (
+                    <Navigate to="/dashboard" replace />
+                     ) : (
+                    <LandingPage/>
+                    )
+                }
+            />
                 <Route
                     path="/dashboard"
                     element={
@@ -56,6 +64,46 @@ function App() {
                     element={
                         <ProtectedRoute>
                             <Usage />
+                        </ProtectedRoute>
+                    }
+                />
+                <Route
+                    path="/admin"
+                    element={
+                        <ProtectedRoute adminOnly>
+                            <AdminOverview />
+                        </ProtectedRoute>
+                    }
+                />
+                <Route
+                    path="/admin/users"
+                    element={
+                        <ProtectedRoute adminOnly>
+                            <AdminUsers />
+                        </ProtectedRoute>
+                    }
+                />
+                <Route
+                    path="/admin/users/:userId"
+                    element={
+                        <ProtectedRoute adminOnly>
+                            <AdminUserDetail />
+                        </ProtectedRoute>
+                    }
+                />
+                <Route
+                    path="/admin/usage"
+                    element={
+                        <ProtectedRoute adminOnly>
+                            <AdminUsage />
+                        </ProtectedRoute>
+                    }
+                />
+                <Route
+                    path="/admin/ingestion"
+                    element={
+                        <ProtectedRoute adminOnly>
+                            <AdminIngestion />
                         </ProtectedRoute>
                     }
                 />

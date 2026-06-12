@@ -1,6 +1,25 @@
 import prisma from "./prismaClient.js";
 import { qdrant } from "./ragClients.js";
 
+export async function deleteQdrantCollectionSafe(collectionName) {
+    if (!collectionName || typeof collectionName !== "string" || !collectionName.trim()) {
+        return { deleted: false, reason: "emptyCollectionName" };
+    }
+
+    const name = collectionName.trim();
+    try {
+        await qdrant.deleteCollection(name, { timeout: 60000 });
+        return { deleted: true };
+    } catch (error) {
+        const msg = error?.message || String(error);
+        if (/not found|404/i.test(msg)) {
+            return { deleted: true, reason: "alreadyGone" };
+        }
+        console.error(`[qdrantCleanup] Failed to delete collection "${name}":`, msg);
+        return { deleted: false, reason: msg };
+    }
+}
+
 const DEFAULT_MIN_AGE_DAYS = Number.parseInt(process.env.QDRANT_CLEANUP_MIN_AGE_DAYS || "7", 10);
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 

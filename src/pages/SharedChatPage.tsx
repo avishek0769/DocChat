@@ -33,21 +33,19 @@ import {
     Search,
     ArrowLeft,
     Check,
-    Code,
     X,
     Loader2,
     Database,
 } from "lucide-react";
 import clsx from "clsx";
-import hljs from "highlight.js";
-import "highlight.js/styles/atom-one-dark.css";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import CodeBlock from "../components/CodeBlock";
 import {
     getSharedChatDetails,
     getSharedChatMessages,
     forkSharedChat,
-    getMessageSources,
+    getSharedMessageSources,
 } from "../lib/api";
 import { getAuthUser } from "../lib/auth";
 
@@ -213,7 +211,7 @@ export const SharedChatPage = () => {
         setIsSourcesLoading(true);
 
         try {
-            const srcData = await getMessageSources(message.messageId);
+            const srcData = await getSharedMessageSources(shareToken, message.messageId);
             const sources = (srcData.messageSources || []).map((src) => ({
                 id: src.id,
                 title: src.heading,
@@ -561,19 +559,6 @@ export const SharedChatPage = () => {
     );
 };
 
-// Helper Components
-
-const highlightCode = (language: string, code: string) => {
-    try {
-        if (language && hljs.getLanguage(language)) {
-            return hljs.highlight(code, { language }).value;
-        }
-        return hljs.highlightAuto(code).value;
-    } catch {
-        return code.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    }
-};
-
 const ChatMessage = ({
     message,
     onViewSources,
@@ -692,33 +677,7 @@ const ChatMessage = ({
                                             );
                                         }
 
-                                        return (
-                                            <div className="my-4 rounded-xl overflow-hidden bg-[#0a0a0e] border border-white/10 shadow-xl">
-                                                <div className="flex items-center justify-between px-4 py-2 bg-white/5 border-b border-white/5">
-                                                    <div className="flex items-center gap-2 text-sm font-medium text-gray-400">
-                                                        <Code className="w-3.5 h-3.5" />
-                                                        {language || "code"}
-                                                    </div>
-                                                    <button
-                                                        onClick={() =>
-                                                            navigator.clipboard.writeText(code)
-                                                        }
-                                                        className="text-sm uppercase font-bold tracking-wider text-gray-500 hover:text-white transition-colors cursor-pointer"
-                                                    >
-                                                        Copy
-                                                    </button>
-                                                </div>
-                                                <div className="p-4 overflow-x-auto text-sm font-mono leading-relaxed text-gray-300 custom-scrollbar w-full max-w-full">
-                                                    <pre>
-                                                        <code
-                                                            dangerouslySetInnerHTML={{
-                                                                __html: highlightCode(language, code),
-                                                            }}
-                                                        />
-                                                    </pre>
-                                                </div>
-                                            </div>
-                                        );
+                                        return <CodeBlock language={language} code={code} />;
                                     },
                                 }}
                             >

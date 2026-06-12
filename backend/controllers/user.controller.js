@@ -6,6 +6,7 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import redis from "../utils/redis.js";
 import { Resend } from "resend";
+import { createAuditEvent } from "../utils/audit.js";
 
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -181,8 +182,17 @@ const userLogIn = asyncHandler(async (req, res) => {
     const loggedInUser = await prisma.user.update({
         where: { id: user.id },
         data: { refreshToken },
-        select: { id: true, fullname: true, username: true, email: true },
+        select: { id: true, fullname: true, username: true, email: true, isAdmin: true },
     });
+
+    try {
+        await createAuditEvent("user.login", user.id, null, {
+            username: user.username,
+            email: user.email,
+        });
+    } catch (error) {
+        console.error("Failed to write user.login audit event:", error.message);
+    }
 
     res.status(200)
         .cookie("accessToken", accessToken, AccessOptions)
@@ -325,6 +335,85 @@ const resetPassword = asyncHandler(async (req, res) => {
     res.status(200).json(new ApiResponse(200, { reset: true }, "Password reset successfully !!"));
 });
 
+const deleteMyData = asyncHandler(async (req, res) => {
+  const userId = req.user.id; // set by your auth middleware
+  const { confirm } = req.query;
+
+  // Acceptance criteria: require explicit confirmation flag
+  if (confirm !== "true") {
+    return res.status(400).json({
+      success: false,
+      message: 'Pass confirm=true as a query param to confirm deletion.',
+    });
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      // 1. Delete ChatMessageSources (deepest dependency first)
+      await tx.chatMessageSource.deleteMany({
+        where: { chatMessage: { chat: { userId } } },
+      });
+
+      // 2. Delete ChatMessages
+      await tx.chatMessage.deleteMany({
+        where: { chat: { userId } },
+      });
+
+      // 3. Delete UsageEvents (onDelete: SetNull means we must handle these)
+      await tx.usageEvent.deleteMany({ where: { userId } });
+
+      // 4. Delete ApiKeys
+      await tx.apiKey.deleteMany({ where: { userId } });
+
+      // 5. Delete ChatSources that belong ONLY to this user's chats
+      //    Safe detach: only remove if no other user's chat references them
+      const userChatIds = (
+        await tx.chat.findMany({
+          where: { userId },
+          select: { id: true },
+        })
+      ).map((c) => c.id);
+
+      // Find ChatSource IDs used by this user's chats
+      const userChatSources = await tx.chatSource.findMany({
+        where: { chatId: { in: userChatIds } },
+        select: { id: true, docsUrl: true },
+      });
+
+      // Only delete ChatSources not referenced by any other chat
+      for (const cs of userChatSources) {
+        const otherChatCount = await tx.chat.count({
+          where: {
+            chatSources: { some: { docsUrl: cs.docsUrl } },
+            userId: { not: userId },
+          },
+        });
+        if (otherChatCount === 0) {
+          await tx.chatSource.delete({ where: { id: cs.id } });
+        }
+      }
+
+      // 6. Delete Chats
+      await tx.chat.deleteMany({ where: { userId } });
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'All your data has been deleted.',
+    });
+  } catch (error) {
+    // Idempotent: if already deleted, return success
+    if (error.code === 'P2025') {
+      return res.status(200).json({
+        success: true,
+        message: 'Data already deleted or not found.',
+      });
+    }
+    console.error('deleteMyData error:', error);
+    return res.status(500).json({ success: false, message: 'Server error.' });
+  }
+});
+
 export {
     userRegister,
     userLogIn,
@@ -335,4 +424,5 @@ export {
     currentUserProfile,
     resetPassword,
     sendResetCode,
+    deleteMyData,
 };
