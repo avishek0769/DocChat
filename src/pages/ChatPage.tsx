@@ -659,8 +659,8 @@ export const ChatPage = () => {
                                                 key={i}
                                                 className="px-3 py-2 rounded-lg text-sm transition-colors border border-transparent text-gray-400"
                                             >
-                                                <div className="flex items-center justify-between gap-2">
-                                                    <span className="truncate pr-2 text-gray-300">
+                                                <div className="flex items-center justify-between gap-2 min-w-0">
+                                                    <span className="truncate pr-2 text-gray-300" title={page.title}>
                                                         {page.title}
                                                     </span>
                                                     <button
@@ -676,6 +676,7 @@ export const ChatPage = () => {
                                                     target="_blank"
                                                     rel="noreferrer"
                                                     className="text-sm opacity-60 truncate mt-0.5 font-mono hover:text-accent-blue hover:underline block"
+                                                    title={page.url}
                                                 >
                                                     {page.url}
                                                 </a>
