@@ -359,6 +359,7 @@ const getChatMessages = asyncHandler(async (req, res) => {
     const messages = await prisma.chatMessage.findMany({
         where: { chatId },
         orderBy: { createdAt: "asc" },
+        include: { chatMessageSources: true },
     });
 
     if (!messages.length) {
@@ -367,9 +368,14 @@ const getChatMessages = asyncHandler(async (req, res) => {
             .json(new ApiResponse(200, { messages: [] }, "No messages found for this chat."));
     }
 
+    const messagesWithMeta = messages.map(({ chatMessageSources, ...msg }) => ({
+        ...msg,
+        hasSystemInstructions: chatMessageSources.length > 0,
+    }));
+
     return res
         .status(200)
-        .json(new ApiResponse(200, { messages: messages }, "Chat messages retrieved successfully."));
+        .json(new ApiResponse(200, { messages: messagesWithMeta }, "Chat messages retrieved successfully."));
 });
 
 
@@ -534,6 +540,7 @@ const getSharedChatMessages = asyncHandler(async (req, res) => {
     const messages = await prisma.chatMessage.findMany({
         where: { chatId: chat.id },
         orderBy: { createdAt: "asc" },
+        include: { chatMessageSources: true },
     });
 
     if (!messages.length) {
@@ -542,9 +549,14 @@ const getSharedChatMessages = asyncHandler(async (req, res) => {
             .json(new ApiResponse(200, { messages: [] }, "No messages found for this chat."));
     }
 
+    const messagesWithMeta = messages.map(({ chatMessageSources, ...msg }) => ({
+        ...msg,
+        hasSystemInstructions: chatMessageSources.length > 0,
+    }));
+
     return res
         .status(200)
-        .json(new ApiResponse(200, { messages: messages }, "Chat messages retrieved successfully."));
+        .json(new ApiResponse(200, { messages: messagesWithMeta }, "Chat messages retrieved successfully."));
 });
 
 export {
