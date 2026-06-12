@@ -28,9 +28,9 @@ const verifyStrictJWT = async (req, res, next) => {
         req.user = user;
         next();
     } catch (error) {
-        if (error instanceof ApiError) next(error);
-        else next(new ApiError(401, "Your Access Token expired !"));
-    }
+    console.error("VERIFY JWT ERROR:", error);
+    next(error);
+}
 };
 
 const verifyJWT = async (req, res, next) => {
