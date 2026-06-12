@@ -5,31 +5,55 @@ import { ApiError } from "../utils/ApiError.js";
 import { scrapeWebpage } from "../utils/ragUtilities.js";
 import { cleanupQdrantCollections } from "../utils/qdrantCleanup.js";
 import { Queue } from "bullmq";
-import redis, { getChatProgressKey } from "../utils/redis.js";
+import redis, { getChatProgressKey, getChatProgressChannel, progressEmitter, redisSubscriber } from "../utils/redis.js";
 import crypto from "crypto";
 import { createAuditEvent } from "../utils/audit.js";
-
+import { normalizeUrl } from "../utils/ragUtilities.js";
 const chatCreationQueue = new Queue("chatCreation");
 
+const normalizeBooleanLike = (value) => {
+    if (typeof value === "boolean") return value;
+    if (typeof value === "number") {
+        if (value === 1) return true;
+        if (value === 0) return false;
+    }
+    if (typeof value === "string") {
+        const normalized = value.trim().toLowerCase();
+        if (["true", "1", "yes", "on"].includes(normalized)) return true;
+        if (["false", "0", "no", "off"].includes(normalized)) return false;
+    }
+    return false;
+};
+
+const normalizeDocsUrl = (docsUrl) => normalizeUrl(docsUrl);
+
+const findChatSourceByUrlAndMode = async (docsUrl, isVectorLess) => {
+    const normalizedDocsUrl = normalizeDocsUrl(docsUrl);
+    return prisma.chatSource.findFirst({
+        where: {
+            documentationUrl: normalizedDocsUrl,
+            isVectorLess,
+        },
+        include: {
+            chats: { take: 1 },
+            _count: {
+                select: { pagesIndexed: true },
+            },
+        },
+    });
+};
+
 const expectation = asyncHandler(async (req, res) => {
-    const { docsUrl } = req.query;
+    const { docsUrl, isVectorLess } = req.query;
+    const normalizedDocsUrl = normalizeDocsUrl(docsUrl);
+    const isVectorLessChat = normalizeBooleanLike(isVectorLess);
 
     try {
-        const { internalLinks } = await scrapeWebpage(docsUrl, docsUrl);
+        const { internalLinks } = await scrapeWebpage(normalizedDocsUrl, normalizedDocsUrl);
         let allLinks = internalLinks.slice(0, 300);
         const sampleLinks = allLinks.slice(0, 10);
 
-        const existingChatSource = await prisma.chatSource.findFirst({
-            where: {
-                documentationUrl: docsUrl,
-            },
-            include: {
-                chats: { take: 1 },
-                _count: {
-                    select: { pagesIndexed: true },
-                },
-            },
-        });
+        const existingChatSource = await findChatSourceByUrlAndMode(normalizedDocsUrl, isVectorLessChat);
         if (existingChatSource) {
             return res.status(200).json(
                 new ApiResponse(
@@ -85,10 +109,11 @@ const expectation = asyncHandler(async (req, res) => {
 });
 
 const createChat = asyncHandler(async (req, res) => {
-    let { name, docsUrl, isVectorLess, scrapeLimit } = req.body;
-    const isVectorLessChat = Boolean(isVectorLess);
-    const { internalLinks, title } = await scrapeWebpage(docsUrl, docsUrl);
-    name = name || title || "Untitled Chat";
+let { name, docsUrl, isVectorLess, scrapeLimit } = req.body;
+const normalizedDocsUrl = normalizeDocsUrl(docsUrl);
+const isVectorLessChat = normalizeBooleanLike(isVectorLess);
+const { internalLinks, title } = await scrapeWebpage(normalizedDocsUrl, normalizedDocsUrl);
+ name = name || title || "Untitled Chat";
 
     let chatSource;
     let isNew = false;
@@ -99,7 +124,7 @@ const createChat = asyncHandler(async (req, res) => {
             data: {
                 totalPages: internalLinks.length,
                 heading: name,
-                documentationUrl: docsUrl,
+                documentationUrl: normalizedDocsUrl,
                 collectionName: collectionName,
                 isVectorLess: isVectorLessChat,
                 scrapeLimit,
@@ -111,7 +136,7 @@ const createChat = asyncHandler(async (req, res) => {
             chatSource = await prisma.chatSource.findUnique({
                 where: {
                     documentationUrl_isVectorLess: {
-                        documentationUrl: docsUrl,
+                        documentationUrl: normalizedDocsUrl,
                         isVectorLess: isVectorLessChat,
                     },
                 },
@@ -175,6 +200,7 @@ const createChat = asyncHandler(async (req, res) => {
                 chatSourceId: chat.chatSources[0].id.toString(),
                 isVectorLess: isVectorLessChat,
                 scrapeLimit,
+                requestId: req.id,
             },
             { jobId: chat.id },
         );
@@ -243,10 +269,15 @@ const progressStatus = asyncHandler(async (req, res) => {
             status: true,
             failedAt: true,
             failureReason: true,
+            deletedAt: true,
         },
     });
 
     if (!chat) {
+        throw new ApiError(404, "Chat not found");
+    }
+
+    if (chat.deletedAt) {
         throw new ApiError(404, "Chat not found");
     }
 
@@ -262,6 +293,8 @@ const progressStatus = asyncHandler(async (req, res) => {
             finishedAt: true,
             errorCode: true,
             errorMessage: true,
+            pagesCrawled: true,
+            pagesFailed: true,
         },
     });
 
@@ -291,6 +324,71 @@ const progressStatus = asyncHandler(async (req, res) => {
     }
 
     res.status(200).json(new ApiResponse(200, response, "Progress fetched successfully"));
+});
+
+const streamChatStatus = asyncHandler(async (req, res) => {
+    const { chatId } = req.params;
+
+    const chat = await prisma.chat.findFirst({
+        where: {
+            id: chatId,
+            userId: req.user.id,
+        },
+        select: { id: true, deletedAt: true },
+    });
+
+    if (!chat) {
+        throw new ApiError(404, "Chat not found");
+    }
+
+    if (chat.deletedAt) {
+        throw new ApiError(404, "Chat not found");
+    }
+
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders();
+
+    const redisData = await redis.get(getChatProgressKey(chatId));
+    const initialProgress = normalizeProgress(redisData ? JSON.parse(redisData) : DEFAULT_PROGRESS);
+    
+    // Send initial status immediately
+    res.write(`data: ${JSON.stringify({ progress: initialProgress })}\n\n`);
+
+    if (["READY", "FAILED", "CANCELLED"].includes(initialProgress.status)) {
+        res.end();
+        return;
+    }
+
+    const channel = getChatProgressChannel(chatId);
+
+    // If this is the first listener for this channel, subscribe to redis
+    if (progressEmitter.listenerCount(channel) === 0) {
+        redisSubscriber.subscribe(channel);
+    }
+
+    const listener = (message) => {
+        const progress = normalizeProgress(JSON.parse(message));
+        res.write(`data: ${JSON.stringify({ progress })}\n\n`);
+        
+        if (["READY", "FAILED", "CANCELLED"].includes(progress.status)) {
+            cleanup();
+        }
+    };
+
+    progressEmitter.on(channel, listener);
+
+    const cleanup = () => {
+        progressEmitter.off(channel, listener);
+        // If no one else is listening to this channel, unsubscribe from redis
+        if (progressEmitter.listenerCount(channel) === 0) {
+            redisSubscriber.unsubscribe(channel);
+        }
+        res.end();
+    };
+
+    req.on("close", cleanup);
 });
 
 const recentFailedIngestionRuns = asyncHandler(async (req, res) => {
@@ -360,7 +458,7 @@ const qdrantCleanup = asyncHandler(async (req, res) => {
 
 const listAllChats = asyncHandler(async (req, res) => {
     const chats = await prisma.chat.findMany({
-        where: { userId: req.user.id },
+        where: { userId: req.user.id, deletedAt: null },
         include: {
             chatSources: {
                 include: {
@@ -408,7 +506,7 @@ const listAllChats = asyncHandler(async (req, res) => {
 
 const recentChats = asyncHandler(async (req, res) => {
     const chats = await prisma.chat.findMany({
-        where: { userId: req.user.id },
+        where: { userId: req.user.id, deletedAt: null },
         include: {
             chatSources: {
                 include: {
@@ -470,6 +568,14 @@ const chatDetails = asyncHandler(async (req, res) => {
         },
     });
 
+    if (!chat) {
+        throw new ApiError(404, "Chat not found");
+    }
+
+    if (chat.deletedAt) {
+        throw new ApiError(404, "Chat not found");
+    }
+
     res.status(200).json(new ApiResponse(200, { chat }, "Chat details fetched successfully"));
 });
 
@@ -486,6 +592,14 @@ const listAllPagesIndexed = asyncHandler(async (req, res) => {
             },
         },
     });
+
+    if (!chat) {
+        throw new ApiError(404, "Chat not found");
+    }
+
+    if (chat.deletedAt) {
+        throw new ApiError(404, "Chat not found");
+    }
 
     res.status(200).json(
         new ApiResponse(
@@ -506,6 +620,10 @@ const cancelProcessing = asyncHandler(async (req, res) => {
     });
 
     if (!chat) {
+        throw new ApiError(404, "Chat not found");
+    }
+
+    if (chat.deletedAt) {
         throw new ApiError(404, "Chat not found");
     }
 
@@ -538,6 +656,7 @@ const deleteChat = asyncHandler(async (req, res) => {
         select: {
             id: true,
             userId: true,
+            deletedAt: true,
         },
     });
 
@@ -549,30 +668,58 @@ const deleteChat = asyncHandler(async (req, res) => {
         throw new ApiError(403, "You do not have permission to delete this chat");
     }
 
-    await prisma.$transaction(async (tx) => {
-        await tx.chatMessageSource.deleteMany({
-            where: { chatMessage: { chatId } },
-        });
+    if (chat.deletedAt) {
+        throw new ApiError(400, "Chat is already deleted");
+    }
 
-        await tx.chatMessage.deleteMany({
-            where: { chatId },
-        });
-
-        await tx.chat.delete({
-            where: { id: chatId },
-        });
-
-        // ChatSource rows (and their DocumentTree / DocumentPage children) are
-        // intentionally left intact — they may be shared by other chats, and the
-        // Qdrant collection they reference is preserved so no data is lost.
-        // Orphaned collections are cleaned up by the admin Qdrant sweep.
+    await prisma.chat.update({
+        where: { id: chatId },
+        data: { deletedAt: new Date() },
     });
+
+    await createAuditEvent("chat.deleted", req.user.id, chatId, {});
 
     res.status(200).json(
         new ApiResponse(200, null, "Chat deleted successfully"),
     );
 });
 
+
+const restoreChat = asyncHandler(async (req, res) => {
+    const { chatId } = req.params;
+
+    const chat = await prisma.chat.findUnique({
+        where: { id: chatId },
+        select: {
+            id: true,
+            userId: true,
+            deletedAt: true,
+        },
+    });
+
+    if (!chat) {
+        throw new ApiError(404, "Chat not found");
+    }
+
+    if (chat.userId !== req.user.id) {
+        throw new ApiError(403, "You do not have permission to restore this chat");
+    }
+
+    if (!chat.deletedAt) {
+        throw new ApiError(400, "Chat is not deleted");
+    }
+
+    await prisma.chat.update({
+        where: { id: chatId },
+        data: { deletedAt: null },
+    });
+
+    await createAuditEvent("chat.restored", req.user.id, chatId, {});
+
+    res.status(200).json(
+        new ApiResponse(200, null, "Chat restored successfully"),
+    );
+});
 
 const toggleShare = asyncHandler(async (req, res) => {
     const { chatId } = req.params;
@@ -583,6 +730,10 @@ const toggleShare = asyncHandler(async (req, res) => {
 
     if (!chat) {
         throw new ApiError(404, "Chat not found");
+    }
+
+    if (chat.deletedAt) {
+        throw new ApiError(400, "Cannot share a deleted chat");
     }
 
     if (chat.shareToken) {
@@ -696,12 +847,14 @@ export {
     expectation,
     createChat,
     progressStatus,
+    streamChatStatus,
     recentFailedIngestionRuns,
     qdrantCleanup,
     listAllChats,
     chatDetails,
     cancelProcessing,
     deleteChat,
+    restoreChat,
     listAllPagesIndexed,
     recentChats,
     toggleShare,

@@ -79,6 +79,25 @@ export type ChatMessageSourceItem = {
     score: number;
 };
 
+export type FailedIngestionRunItem = {
+    id: string;
+    chatId: string;
+    chatSourceId?: string | null;
+    status: string;
+    startedAt: string;
+    finishedAt?: string | null;
+    errorCode?: string | null;
+    errorMessage?: string | null;
+    chat?: {
+        name?: string | null;
+        userId?: string | null;
+    };
+    chatSource?: {
+        heading?: string | null;
+        documentationUrl?: string | null;
+    };
+};
+
 const apiRequest = async <T>(path: string, init?: RequestInit): Promise<T> => {
     const headers = new Headers(init?.headers || {});
     if (!headers.has("Content-Type") && init?.body) {
@@ -208,6 +227,12 @@ export const getChats = () =>
         apiRequest<ChatItem[]>("/chat/list", { method: "GET" }),
     );
 
+export const getRecentFailedIngestionRuns = (limit = 5) =>
+    apiRequest<{ runs: FailedIngestionRunItem[] }>(
+        `/chat/ingestion-runs/failed?limit=${limit}`,
+        { method: "GET" },
+    );
+
 export const createChat = async (payload: {
     name?: string;
     docsUrl: string;
@@ -239,6 +264,43 @@ export const getChatStatus = (chatId: string) =>
     }>(`/chat/status/${chatId}`, {
         method: "GET",
     });
+
+export const subscribeToChatStatus = (
+    chatId: string,
+    onMessage: (progress: { status: string; progress: number; current: number; total: number }) => void,
+    onError: (error: Event) => void
+) => {
+    const token = getAccessToken();
+    const url = new URL(`${API_BASE_URL}/chat/status/stream/${chatId}`);
+    if (token) {
+        url.searchParams.append("token", token);
+    }
+
+    const eventSource = new EventSource(url.toString(), { withCredentials: true });
+
+    eventSource.onmessage = (event) => {
+        try {
+            const data = JSON.parse(event.data);
+            if (data.progress) {
+                onMessage(data.progress);
+                if (["READY", "FAILED", "CANCELLED"].includes(data.progress.status)) {
+                    eventSource.close();
+                }
+            }
+        } catch (e) {
+            console.error("Error parsing SSE message", e);
+        }
+    };
+
+    eventSource.onerror = (error) => {
+        onError(error);
+        eventSource.close();
+    };
+
+    return () => {
+        eventSource.close();
+    };
+};
 
 export const getChatDetails = (chatId: string) =>
     apiRequest<{ chat: ChatItem }>(`/chat/${chatId}`, { method: "GET" });
@@ -596,3 +658,6 @@ export const getSharedMessageSources = (shareToken: string, messageId: string) =
 
 export const forkSharedChat = (shareToken: string) =>
     apiRequest<{ chatId: string }>(`/chat/shared/${shareToken}/fork`, { method: "POST" });
+
+export const deleteMyData = () =>
+    apiRequest<{ message: string }>("/user/delete-my-data?confirm=true", { method: "DELETE" });

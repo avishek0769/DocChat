@@ -20,11 +20,14 @@ import {
     createChat,
     deleteChat,
     getChatStatus,
+    subscribeToChatStatus,
     getLifetimeTokens,
     getRecentChats,
+    getRecentFailedIngestionRuns,
     invalidatePagesIndexed,
     cancelChat,
     type ChatItem,
+    type FailedIngestionRunItem,
 } from "../lib/api";
 import { formatTokens } from "../lib/format";
 
@@ -94,12 +97,15 @@ const Dashboard = () => {
     const [isDeleting, setIsDeleting] = useState(false);
     const [isCancelling, setIsCancelling] = useState(false);
     const [lifetimeTokens, setLifetimeTokens] = useState(0);
+    const [failedRuns, setFailedRuns] = useState<FailedIngestionRunItem[]>([]);
     const [chatProgress, setChatProgress] = useState<
         Record<string, { status: string; progress: number }>
     >({});
     const chatsRef = useRef<Chat[]>([]);
     const chatProgressRef = useRef<Record<string, { status: string; progress: number }>>({});
     const pollIntervalRef = useRef<number | null>(null);
+    const sseCleanupsRef = useRef<Record<string, () => void>>({});
+    const [usePollingFallback, setUsePollingFallback] = useState(false);
 
     // New Chat Form State
     const [chatName, setChatName] = useState("");
@@ -126,6 +132,14 @@ const Dashboard = () => {
             const input = Number(lifetime?._sum?.inputTokens || 0);
             const output = Number(lifetime?._sum?.outputTokens || 0);
             setLifetimeTokens(input + output);
+
+            try {
+                const failedRunResponse = await getRecentFailedIngestionRuns(5);
+                setFailedRuns(failedRunResponse?.runs || []);
+            } catch (failedRunError) {
+                console.error("Failed to load failed ingestion runs:", failedRunError);
+                setFailedRuns([]);
+            }
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to load dashboard data.");
         } finally {
@@ -234,29 +248,98 @@ const Dashboard = () => {
         );
     }, []);
 
+    const handleProgressUpdate = useCallback((chatId: string, statusData: { status: string; progress: number }) => {
+        const status = normalizeStatus(statusData.status);
+        const progress = clampProgress(statusData.progress);
+        
+        if (status === "ready") {
+            const prevStatus = normalizeStatus(
+                chatProgressRef.current[chatId]?.status ||
+                    chatsRef.current.find((c) => c.id === chatId)?.status ||
+                    ""
+            );
+            if (prevStatus !== "ready") {
+                invalidatePagesIndexed(chatId);
+            }
+        }
+
+        setChatProgress((prev) => ({
+            ...prev,
+            [chatId]: { status, progress }
+        }));
+
+        setChats((prev) =>
+            prev.map((chat) => {
+                if (chat.id !== chatId) return chat;
+
+                const estimatedPages = chat.totalPages > 0
+                    ? Math.round((progress / 100) * chat.totalPages)
+                    : chat.pages;
+
+                const nextPages = status === "ready"
+                    ? chat.totalPages || chat.pages
+                    : Math.max(chat.pages, estimatedPages);
+
+                return {
+                    ...chat,
+                    status,
+                    pages: nextPages,
+                };
+            })
+        );
+    }, []);
+
     useEffect(() => {
-        const hasInFlightChats = chats.some(
+        const inFlightChats = chats.filter(
             (chat) =>
                 normalizeStatus(chatProgress[chat.id]?.status || chat.status) !== "ready" &&
                 normalizeStatus(chatProgress[chat.id]?.status || chat.status) !== "failed",
         );
 
-        if (hasInFlightChats && pollIntervalRef.current === null) {
-            pollStatuses();
-            pollIntervalRef.current = window.setInterval(pollStatuses, 3000);
-        }
+        if (usePollingFallback) {
+            // Polling Fallback Logic
+            if (inFlightChats.length > 0 && pollIntervalRef.current === null) {
+                pollStatuses();
+                pollIntervalRef.current = window.setInterval(pollStatuses, 3000);
+            } else if (inFlightChats.length === 0 && pollIntervalRef.current !== null) {
+                clearInterval(pollIntervalRef.current);
+                pollIntervalRef.current = null;
+            }
+        } else {
+            // SSE Logic
+            const currentInFlightIds = new Set(inFlightChats.map(c => c.id));
 
-        if (!hasInFlightChats && pollIntervalRef.current !== null) {
-            clearInterval(pollIntervalRef.current);
-            pollIntervalRef.current = null;
+            // Clean up completed/removed chats
+            Object.keys(sseCleanupsRef.current).forEach(chatId => {
+                if (!currentInFlightIds.has(chatId)) {
+                    sseCleanupsRef.current[chatId]();
+                    delete sseCleanupsRef.current[chatId];
+                }
+            });
+
+            // Start SSE for new in-flight chats
+            inFlightChats.forEach(chat => {
+                if (!sseCleanupsRef.current[chat.id]) {
+                    sseCleanupsRef.current[chat.id] = subscribeToChatStatus(
+                        chat.id,
+                        (progress) => handleProgressUpdate(chat.id, progress),
+                        () => {
+                            // On error, fallback to polling
+                            setUsePollingFallback(true);
+                        }
+                    );
+                }
+            });
         }
-    }, [chats, chatProgress, pollStatuses]);
+    }, [chats, chatProgress, pollStatuses, usePollingFallback, handleProgressUpdate]);
 
     useEffect(() => {
         return () => {
             if (pollIntervalRef.current !== null) {
                 clearInterval(pollIntervalRef.current);
             }
+            const cleanups = sseCleanupsRef.current;
+            Object.values(cleanups).forEach(cleanup => cleanup());
         };
     }, []);
 
@@ -440,6 +523,11 @@ const Dashboard = () => {
                                     </button>
                                 ),
                             },
+                            {
+                                label: "Failed Ingestions",
+                                value: failedRuns.length.toString(),
+                                icon: <AlertCircle className="w-5 h-5 text-red-400" />,
+                            },
                         ].map((stat, i) => (
                             <div
                                 key={i}
@@ -455,6 +543,58 @@ const Dashboard = () => {
                                 </div>
                             </div>
                         ))}
+                    </div>
+
+                    {/* Failed Ingestions Section */}
+                    <div className="rounded-2xl border border-white/5 bg-white/2 p-5">
+                        <div className="flex items-center justify-between mb-5 gap-4">
+                            <div>
+                                <h2 className="text-lg font-semibold">Recent Failed Ingestions</h2>
+                                <p className="text-sm text-gray-400">
+                                    Review the latest ingestion runs that did not complete successfully.
+                                </p>
+                            </div>
+                            <div className="text-sm text-gray-400">
+                                {failedRuns.length} recent failure{failedRuns.length === 1 ? "" : "s"}
+                            </div>
+                        </div>
+
+                        {failedRuns.length > 0 ? (
+                            <div className="grid gap-3">
+                                {failedRuns.slice(0, 3).map((run) => (
+                                    <div
+                                        key={run.id}
+                                        className="rounded-2xl border border-white/5 bg-[#0d0d12] p-4"
+                                    >
+                                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                                            <div>
+                                                <p className="text-sm font-semibold text-white truncate">
+                                                    {run.chat?.name || run.chatId}
+                                                </p>
+                                                <p className="text-xs text-gray-500 mt-1">
+                                                    {run.chatSource?.heading || run.chatSourceId || "No source"}
+                                                </p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-xs uppercase text-red-400 tracking-[0.2em] font-semibold">
+                                                    {run.status}
+                                                </p>
+                                                <p className="text-xs text-gray-500 mt-1">
+                                                    {fromNow(run.startedAt)}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="mt-4 rounded-xl bg-white/5 p-3 text-sm text-gray-300 border border-white/5">
+                                            {run.errorMessage || run.errorCode || "Unknown ingestion failure."}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="rounded-2xl border border-dashed border-white/10 bg-[#0b0b0f] p-6 text-center text-sm text-gray-400">
+                                No recent failed ingestion runs were found.
+                            </div>
+                        )}
                     </div>
 
                     {/* Chat List Section */}

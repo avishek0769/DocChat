@@ -51,14 +51,17 @@ function getCrawlConfig() {
     };
 }
 
-async function generateVectorEmbeddings(text) {
+async function generateVectorEmbeddings(input) {
     const response = await getOpenAIClient().embeddings.create({
         model: "openai/text-embedding-3-small",
-        input: text,
+        input: input,
         encoding_format: "float",
         dimensions: 1536,
     });
 
+    if (Array.isArray(input)) {
+        return response.data.map((d) => d.embedding);
+    }
     return response.data[0].embedding;
 }
 
