@@ -43,5 +43,9 @@
             "@qdrant/js-client-rest": "$@qdrant/js-client-rest",
             "pg": "$pg"
         }
+    },
+    "devDependencies": {
+        "@jest/globals": "^30.4.1",
+        "supertest": "^7.2.2"
     }
 }

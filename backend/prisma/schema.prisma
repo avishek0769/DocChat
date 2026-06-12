@@ -108,6 +108,8 @@ model DocumentPage {
     heading      String
     pageUrl      String     @map("page_url")
     chatSourceId String     @map("chat_source_id")
+    startIndex   Int?       @map("start_index")
+    endIndex     Int?       @map("end_index")
     chatSource   ChatSource @relation(fields: [chatSourceId], references: [id], onDelete: Cascade)
 }
 
