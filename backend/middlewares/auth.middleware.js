@@ -4,7 +4,7 @@ import { ApiError } from "../utils/ApiError.js";
 
 const verifyStrictJWT = async (req, res, next) => {
     try {
-        const token = req.cookies?.accessToken || req.header("Authorization")?.replace("Bearer ", "");
+        const token = req.cookies?.accessToken || req.header("Authorization")?.replace("Bearer ", "") || req.query?.token;
 
         if (!token) {
             throw new ApiError(401, "Unauthorised request");
@@ -35,7 +35,7 @@ const verifyStrictJWT = async (req, res, next) => {
 };
 
 const verifyJWT = async (req, res, next) => {
-    const token = req.cookies?.accessToken || req.header("Authorization")?.replace("Bearer ", "");
+    const token = req.cookies?.accessToken || req.header("Authorization")?.replace("Bearer ", "") || req.query?.token;
 
     if (token) {
         try {

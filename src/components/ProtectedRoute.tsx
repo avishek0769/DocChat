@@ -38,7 +38,7 @@ export const ProtectedRoute = ({ children, adminOnly = false }: Props) => {
 
     if (adminOnly) {
         const sessionAdmin = Boolean(getAuthUser()?.isAdmin);
-        if (isAdmin === false || (!sessionAdmin && isAdmin === null)) {
+        if (isAdmin === false) {
             return <Navigate to="/dashboard" replace />;
         }
         if (isAdmin === null && !sessionAdmin) {

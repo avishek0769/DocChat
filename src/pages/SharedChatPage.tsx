@@ -45,7 +45,7 @@ import {
     getSharedChatDetails,
     getSharedChatMessages,
     forkSharedChat,
-    getMessageSources,
+    getSharedMessageSources,
 } from "../lib/api";
 import { getAuthUser } from "../lib/auth";
 
@@ -211,7 +211,7 @@ export const SharedChatPage = () => {
         setIsSourcesLoading(true);
 
         try {
-            const srcData = await getMessageSources(message.messageId);
+            const srcData = await getSharedMessageSources(shareToken, message.messageId);
             const sources = (srcData.messageSources || []).map((src) => ({
                 id: src.id,
                 title: src.heading,

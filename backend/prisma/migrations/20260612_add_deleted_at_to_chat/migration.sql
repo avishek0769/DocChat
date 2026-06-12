@@ -1,0 +1,1 @@
+ALTER TABLE "Chat" ADD COLUMN "deleted_at" TIMESTAMP(3);

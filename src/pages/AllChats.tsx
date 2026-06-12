@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import Skeleton from "../components/Skeleton";
 import {
@@ -14,7 +14,7 @@ import {
     ExternalLink,
 } from "lucide-react";
 import { Sidebar } from "../components/Sidebar";
-import { deleteChat, getChats, type ChatItem } from "../lib/api";
+import { deleteChat, getChats, getChatStatus, subscribeToChatStatus, type ChatItem } from "../lib/api";
 import { formatTokens } from "../lib/format";
 
 type ChatRow = {
@@ -83,6 +83,90 @@ const AllChats = () => {
     useEffect(() => {
         // eslint-disable-next-line react-hooks/set-state-in-effect
         loadChats();
+    }, []);
+
+    const [usePollingFallback, setUsePollingFallback] = useState(false);
+    const sseCleanupsRef = useRef<Record<string, () => void>>({});
+    const pollIntervalRef = useRef<number | null>(null);
+
+    const handleProgressUpdate = useCallback((chatId: string, statusData: { status: string }) => {
+        const status = String(statusData.status || "QUEUED").toLowerCase();
+        setChats((prev) =>
+            prev.map((chat) => (chat.id === chatId ? { ...chat, status } : chat))
+        );
+    }, []);
+
+    const pollStatuses = useCallback(async () => {
+        const inFlightChats = chats.filter((c) => c.status === "processing" || c.status === "queued");
+        if (!inFlightChats.length) {
+            if (pollIntervalRef.current !== null) {
+                clearInterval(pollIntervalRef.current);
+                pollIntervalRef.current = null;
+            }
+            return;
+        }
+
+        const updates = await Promise.all(
+            inFlightChats.map(async (chat) => {
+                try {
+                    const statusData = await getChatStatus(chat.id);
+                    return { id: chat.id, status: String(statusData.progress?.status || "QUEUED").toLowerCase() };
+                } catch {
+                    return null;
+                }
+            })
+        );
+
+        setChats((prev) =>
+            prev.map((chat) => {
+                const update = updates.find((u) => u?.id === chat.id);
+                if (!update) return chat;
+                return { ...chat, status: update.status };
+            })
+        );
+    }, [chats]);
+
+    useEffect(() => {
+        const inFlightChats = chats.filter((c) => c.status === "processing" || c.status === "queued");
+
+        if (usePollingFallback) {
+            if (inFlightChats.length > 0 && pollIntervalRef.current === null) {
+                pollStatuses();
+                pollIntervalRef.current = window.setInterval(pollStatuses, 3000);
+            } else if (inFlightChats.length === 0 && pollIntervalRef.current !== null) {
+                clearInterval(pollIntervalRef.current);
+                pollIntervalRef.current = null;
+            }
+        } else {
+            const currentInFlightIds = new Set(inFlightChats.map((c) => c.id));
+
+            Object.keys(sseCleanupsRef.current).forEach((chatId) => {
+                if (!currentInFlightIds.has(chatId)) {
+                    sseCleanupsRef.current[chatId]();
+                    delete sseCleanupsRef.current[chatId];
+                }
+            });
+
+            inFlightChats.forEach((chat) => {
+                if (!sseCleanupsRef.current[chat.id]) {
+                    sseCleanupsRef.current[chat.id] = subscribeToChatStatus(
+                        chat.id,
+                        (progress) => handleProgressUpdate(chat.id, progress),
+                        () => setUsePollingFallback(true)
+                    );
+                }
+            });
+        }
+    }, [chats, usePollingFallback, handleProgressUpdate, pollStatuses]);
+
+    useEffect(() => {
+        return () => {
+            if (pollIntervalRef.current !== null) {
+                clearInterval(pollIntervalRef.current);
+            }
+            const cleanups = sseCleanupsRef.current;
+            Object.values(cleanups).forEach(cleanup => cleanup());
+        };
     }, []);
 
     const handleDelete = async () => {
