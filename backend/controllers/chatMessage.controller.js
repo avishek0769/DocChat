@@ -347,6 +347,8 @@ if (!chat.chatSources[0].isVectorLess) {
 
 const getChatMessages = asyncHandler(async (req, res) => {
     const { chatId } = req.params;
+    const limit = req.query.limit ?? 50;
+    const cursor = req.query.cursor || undefined;
 
     const chat = await prisma.chat.findUnique({
         where: { id: chatId },
@@ -358,24 +360,31 @@ const getChatMessages = asyncHandler(async (req, res) => {
 
     const messages = await prisma.chatMessage.findMany({
         where: { chatId },
-        orderBy: { createdAt: "asc" },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: limit + 1,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
         include: { chatMessageSources: true },
     });
 
-    if (!messages.length) {
+    const hasMore = messages.length > limit;
+    const pageMessages = hasMore ? messages.slice(0, limit) : messages;
+    const nextCursor = hasMore ? pageMessages[pageMessages.length - 1]?.id || null : null;
+    const orderedMessages = pageMessages.reverse();
+
+    if (!orderedMessages.length) {
         return res
             .status(200)
-            .json(new ApiResponse(200, { messages: [] }, "No messages found for this chat."));
+            .json(new ApiResponse(200, { messages: [], nextCursor: null, hasMore: false }, "No messages found for this chat."));
     }
 
-    const messagesWithMeta = messages.map(({ chatMessageSources, ...msg }) => ({
+    const messagesWithMeta = orderedMessages.map(({ chatMessageSources, ...msg }) => ({
         ...msg,
         hasSystemInstructions: chatMessageSources.length > 0,
     }));
 
     return res
         .status(200)
-        .json(new ApiResponse(200, { messages: messagesWithMeta }, "Chat messages retrieved successfully."));
+        .json(new ApiResponse(200, { messages: messagesWithMeta, nextCursor, hasMore }, "Chat messages retrieved successfully."));
 });
 
 

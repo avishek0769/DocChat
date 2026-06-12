@@ -89,6 +89,36 @@ const toModelDisplayName = (model?: string) => {
     return model;
 };
 
+const mapApiMessagesToUiMessages = (messageList: Array<{
+    id: string;
+    userPrompt: string;
+    llmResponse: string;
+    llmModel: string;
+    createdAt: string;
+}>) => {
+    const messagePairs: Message[] = [];
+    for (const msg of messageList) {
+        messagePairs.push({
+            id: `${msg.id}-user`,
+            role: "user",
+            content: msg.userPrompt,
+            timestamp: new Date(msg.createdAt),
+        });
+
+        messagePairs.push({
+            id: `${msg.id}-ai`,
+            messageId: msg.id,
+            role: "ai",
+            content: msg.llmResponse,
+            model: toModelDisplayName(msg.llmModel),
+            sources: [],
+            sourcesLoaded: false,
+            timestamp: new Date(msg.createdAt),
+        });
+    }
+    return messagePairs;
+};
+
 const WARNING_LENGTH_THRESHOLD = 4000;
 
 export const ChatPage = () => {
@@ -118,6 +148,9 @@ export const ChatPage = () => {
     // Chat state
     const [input, setInput] = useState("");
     const [messages, setMessages] = useState<Message[]>([]);
+    const [nextCursor, setNextCursor] = useState<string | null>(null);
+    const [hasMore, setHasMore] = useState(false);
+    const [isLoadingOlder, setIsLoadingOlder] = useState(false);
     const [isTyping, setIsTyping] = useState(false);
     const [isAwaitingFirstChunk, setIsAwaitingFirstChunk] = useState(false);
     const [selectedSources, setSelectedSources] = useState<Source[]>([]);
@@ -174,7 +207,7 @@ export const ChatPage = () => {
                 getChatDetails(chatId),
                 getPagesIndexed(chatId),
                 getAvailableModels(),
-                getChatMessages(chatId),
+                getChatMessages(chatId, 50),
             ]);
 
             const chat = chatDetails.chat;
@@ -243,28 +276,9 @@ export const ChatPage = () => {
             setModelOptions(options);
             setSelectedModel((prev) => prev || options[0]?.model || "default-1");
 
-            const messageList = messageData.messages || [];
-            const messagePairs: Message[] = [];
-            for (const msg of messageList) {
-                messagePairs.push({
-                    id: `${msg.id}-user`,
-                    role: "user",
-                    content: msg.userPrompt,
-                    timestamp: new Date(msg.createdAt),
-                });
-
-                messagePairs.push({
-                    id: `${msg.id}-ai`,
-                    messageId: msg.id,
-                    role: "ai",
-                    content: msg.llmResponse,
-                    model: toModelDisplayName(msg.llmModel),
-                    sources: [],
-                    sourcesLoaded: false,
-                    timestamp: new Date(msg.createdAt),
-                });
-            }
-            setMessages(messagePairs);
+            setMessages(mapApiMessagesToUiMessages(messageData.messages || []));
+            setNextCursor(messageData.nextCursor || null);
+            setHasMore(Boolean(messageData.hasMore));
             setIsMessagesLoading(false);
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to load chat data.");
@@ -292,6 +306,23 @@ export const ChatPage = () => {
             await loadChatPage();
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to remove source.");
+        }
+    };
+
+    const loadOlderMessages = async () => {
+        if (!chatId || !nextCursor || isLoadingOlder) return;
+        setIsLoadingOlder(true);
+        try {
+            skipNextAutoScrollRef.current = true;
+            const olderData = await getChatMessages(chatId, 50, nextCursor);
+            const olderMessages = mapApiMessagesToUiMessages(olderData.messages || []);
+            setMessages((prev) => [...olderMessages, ...prev]);
+            setNextCursor(olderData.nextCursor || null);
+            setHasMore(Boolean(olderData.hasMore));
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to load older messages.");
+        } finally {
+            setIsLoadingOlder(false);
         }
     };
 
@@ -331,6 +362,7 @@ export const ChatPage = () => {
     const chunkRafRef = useRef<number | null>(null);
     const firstChunkReceivedRef = useRef(false);
     const abortControllerRef = useRef<AbortController | null>(null);
+    const skipNextAutoScrollRef = useRef(false);
 
     useEffect(() => {
         return () => {
@@ -394,6 +426,10 @@ export const ChatPage = () => {
 
     // Scroll to bottom on new message
     useEffect(() => {
+        if (skipNextAutoScrollRef.current) {
+            skipNextAutoScrollRef.current = false;
+            return;
+        }
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages, isTyping]);
 
@@ -491,7 +527,7 @@ export const ChatPage = () => {
 
             setMessages((prev) => prev.map((m) => (m.id === aiId ? { ...m, isStreaming: false } : m)));
 
-            const latestMessages = await getChatMessages(chatId);
+            const latestMessages = await getChatMessages(chatId, 50);
             const latestAi = (latestMessages.messages || []).at(-1);
             if (latestAi) {
                 setMessages((prev) =>
@@ -820,7 +856,7 @@ export const ChatPage = () => {
       </div>
     </div>
   ))}
-</div>
+                                </div>
                             ) : messages.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center h-full min-h-[50vh] text-center space-y-6">
                                     <div className="w-16 h-16 rounded-2xl bg-linear-to-br from-accent-blue/20 to-accent-purple/20 flex items-center justify-center border border-white/10 shadow-2xl shadow-accent-blue/10">
@@ -855,13 +891,34 @@ export const ChatPage = () => {
                                     </div>
                                 </div>
                             ) : (
-                                messages.map((msg) => (
-                                    <ChatMessage
-                                        key={msg.id}
-                                        message={msg}
-                                        onViewSources={handleViewSources}
-                                    />
-                                ))
+                                <>
+                                    {hasMore && (
+                                        <div className="flex justify-center">
+                                            <button
+                                                type="button"
+                                                onClick={loadOlderMessages}
+                                                disabled={isLoadingOlder}
+                                                className="px-4 py-2 rounded-full border border-white/10 bg-white/5 text-sm text-gray-300 hover:bg-white/10 hover:border-white/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                            >
+                                                {isLoadingOlder ? (
+                                                    <>
+                                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                                        Loading older...
+                                                    </>
+                                                ) : (
+                                                    "Load older messages"
+                                                )}
+                                            </button>
+                                        </div>
+                                    )}
+                                    {messages.map((msg) => (
+                                        <ChatMessage
+                                            key={msg.id}
+                                            message={msg}
+                                            onViewSources={handleViewSources}
+                                        />
+                                    ))}
+                                </>
                             )}
 
                             {isTyping && isAwaitingFirstChunk && (
