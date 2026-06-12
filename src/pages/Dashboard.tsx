@@ -23,9 +23,11 @@ import {
     subscribeToChatStatus,
     getLifetimeTokens,
     getRecentChats,
+    getRecentFailedIngestionRuns,
     invalidatePagesIndexed,
     cancelChat,
     type ChatItem,
+    type FailedIngestionRunItem,
 } from "../lib/api";
 import { formatTokens } from "../lib/format";
 
@@ -95,6 +97,7 @@ const Dashboard = () => {
     const [isDeleting, setIsDeleting] = useState(false);
     const [isCancelling, setIsCancelling] = useState(false);
     const [lifetimeTokens, setLifetimeTokens] = useState(0);
+    const [failedRuns, setFailedRuns] = useState<FailedIngestionRunItem[]>([]);
     const [chatProgress, setChatProgress] = useState<
         Record<string, { status: string; progress: number }>
     >({});
@@ -129,6 +132,14 @@ const Dashboard = () => {
             const input = Number(lifetime?._sum?.inputTokens || 0);
             const output = Number(lifetime?._sum?.outputTokens || 0);
             setLifetimeTokens(input + output);
+
+            try {
+                const failedRunResponse = await getRecentFailedIngestionRuns(5);
+                setFailedRuns(failedRunResponse?.runs || []);
+            } catch (failedRunError) {
+                console.error("Failed to load failed ingestion runs:", failedRunError);
+                setFailedRuns([]);
+            }
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to load dashboard data.");
         } finally {
@@ -512,6 +523,11 @@ const Dashboard = () => {
                                     </button>
                                 ),
                             },
+                            {
+                                label: "Failed Ingestions",
+                                value: failedRuns.length.toString(),
+                                icon: <AlertCircle className="w-5 h-5 text-red-400" />,
+                            },
                         ].map((stat, i) => (
                             <div
                                 key={i}
@@ -527,6 +543,58 @@ const Dashboard = () => {
                                 </div>
                             </div>
                         ))}
+                    </div>
+
+                    {/* Failed Ingestions Section */}
+                    <div className="rounded-2xl border border-white/5 bg-white/2 p-5">
+                        <div className="flex items-center justify-between mb-5 gap-4">
+                            <div>
+                                <h2 className="text-lg font-semibold">Recent Failed Ingestions</h2>
+                                <p className="text-sm text-gray-400">
+                                    Review the latest ingestion runs that did not complete successfully.
+                                </p>
+                            </div>
+                            <div className="text-sm text-gray-400">
+                                {failedRuns.length} recent failure{failedRuns.length === 1 ? "" : "s"}
+                            </div>
+                        </div>
+
+                        {failedRuns.length > 0 ? (
+                            <div className="grid gap-3">
+                                {failedRuns.slice(0, 3).map((run) => (
+                                    <div
+                                        key={run.id}
+                                        className="rounded-2xl border border-white/5 bg-[#0d0d12] p-4"
+                                    >
+                                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                                            <div>
+                                                <p className="text-sm font-semibold text-white truncate">
+                                                    {run.chat?.name || run.chatId}
+                                                </p>
+                                                <p className="text-xs text-gray-500 mt-1">
+                                                    {run.chatSource?.heading || run.chatSourceId || "No source"}
+                                                </p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-xs uppercase text-red-400 tracking-[0.2em] font-semibold">
+                                                    {run.status}
+                                                </p>
+                                                <p className="text-xs text-gray-500 mt-1">
+                                                    {fromNow(run.startedAt)}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="mt-4 rounded-xl bg-white/5 p-3 text-sm text-gray-300 border border-white/5">
+                                            {run.errorMessage || run.errorCode || "Unknown ingestion failure."}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="rounded-2xl border border-dashed border-white/10 bg-[#0b0b0f] p-6 text-center text-sm text-gray-400">
+                                No recent failed ingestion runs were found.
+                            </div>
+                        )}
                     </div>
 
                     {/* Chat List Section */}

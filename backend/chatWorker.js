@@ -75,15 +75,17 @@ function getWorkerConfig() {
 }
 
 async function processVector(docsRootUrl, chatId, collectionName, chatSourceId, scrapeLimit) {
+    let pagesCrawled = 0;
+    let pagesFailed = 0;
     try {
         const { maxPagesPerJob } = getWorkerConfig();
         const rootUrl = normalizeUrl(docsRootUrl);
         console.log("Scraping root:", rootUrl);
 
         const { internalLinks } = await scrapeWebpage(rootUrl, rootUrl);
-        const allLinks = internalLinks.slice(0, maxPagesPerJob).filter(link => isValidDocUrl(link, rootUrl));
+        // Combined logic: enforce effective limit, then filter valid docs
         const effectiveLimit = typeof scrapeLimit === 'number' && scrapeLimit > 0 ? scrapeLimit : maxPagesPerJob;
-        let allLinks = internalLinks.slice(0, effectiveLimit);
+        const allLinks = internalLinks.slice(0, effectiveLimit).filter(link => isValidDocUrl(link, rootUrl));
         const totalLinks = allLinks.length;
 
         console.log("Total unique valid links found:", totalLinks);
@@ -156,6 +158,7 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId, 
                     });
                 }
 
+                pagesCrawled++;
                 processedLinks++;
                 await updateChatProgress(chatId, {
                     status: "PROCESSING",
@@ -164,7 +167,9 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId, 
                     progress: Math.round((processedLinks / totalLinks) * 100),
                 });
             } catch (err) {
+                pagesFailed++;
                 console.error(`Failed link ${link}:`, err.message);
+                // Concurrency branch logic: update progress rather than throwing/breaking out
                 processedLinks++;
                 await updateChatProgress(chatId, {
                     status: "PROCESSING",
@@ -172,18 +177,21 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId, 
                     total: totalLinks,
                     progress: Math.round((processedLinks / totalLinks) * 100),
                 });
-                await markChatFailed(chatId, err);
-                continue;
             }
         })));
+        
+        return { pagesCrawled, pagesFailed };
     } catch (err) {
-        await updateChatProgress(chatId, { status: "FAILED" });
+        err.pagesCrawled = pagesCrawled;
+        err.pagesFailed = pagesFailed;
         await markChatFailed(chatId, err);
         throw err;
     }
 }
 
 async function processVectorLess(docsRootUrl, chatId, chatSourceId, scrapeLimit) {
+    let pagesCrawled = 0;
+    let pagesFailed = 0;
     try {
         const { maxPagesPerJob, vectorlessBatchSize } = getWorkerConfig();
         await updateChatProgress(chatId, { status: "PROCESSING", progress: 0 });
@@ -198,26 +206,41 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId, scrapeLimit)
 
         console.log("Total unique links found:", totalLinks);
 
-        let batchLinks = allLinks.slice(0, vectorlessBatchSize);
         let allData = "";
         let i = 0;
+        const pages = [];
 
-        while (batchLinks.length > 0) {
-            batchLinks = allLinks.slice(i, i + vectorlessBatchSize);
+        while (i < totalLinks) {
+            const batchLinks = allLinks.slice(i, i + vectorlessBatchSize);
+            if (batchLinks.length === 0) break;
             const results = await Promise.all(
                 batchLinks.map(async (link) => {
-                    if (!isValidDocUrl(link, rootUrl)) return "";
+                    if (!isValidDocUrl(link, rootUrl)) return null;
                     try {
                         const { title, body } = await scrapeWebpage(link, rootUrl);
-                        return `Title: ${title}\n ${body}\n\n`;
+                        pagesCrawled++;
+                        return { link, title, body };
                     } catch (error) {
+                        pagesFailed++;
                         console.error(`Failed: ${link}`, error.message);
-                        return "";
+                        return null;
                     }
                 }),
             );
 
-            allData += results.join("");
+            for (const res of results) {
+                if (!res) continue;
+                const pageContent = `Title: ${res.title}\n ${res.body}\n\n`;
+                const start = allData.length;
+                allData += pageContent;
+                const end = allData.length;
+                pages.push({
+                    pageUrl: res.link,
+                    heading: res.title,
+                    startIndex: start,
+                    endIndex: end,
+                });
+            }
             i += vectorlessBatchSize;
 
             await updateChatProgress(chatId, {
@@ -244,7 +267,24 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId, scrapeLimit)
             },
         });
 
+        if (pages.length > 0) {
+            await prisma.documentPage.createMany({
+                data: pages.map((page) => ({
+                    pageUrl: page.pageUrl,
+                    heading: page.heading,
+                    chatSourceId,
+                    startIndex: page.startIndex,
+                    endIndex: page.endIndex,
+                })),
+            }).catch((err) => {
+                console.error("Failed to update indexed pages:", err.message);
+            });
+        }
+
+        await redis.setex(getChatProgressKey(chatId), 3600, JSON.stringify({ status: "READY", progress: 100 }));
         await updateChatProgress(chatId, { status: "READY", progress: 100 });
+
+        const actualPages = pages.length;
 
         await prisma.chat.update({
             where: { id: chatId },
@@ -254,14 +294,19 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId, scrapeLimit)
                 chatSources: {
                     update: {
                         where: { id: chatSourceId },
-                        data: { collectionName: docTree.id },
+                        data: {
+                            collectionName: docTree.id,
+                            totalPages: actualPages,
+                        },
                     },
                 },
             },
         });
 
-        return;
+        return { pagesCrawled, pagesFailed };
     } catch (error) {
+        error.pagesCrawled = pagesCrawled;
+        error.pagesFailed = pagesFailed;
         console.error("Error VectorLess:", error);
         await updateChatProgress(chatId, { status: "FAILED" });
         await markChatFailed(chatId, error);
@@ -288,10 +333,11 @@ const worker = new Worker(
         });
 
         try {
+            let stats = { pagesCrawled: 0, pagesFailed: 0 };
             if (!isVectorLess) {
-                await processVector(docsUrl, chatId, collectionName, chatSourceId, scrapeLimit);
+                stats = await processVector(docsUrl, chatId, collectionName, chatSourceId, scrapeLimit);
             } else {
-                await processVectorLess(docsUrl, chatId, chatSourceId, scrapeLimit);
+                stats = await processVectorLess(docsUrl, chatId, chatSourceId, scrapeLimit);
             }
 
             await prisma.ingestionRun.update({
@@ -301,6 +347,8 @@ const worker = new Worker(
                     finishedAt: new Date(),
                     errorCode: null,
                     errorMessage: null,
+                    pagesCrawled: stats.pagesCrawled,
+                    pagesFailed: stats.pagesFailed,
                 },
             });
 
@@ -317,6 +365,8 @@ const worker = new Worker(
                     finishedAt: new Date(),
                     errorCode: getErrorCode(err),
                     errorMessage: sanitizeErrorMessage(err?.message),
+                    pagesCrawled: err.pagesCrawled || 0,
+                    pagesFailed: err.pagesFailed || 0,
                 },
             });
             await createAuditEvent("ingestion.failed", null, chatId, {

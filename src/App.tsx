@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import LandingPage from "./pages/LandingPage";
 import Dashboard from "./pages/Dashboard";
 import AllChats from "./pages/AllChats";
@@ -15,19 +15,22 @@ import AdminUserDetail from "./pages/AdminUserDetail";
 import AdminUsage from "./pages/AdminUsage";
 import AdminIngestion from "./pages/AdminIngestion";
 import { ProtectedRoute, PublicOnlyRoute } from "./components/ProtectedRoute";
+import { isAuthenticated } from "./lib/auth";
 
 function App() {
     return (
         <BrowserRouter>
             <Routes>
-                <Route
-                    path="/"
-                    element={
-                        <PublicOnlyRoute>
-                            <LandingPage />
-                        </PublicOnlyRoute>
-                    }
-                />
+            <Route
+                path="/"
+                element={
+                    isAuthenticated() ? (
+                    <Navigate to="/dashboard" replace />
+                     ) : (
+                    <LandingPage/>
+                    )
+                }
+            />
                 <Route
                     path="/dashboard"
                     element={

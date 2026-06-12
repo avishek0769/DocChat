@@ -14,6 +14,7 @@ import {
     getChatMessageSources,
     exportChatMessages,
     getSharedChatMessages,
+    getSharedChatMessageSources,
 } from "../controllers/chatMessage.controller.js";
 
 const chatMessageRouter = Router();
@@ -34,5 +35,6 @@ chatMessageRouter
 
 // Shared Chat Messages Route
 chatMessageRouter.route("/shared/:shareToken/messages").get(getSharedChatMessages);
+chatMessageRouter.route("/shared/:shareToken/messages/:messageId/sources").get(getSharedChatMessageSources);
 
 export default chatMessageRouter;

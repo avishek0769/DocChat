@@ -51,7 +51,7 @@ const buildSourceContext = ({ relevantSources = [], relevantNodes = [], budget }
             body: point.payload?.body || "",
         }))
         : relevantNodes.map((node, index) => ({
-            label: `Source ${index + 1}`,
+            label: node.heading || `Source ${index + 1}`,
             body: node.data || "",
         }));
 

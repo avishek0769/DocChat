@@ -19,6 +19,7 @@ import {
     currentUserProfile,
     resetPassword,
     sendResetCode,
+    deleteMyData,
 } from "../controllers/user.controller.js";
 
 const userRouter = Router();
@@ -32,5 +33,6 @@ userRouter.route("/refresh-tokens").patch(verifyJWT, refreshTokens);
 userRouter.route("/profile").get(verifyStrictJWT, currentUserProfile);
 userRouter.route("/send-reset-code").post(validate(sendResetCodeSchema), sendResetCode);
 userRouter.route("/reset-password").patch(validate(resetPasswordSchema), resetPassword);
+userRouter.route("/delete-my-data").delete(verifyStrictJWT, deleteMyData);
 
 export default userRouter;
