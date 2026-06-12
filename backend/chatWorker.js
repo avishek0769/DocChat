@@ -207,28 +207,41 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId, scrapeLimit)
 
         console.log("Total unique links found:", totalLinks);
 
-        let batchLinks = allLinks.slice(0, vectorlessBatchSize);
         let allData = "";
         let i = 0;
+        const pages = [];
 
-        while (batchLinks.length > 0) {
-            batchLinks = allLinks.slice(i, i + vectorlessBatchSize);
+        while (i < totalLinks) {
+            const batchLinks = allLinks.slice(i, i + vectorlessBatchSize);
+            if (batchLinks.length === 0) break;
             const results = await Promise.all(
                 batchLinks.map(async (link) => {
-                    if (!isValidDocUrl(link, rootUrl)) return "";
+                    if (!isValidDocUrl(link, rootUrl)) return null;
                     try {
                         const { title, body } = await scrapeWebpage(link, rootUrl);
                         pagesCrawled++;
-                        return `Title: ${title}\n ${body}\n\n`;
+                        return { link, title, body };
                     } catch (error) {
                         pagesFailed++;
                         console.error(`Failed: ${link}`, error.message);
-                        return "";
+                        return null;
                     }
                 }),
             );
 
-            allData += results.join("");
+            for (const res of results) {
+                if (!res) continue;
+                const pageContent = `Title: ${res.title}\n ${res.body}\n\n`;
+                const start = allData.length;
+                allData += pageContent;
+                const end = allData.length;
+                pages.push({
+                    pageUrl: res.link,
+                    heading: res.title,
+                    startIndex: start,
+                    endIndex: end,
+                });
+            }
             i += vectorlessBatchSize;
 
             await updateChatProgress(chatId, {
@@ -255,6 +268,21 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId, scrapeLimit)
             },
         });
 
+        if (pages.length > 0) {
+            await prisma.documentPage.createMany({
+                data: pages.map((page) => ({
+                    pageUrl: page.pageUrl,
+                    heading: page.heading,
+                    chatSourceId,
+                    startIndex: page.startIndex,
+                    endIndex: page.endIndex,
+                })),
+            }).catch((err) => {
+                console.error("Failed to update indexed pages:", err.message);
+            });
+        }
+
+        await redis.setex(getChatProgressKey(chatId), 3600, JSON.stringify({ status: "READY", progress: 100 }));
         await updateChatProgress(chatId, { status: "READY", progress: 100 });
 
         await prisma.chat.update({

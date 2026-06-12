@@ -166,7 +166,42 @@ const sendMessage = asyncHandler(async (req, res) => {
             res.end();
             return;
         }
-        relevantNodes = treeindex.findNodes(relevantNodeIds);
+        
+        const rawNodes = treeindex.findNodes(relevantNodeIds);
+        const pages = await prisma.documentPage.findMany({
+            where: { chatSourceId: { in: chat.chatSources.map((s) => s.id) } },
+        });
+
+        relevantNodes = rawNodes.map((node, index) => {
+            const nodeId = node.id || relevantNodeIds[index] || `idx-${index}`;
+            let matchedPage = null;
+            if (node.stringSubset && node.stringSubset.length === 2) {
+                const [start, end] = node.stringSubset;
+                matchedPage = pages.find((p) => {
+                    if (p.startIndex === null || p.endIndex === null) return false;
+                    return start >= p.startIndex && start < p.endIndex;
+                });
+                if (!matchedPage) {
+                    matchedPage = pages.find((p) => {
+                        if (p.startIndex === null || p.endIndex === null) return false;
+                        return start < p.endIndex && end > p.startIndex;
+                    });
+                }
+            }
+
+            const pageUrl = matchedPage
+                ? matchedPage.pageUrl
+                : (chat.chatSources[0]?.documentationUrl || `vectorless://node/${nodeId}`);
+            const heading = matchedPage
+                ? matchedPage.heading
+                : (node.title || "Vectorless Source");
+
+            return {
+                ...node,
+                pageUrl,
+                heading,
+            };
+        });
     }
 
     let systemInstructions = "You are a helpful assistant for answering questions. \n";
@@ -279,22 +314,12 @@ const sendMessage = asyncHandler(async (req, res) => {
             });
         } else if (relevantNodes.length) {
             await prisma.chatMessageSource.createMany({
-                data: relevantNodes.map((node, index) => {
-                    const nodeId = node.id || relevantNodeIds[index] || `idx-${index}`;
-                    let fallbackHeading = "Vectorless Source";
-                    if (node.data) {
-                        const firstLine = node.data.split("\n")[0].trim();
-                        fallbackHeading = firstLine.substring(0, 60);
-                        if (firstLine.length > 60) fallbackHeading += "...";
-                    }
-
-                    return {
-                        chunkText: node.data,
-                        heading: fallbackHeading,
-                        pageUrl: `vectorless://node/${nodeId}`,
-                        chatMessageId: chatMessage.id,
-                    };
-                }),
+                data: relevantNodes.map((node) => ({
+                    chunkText: node.data,
+                    heading: node.heading,
+                    pageUrl: node.pageUrl,
+                    chatMessageId: chatMessage.id,
+                })),
             });
         }
 
