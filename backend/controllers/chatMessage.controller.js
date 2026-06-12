@@ -11,6 +11,11 @@ import { MemoryClient } from "mem0ai";
 
 const memory = MEM0_ENABLED ? new MemoryClient({ apiKey: process.env.MEM0_API_KEY }) : null;
 
+// SSE helper — writes a properly-framed SSE event
+function writeSSE(res, event, data) {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+}
+
 const getAvailableModels = asyncHandler(async (req, res) => {
     const apikeys = await prisma.apiKey.findMany({
         where: { userId: req.user.id },
@@ -125,7 +130,11 @@ if (chat.status === "FAILED") {
 
         relevantNodeIds = await treeindex.retrieveRelevantNodes(userPrompt);
         if(relevantNodeIds.length == 0) {
-            res.write("No relevant sources found, for this query");
+            res.setHeader("Content-Type", "text/event-stream");
+            res.setHeader("Cache-Control", "no-cache, no-transform");
+            res.setHeader("Connection", "keep-alive");
+            res.setHeader("X-Accel-Buffering", "no");
+            writeSSE(res, "error", { message: "No relevant sources found for this query" });
             res.end();
             return;
         }
@@ -210,7 +219,7 @@ if (chat.status === "FAILED") {
     res.setHeader("Cache-Control", "no-cache, no-transform");
     res.setHeader("Connection", "keep-alive");
     res.setHeader("X-Accel-Buffering", "no");
-
+    
     let llmResponse = "";
     let inputTokens = 0;
     let outputTokens = 0;
@@ -222,17 +231,19 @@ if (chat.status === "FAILED") {
             if (chunk.usage) {
                 inputTokens = chunk.usage.prompt_tokens;
                 outputTokens = chunk.usage.completion_tokens;
+                writeSSE(res, "usage", { inputTokens, outputTokens });
             }
             if (content) {
                 llmResponse += content;
-                res.write(content);
+                writeSSE(res, "chunk", { content });
             }
         }
-    } catch (error) {
-        res.end("Stream ended with error.", error.message);
-    } finally {
-        res.end();
-    }
+        writeSSE(res, "done", {});
+        } catch (error) {
+            writeSSE(res, "error", { message: error.message || "Stream ended with error" });
+        } finally {
+            res.end();
+        }
 
     if (llmResponse.trim()) {
         if (MEM0_ENABLED && memory) {
