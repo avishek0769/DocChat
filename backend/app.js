@@ -46,6 +46,9 @@ app.use("/api/v1/message", chatMessageRouter);
 import usageRouter from "./routers/usage.route.js";
 app.use("/api/v1/usage", usageRouter);
 
+import adminRouter from "./routers/admin.route.js";
+app.use("/api/v1/admin", adminRouter);
+
 app.use(errorHandler);
 
 export { app };

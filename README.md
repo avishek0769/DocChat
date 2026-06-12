@@ -161,7 +161,7 @@ Stores encrypted API keys provided by users.
 ## Installation and Setup
 
 ```
-git clone https://github.com/avishek0679/DocChat.git
+git clone https://github.com/avishek0769/DocChat.git
 cd DocChat
 pnpm install
 pnpm run dev # Start the frontend development server

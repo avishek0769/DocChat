@@ -24,3 +24,5 @@ dist-ssr
 *.sw?
 
 python-service/venv
+
+issues*.md

@@ -6,16 +6,24 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import redis from "../utils/redis.js";
 import { Resend } from "resend";
+import { createAuditEvent } from "../utils/audit.js";
+
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 const AccessOptions = {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 1 * 24 * 60 * 60 * 1000, // 1 day
+    path: "/",
 };
 const RefreshOptions = {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 10 * 24 * 60 * 60 * 1000, // 10 days
+    path: "/",
 };
 
 const hashPassword = async (password) => {
@@ -52,6 +60,8 @@ const generateRefreshToken = (userId) => {
     );
 };
 
+const generateVerificationCode = () => Math.floor(Math.random() * 90000) + 10000;
+
 const generateAccessAndRefreshTokens = async (userId) => {
     try {
         const user = await prisma.user.findUnique({ where: { id: userId } });
@@ -80,7 +90,7 @@ const sendVerificationCode = asyncHandler(async (req, res) => {
         data: { email },
     });
 
-    const code = Math.floor(Math.random() * 99999 + 10000);
+    const code = generateVerificationCode();
     await redis.set(email, code, "EX", 3 * 60);
 
     await resend.emails.send({
@@ -172,8 +182,17 @@ const userLogIn = asyncHandler(async (req, res) => {
     const loggedInUser = await prisma.user.update({
         where: { id: user.id },
         data: { refreshToken },
-        select: { id: true, fullname: true, username: true, email: true },
+        select: { id: true, fullname: true, username: true, email: true, isAdmin: true },
     });
+
+    try {
+        await createAuditEvent("user.login", user.id, null, {
+            username: user.username,
+            email: user.email,
+        });
+    } catch (error) {
+        console.error("Failed to write user.login audit event:", error.message);
+    }
 
     res.status(200)
         .cookie("accessToken", accessToken, AccessOptions)
@@ -256,7 +275,12 @@ const refreshTokens = asyncHandler(async (req, res) => {
 });
 
 const currentUserProfile = asyncHandler(async (req, res) => {
-    const user = req.user;
+    const user = {
+        id:req.user.id,
+        fullname:req.user.fullname,
+        username:req.user.username,
+        email:req.user.email,
+    }
     res.status(200).json(new ApiResponse(200, user, "Current user profile fetched successfully !"));
 });
 
@@ -271,7 +295,7 @@ const sendResetCode = asyncHandler(async (req, res) => {
         throw new ApiError(404, "User with this email does not exist");
     }
 
-    const code = Math.floor(10000 + Math.random() * 99999);
+    const code = generateVerificationCode();
     await redis.set(email, code, "EX", 3 * 60);
 
     await resend.emails.send({

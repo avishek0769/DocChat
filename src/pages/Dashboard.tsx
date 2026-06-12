@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Sidebar } from "../components/Sidebar";
+import Skeleton from "../components/Skeleton";
 
 import {
     MessageSquare,
@@ -19,9 +20,11 @@ import {
     createChat,
     deleteChat,
     getChatStatus,
+    subscribeToChatStatus,
     getLifetimeTokens,
     getRecentChats,
     invalidatePagesIndexed,
+    cancelChat,
     type ChatItem,
 } from "../lib/api";
 import { formatTokens } from "../lib/format";
@@ -90,6 +93,7 @@ const Dashboard = () => {
     const [error, setError] = useState("");
     const [isCreating, setIsCreating] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [isCancelling, setIsCancelling] = useState(false);
     const [lifetimeTokens, setLifetimeTokens] = useState(0);
     const [chatProgress, setChatProgress] = useState<
         Record<string, { status: string; progress: number }>
@@ -97,11 +101,14 @@ const Dashboard = () => {
     const chatsRef = useRef<Chat[]>([]);
     const chatProgressRef = useRef<Record<string, { status: string; progress: number }>>({});
     const pollIntervalRef = useRef<number | null>(null);
+    const sseCleanupsRef = useRef<Record<string, () => void>>({});
+    const [usePollingFallback, setUsePollingFallback] = useState(false);
 
     // New Chat Form State
     const [chatName, setChatName] = useState("");
     const [chatUrl, setChatUrl] = useState("");
     const [isVectorLess, setIsVectorLess] = useState(false);
+    const [scrapeLimit, setScrapeLimit] = useState<number | "">("");
 
     // Delete Confirmation
     const [deleteTarget, setDeleteTarget] = useState<Chat | null>(null);
@@ -230,29 +237,98 @@ const Dashboard = () => {
         );
     }, []);
 
+    const handleProgressUpdate = useCallback((chatId: string, statusData: { status: string; progress: number }) => {
+        const status = normalizeStatus(statusData.status);
+        const progress = clampProgress(statusData.progress);
+        
+        if (status === "ready") {
+            const prevStatus = normalizeStatus(
+                chatProgressRef.current[chatId]?.status ||
+                    chatsRef.current.find((c) => c.id === chatId)?.status ||
+                    ""
+            );
+            if (prevStatus !== "ready") {
+                invalidatePagesIndexed(chatId);
+            }
+        }
+
+        setChatProgress((prev) => ({
+            ...prev,
+            [chatId]: { status, progress }
+        }));
+
+        setChats((prev) =>
+            prev.map((chat) => {
+                if (chat.id !== chatId) return chat;
+
+                const estimatedPages = chat.totalPages > 0
+                    ? Math.round((progress / 100) * chat.totalPages)
+                    : chat.pages;
+
+                const nextPages = status === "ready"
+                    ? chat.totalPages || chat.pages
+                    : Math.max(chat.pages, estimatedPages);
+
+                return {
+                    ...chat,
+                    status,
+                    pages: nextPages,
+                };
+            })
+        );
+    }, []);
+
     useEffect(() => {
-        const hasInFlightChats = chats.some(
+        const inFlightChats = chats.filter(
             (chat) =>
                 normalizeStatus(chatProgress[chat.id]?.status || chat.status) !== "ready" &&
                 normalizeStatus(chatProgress[chat.id]?.status || chat.status) !== "failed",
         );
 
-        if (hasInFlightChats && pollIntervalRef.current === null) {
-            pollStatuses();
-            pollIntervalRef.current = window.setInterval(pollStatuses, 3000);
-        }
+        if (usePollingFallback) {
+            // Polling Fallback Logic
+            if (inFlightChats.length > 0 && pollIntervalRef.current === null) {
+                pollStatuses();
+                pollIntervalRef.current = window.setInterval(pollStatuses, 3000);
+            } else if (inFlightChats.length === 0 && pollIntervalRef.current !== null) {
+                clearInterval(pollIntervalRef.current);
+                pollIntervalRef.current = null;
+            }
+        } else {
+            // SSE Logic
+            const currentInFlightIds = new Set(inFlightChats.map(c => c.id));
 
-        if (!hasInFlightChats && pollIntervalRef.current !== null) {
-            clearInterval(pollIntervalRef.current);
-            pollIntervalRef.current = null;
+            // Clean up completed/removed chats
+            Object.keys(sseCleanupsRef.current).forEach(chatId => {
+                if (!currentInFlightIds.has(chatId)) {
+                    sseCleanupsRef.current[chatId]();
+                    delete sseCleanupsRef.current[chatId];
+                }
+            });
+
+            // Start SSE for new in-flight chats
+            inFlightChats.forEach(chat => {
+                if (!sseCleanupsRef.current[chat.id]) {
+                    sseCleanupsRef.current[chat.id] = subscribeToChatStatus(
+                        chat.id,
+                        (progress) => handleProgressUpdate(chat.id, progress),
+                        () => {
+                            // On error, fallback to polling
+                            setUsePollingFallback(true);
+                        }
+                    );
+                }
+            });
         }
-    }, [chats, chatProgress, pollStatuses]);
+    }, [chats, chatProgress, pollStatuses, usePollingFallback, handleProgressUpdate]);
 
     useEffect(() => {
         return () => {
             if (pollIntervalRef.current !== null) {
                 clearInterval(pollIntervalRef.current);
             }
+            const cleanups = sseCleanupsRef.current;
+            Object.values(cleanups).forEach(cleanup => cleanup());
         };
     }, []);
 
@@ -265,11 +341,13 @@ const Dashboard = () => {
                 name: chatName || undefined,
                 docsUrl: chatUrl,
                 isVectorLess,
+                scrapeLimit: scrapeLimit || undefined,
             });
             setIsModalOpen(false);
             setChatName("");
             setChatUrl("");
             setIsVectorLess(false);
+            setScrapeLimit("");
             showToast("Chat created and processing started.");
             await loadDashboardData();
         } catch (err) {
@@ -292,6 +370,19 @@ const Dashboard = () => {
             setError(err instanceof Error ? err.message : "Failed to delete chat.");
         } finally {
             setIsDeleting(false);
+        }
+    };
+
+    const handleCancelChat = async (chatId: string) => {
+        setIsCancelling(true);
+        try {
+            await cancelChat(chatId);
+            showToast("Cancellation requested. Updating state...");
+            await pollStatuses(); // Force an immediate poll to reflect READY
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to cancel chat.");
+        } finally {
+            setIsCancelling(false);
         }
     };
 
@@ -448,9 +539,18 @@ const Dashboard = () => {
                         </h2>
 
                         {isLoading ? (
-                            <div className="p-8 text-center bg-white/1 border border-white/5 border-dashed rounded-xl text-sm text-gray-400">
-                                Loading chats...
-                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+  {[1,2,3].map((i) => (
+    <div
+      key={i}
+      className="p-5 rounded-xl bg-white/2 border border-white/5"
+    >
+      <Skeleton className="h-4 w-24 mb-3" />
+      <Skeleton className="h-8 w-16 mb-3" />
+      <Skeleton className="h-3 w-20" />
+    </div>
+  ))}
+</div>
                         ) : chats.length > 0 ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                 {chats.map((chat) => {
@@ -579,10 +679,12 @@ const Dashboard = () => {
                                                 )}
                                                 {liveStatus === "processing" && (
                                                     <button
-                                                        disabled
-                                                        className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors bg-white/10 text-white/40 cursor-not-allowed opacity-50"
+                                                        onClick={() => handleCancelChat(chat.id)}
+                                                        disabled={isCancelling}
+                                                        className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/10"
                                                     >
-                                                        Open Chat
+                                                        <X className="w-3.5 h-3.5" />
+                                                        {isCancelling ? "Cancelling..." : "Cancel"}
                                                     </button>
                                                 )}
                                                 {liveStatus === "failed" && (
@@ -785,11 +887,27 @@ const Dashboard = () => {
                                         }`}
                                     >
                                         <p className="text-sm font-medium text-white">Vectorless</p>
-                                        <p className="text-xs text-gray-400 mt-0.5">
-                                            Tree based retrieval without embeddings.
+                                        <p className="text-xs text-gray-400 mt-1 line-clamp-2">
+                                            Skips embeddings, slightly faster for unstructured docs.
                                         </p>
                                     </button>
                                 </div>
+                            </div>
+
+                            {/* Scrape Limit */}
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-gray-300">
+                                    Scrape Limit (Optional)
+                                </label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    max="5000"
+                                    value={scrapeLimit}
+                                    onChange={(e) => setScrapeLimit(e.target.valueAsNumber || "")}
+                                    placeholder="e.g. 50"
+                                    className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-blue/50 focus:ring-1 focus:ring-accent-blue/50 transition-all"
+                                />
                             </div>
                         </div>
 
