@@ -59,11 +59,13 @@ import {
     getPagesIndexed,
     sendMessageStream,
     exportChatMessages,
+    exportRawSource,
     toggleChatShare,
 } from "../lib/api";
 import { formatTokens } from "../lib/format";
 
 type CurrentLink = {
+    id?: string;
     title: string;
     url: string;
     isHighlight: boolean;
@@ -158,6 +160,7 @@ export const ChatPage = () => {
     const [sourceFetchAttempted, setSourceFetchAttempted] = useState(false);
 
     const [isExporting, setIsExporting] = useState(false);
+    const [isExportingSources, setIsExportingSources] = useState(false);
     const [isIndexedModalOpen, setIsIndexedModalOpen] = useState(false);
     const [currentLinks, setCurrentLinks] = useState<CurrentLink[]>([]);
     const [indexedPages, setIndexedPages] = useState<IndexedPage[]>([]);
@@ -197,6 +200,23 @@ export const ChatPage = () => {
         }
     };
 
+    const handleDownloadAllSources = async () => {
+        if (isExportingSources || currentLinks.length === 0) return;
+        setIsExportingSources(true);
+        try {
+            for (const link of currentLinks) {
+                if (link.id) {
+                    await exportRawSource(chatId, link.id);
+                    await new Promise(res => setTimeout(res, 500));
+                }
+            }
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to download raw sources.");
+        } finally {
+            setIsExportingSources(false);
+        }
+    };
+
     const loadChatPage = async () => {
         if (!chatId) return;
         setIsPageLoading(true);
@@ -229,6 +249,7 @@ export const ChatPage = () => {
             setCurrentLinks(
                 (chat?.chatSources || [])
                     .map((source) => ({
+                        id: source.id,
                         title: source.documentationUrl,
                         url: source.documentationUrl,
                         isHighlight: false,
@@ -685,9 +706,23 @@ export const ChatPage = () => {
 
                             {/* Scraped Pages List */}
                             <div className="flex-1 overflow-y-auto p-4 w-70">
-                                <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">
-                                    Current Links
-                                </h4>
+                                <div className="flex items-center justify-between mb-3">
+                                    <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider">
+                                        Current Links
+                                    </h4>
+                                    {currentLinks.length > 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={handleDownloadAllSources}
+                                            disabled={isExportingSources}
+                                            className="text-[10px] uppercase tracking-wide bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white px-2 py-1 rounded border border-white/10 font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                                            title="Download all raw sources"
+                                        >
+                                            <Download className="w-3 h-3 text-accent-blue" />
+                                            {isExportingSources ? "Wait..." : "Raw Data"}
+                                        </button>
+                                    )}
+                                </div>
                                 <div className="space-y-1 mb-4">
                                     {currentLinks.length > 0 ? (
                                         currentLinks.map((page, i) => (
