@@ -402,9 +402,8 @@ worker.on("completed", async (job) => {
 });
 
 worker.on("failed", async (job, err) => {
-    console.log(err);
     console.error(`Job ${job?.id} failed: ${err.message}`);
     if (job?.data?.chatId) {
-        await updateChatProgress(job.data.chatId, { status: "FAILED" });
+        await markChatFailed(job.data.chatId, err);
     }
 });
