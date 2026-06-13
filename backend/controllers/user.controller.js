@@ -182,7 +182,7 @@ const userLogIn = asyncHandler(async (req, res) => {
     const loggedInUser = await prisma.user.update({
         where: { id: user.id },
         data: { refreshToken },
-        select: { id: true, fullname: true, username: true, email: true, isAdmin: true },
+        select: { id: true, fullname: true, username: true, email: true },
     });
 
     try {

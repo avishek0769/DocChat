@@ -110,6 +110,7 @@ const Dashboard = () => {
     // New Chat Form State
     const [chatName, setChatName] = useState("");
     const [chatUrl, setChatUrl] = useState("");
+    const [chatUrls, setChatUrls] = useState<string[]>([]);
     const [isVectorLess, setIsVectorLess] = useState(false);
     const [scrapeLimit, setScrapeLimit] = useState<number | "">("");
 
@@ -205,8 +206,8 @@ const Dashboard = () => {
             if (update.status !== "ready") continue;
             const prevStatus = normalizeStatus(
                 chatProgressRef.current[update.id]?.status ||
-                    chatsRef.current.find((c) => c.id === update.id)?.status ||
-                    "",
+                chatsRef.current.find((c) => c.id === update.id)?.status ||
+                "",
             );
             if (prevStatus !== "ready") {
                 invalidatePagesIndexed(update.id);
@@ -344,19 +345,20 @@ const Dashboard = () => {
     }, []);
 
     const handleCreateChat = async () => {
-        if (!chatUrl) return;
+        if (!chatUrls.some(url => url.trim())) return;
         setIsCreating(true);
         setError("");
         try {
             await createChat({
                 name: chatName || undefined,
-                docsUrl: chatUrl,
+                docsUrls: chatUrls.filter(Boolean),
                 isVectorLess,
                 scrapeLimit: scrapeLimit || undefined,
             });
             setIsModalOpen(false);
             setChatName("");
             setChatUrl("");
+            setChatUrls([]);
             setIsVectorLess(false);
             setScrapeLimit("");
             showToast("Chat created and processing started.");
@@ -366,6 +368,17 @@ const Dashboard = () => {
         } finally {
             setIsCreating(false);
         }
+    };
+
+    const handleAddChatUrl = () => {
+        const value = chatUrl.trim();
+        if (!value) return;
+        setChatUrls((prev) => (prev.includes(value) ? prev : [...prev, value]));
+        setChatUrl("");
+    };
+
+    const handleRemoveChatUrl = (url: string) => {
+        setChatUrls((prev) => prev.filter((item) => item !== url));
     };
 
     const handleDeleteChat = async () => {
@@ -403,7 +416,7 @@ const Dashboard = () => {
         try {
             await createChat({
                 name: chat.title,
-                docsUrl: chat.urls[0] || chatUrl,
+                docsUrls: chat.urls,
                 isVectorLess: chat.isVectorLess,
             });
             showToast(`Retrying "${chat.title}"...`);
@@ -414,13 +427,14 @@ const Dashboard = () => {
     };
 
     // Disabled state for the Start Processing button
-    const isStartDisabled = !chatUrl;
+    const isStartDisabled =
+        !chatUrls.some(url => url.trim());
     const getStatusBadge = (isVectorLess: boolean, status: string) => {
         switch (status) {
             case "ready":
                 return (
                     <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-green-500/10 border border-green-500/20 text-xs font-medium text-green-400">
-                        {isVectorLess? "Vectorless" : "Vector"}
+                        {isVectorLess ? "Vectorless" : "Vector"}
                     </div>
                 );
             case "processing":
@@ -461,7 +475,7 @@ const Dashboard = () => {
                                 <span className="text-white">{chats.length}</span> chats
                             </div>
                             <button
-                               
+
                                 onClick={() => setIsModalOpen(true)}
                                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-accent-blue hover:bg-accent-blue/90 text-white font-medium transition-colors shadow-lg shadow-accent-blue/20"
                             >
@@ -534,7 +548,9 @@ const Dashboard = () => {
                                 className="p-5 rounded-xl bg-white/2 border border-white/5 flex items-center justify-between"
                             >
                                 <div>
-                                    <p className="text-sm text-gray-400 mb-1">{stat.label}</p>
+                                    <div className="text-sm text-gray-400 mb-1">
+                                        {stat.label}
+                                    </div>
                                     <p className="text-2xl font-bold">{stat.value}</p>
                                     {stat.action}
                                 </div>
@@ -608,17 +624,17 @@ const Dashboard = () => {
 
                         {isLoading ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-  {[1,2,3].map((i) => (
-    <div
-      key={i}
-      className="p-5 rounded-xl bg-white/2 border border-white/5"
-    >
-      <Skeleton className="h-4 w-24 mb-3" />
-      <Skeleton className="h-8 w-16 mb-3" />
-      <Skeleton className="h-3 w-20" />
-    </div>
-  ))}
-</div>
+                                {[1, 2, 3].map((i) => (
+                                    <div
+                                        key={i}
+                                        className="p-5 rounded-xl bg-white/2 border border-white/5"
+                                    >
+                                        <Skeleton className="h-4 w-24 mb-3" />
+                                        <Skeleton className="h-8 w-16 mb-3" />
+                                        <Skeleton className="h-3 w-20" />
+                                    </div>
+                                ))}
+                            </div>
                         ) : chats.length > 0 ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                 {chats.map((chat) => {
@@ -666,48 +682,48 @@ const Dashboard = () => {
                                                     </div>
                                                 </div>
                                                 <div className="shrink-0">
-                                                    {getStatusBadge(chat.isVectorLess,liveStatus)}
+                                                    {getStatusBadge(chat.isVectorLess, liveStatus)}
                                                 </div>
                                             </div>
 
                                             {/* Processing Progress Bar */}
                                             {(liveStatus === "processing" ||
                                                 liveStatus === "queued") && (
-                                                <div className="mb-4">
-                                                    {chat.isVectorLess ? (
-                                                        <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-gray-400 flex items-center gap-2">
-                                                            Processing (vectorless)... feel free to return later.
-                                                        </div>
-                                                    ) : (
-                                                        <>
-                                                            <div className="flex items-center justify-between text-xs mb-2">
-                                                                <span className="text-gray-400 flex items-center gap-1.5">
-                                                                    <Loader2 className="w-3 h-3 animate-spin text-yellow-400" />
-                                                                    Ingesting pages...
-                                                                </span>
-                                                                <span className="text-yellow-400 font-medium font-mono">
-                                                                    {Math.round(
-                                                                        (progressPercent / 100) *
+                                                    <div className="mb-4">
+                                                        {chat.isVectorLess ? (
+                                                            <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-gray-400 flex items-center gap-2">
+                                                                Processing (vectorless)... feel free to return later.
+                                                            </div>
+                                                        ) : (
+                                                            <>
+                                                                <div className="flex items-center justify-between text-xs mb-2">
+                                                                    <span className="text-gray-400 flex items-center gap-1.5">
+                                                                        <Loader2 className="w-3 h-3 animate-spin text-yellow-400" />
+                                                                        Ingesting pages...
+                                                                    </span>
+                                                                    <span className="text-yellow-400 font-medium font-mono">
+                                                                        {Math.round(
+                                                                            (progressPercent / 100) *
                                                                             (chat.totalPages || 0),
-                                                                    )}
-                                                                    /{chat.totalPages || 0}
-                                                                </span>
-                                                            </div>
-                                                            <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden border border-white/5">
-                                                                <div
-                                                                    className="h-full bg-linear-to-r from-yellow-500 to-amber-400 rounded-full transition-all duration-500 ease-out"
-                                                                    style={{
-                                                                        width: `${progressPercent}%`,
-                                                                    }}
-                                                                />
-                                                            </div>
-                                                            <p className="text-xs text-gray-500 mt-1.5 text-right">
-                                                                {progressPercent}% complete
-                                                            </p>
-                                                        </>
-                                                    )}
-                                                </div>
-                                            )}
+                                                                        )}
+                                                                        /{chat.totalPages || 0}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden border border-white/5">
+                                                                    <div
+                                                                        className="h-full bg-linear-to-r from-yellow-500 to-amber-400 rounded-full transition-all duration-500 ease-out"
+                                                                        style={{
+                                                                            width: `${progressPercent}%`,
+                                                                        }}
+                                                                    />
+                                                                </div>
+                                                                <p className="text-xs text-gray-500 mt-1.5 text-right">
+                                                                    {progressPercent}% complete
+                                                                </p>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                )}
 
                                             {/* Stats for ready/failed */}
                                             {liveStatus !== "processing" && liveStatus !== "queued" && (
@@ -896,18 +912,34 @@ const Dashboard = () => {
                         {/* Modal Body */}
                         <div className="p-5 space-y-5">
                             {/* Chat Name Input */}
-                            <div className="space-y-1.5">
+                            {/* URL Inputs */}
+                            <div className="space-y-2">
                                 <label className="text-sm font-medium text-gray-300">
-                                    Chat Name{" "}
-                                    <span className="text-gray-500 font-normal">(Optional)</span>
+                                    Documentation URLs <span className="text-red-400">*</span>
                                 </label>
-                                <input
-                                    type="text"
-                                    value={chatName}
-                                    onChange={(e) => setChatName(e.target.value)}
-                                    placeholder="e.g. React Docs 18.2"
-                                    className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-blue/50 focus:ring-1 focus:ring-accent-blue/50 transition-all"
-                                />
+
+                                {chatUrls.map((url, index) => (
+                                    <input
+                                        key={index}
+                                        type="url"
+                                        value={url}
+                                        onChange={(e) => {
+                                            const updated = [...chatUrls];
+                                            updated[index] = e.target.value;
+                                            setChatUrls(updated);
+                                        }}
+                                        placeholder="https://docs.example.com"
+                                        className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-blue/50 focus:ring-1 focus:ring-accent-blue/50 transition-all font-mono"
+                                    />
+                                ))}
+
+                                <button
+                                    type="button"
+                                    onClick={() => setChatUrls([...chatUrls, ""])}
+                                    className="text-sm text-accent-blue hover:underline"
+                                >
+                                    + Add URL
+                                </button>
                             </div>
 
                             {/* URL Input */}
@@ -923,8 +955,34 @@ const Dashboard = () => {
                                     className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-blue/50 focus:ring-1 focus:ring-accent-blue/50 transition-all font-mono"
                                 />
                                 <p className="text-xs text-gray-500">
-                                    We'll scrape this page and sub-pages automatically.
+                                    Add one or more documentation URLs. We'll scrape each page and its sub-pages automatically.
                                 </p>
+                                <button
+                                    type="button"
+                                    onClick={handleAddChatUrl}
+                                    className="mt-2 px-3 py-1.5 rounded-md bg-white/10 hover:bg-white/15 text-xs font-medium text-white transition-colors"
+                                >
+                                    Add URL
+                                </button>
+                                {chatUrls.length > 0 && (
+                                    <div className="mt-3 space-y-2">
+                                        {chatUrls.map((url) => (
+                                            <div
+                                                key={url}
+                                                className="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-white/5 border border-white/10"
+                                            >
+                                                <span className="text-xs text-gray-300 truncate font-mono">{url}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleRemoveChatUrl(url)}
+                                                    className="text-xs text-red-400 hover:text-red-300"
+                                                >
+                                                    Remove
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
 
                             {/* Ingestion Mode */}
@@ -934,11 +992,10 @@ const Dashboard = () => {
                                     <button
                                         type="button"
                                         onClick={() => setIsVectorLess(false)}
-                                        className={`rounded-lg border px-3 py-2.5 text-left transition-colors ${
-                                            !isVectorLess
-                                                ? "border-accent-blue/60 bg-accent-blue/10"
-                                                : "border-white/10 bg-white/5 hover:bg-white/10"
-                                        }`}
+                                        className={`rounded-lg border px-3 py-2.5 text-left transition-colors ${!isVectorLess
+                                            ? "border-accent-blue/60 bg-accent-blue/10"
+                                            : "border-white/10 bg-white/5 hover:bg-white/10"
+                                            }`}
                                     >
                                         <p className="text-sm font-medium text-white">Vector</p>
                                         <p className="text-xs text-gray-400 mt-0.5">
@@ -948,11 +1005,10 @@ const Dashboard = () => {
                                     <button
                                         type="button"
                                         onClick={() => setIsVectorLess(true)}
-                                        className={`rounded-lg border px-3 py-2.5 text-left transition-colors ${
-                                            isVectorLess
-                                                ? "border-accent-blue/60 bg-accent-blue/10"
-                                                : "border-white/10 bg-white/5 hover:bg-white/10"
-                                        }`}
+                                        className={`rounded-lg border px-3 py-2.5 text-left transition-colors ${isVectorLess
+                                            ? "border-accent-blue/60 bg-accent-blue/10"
+                                            : "border-white/10 bg-white/5 hover:bg-white/10"
+                                            }`}
                                     >
                                         <p className="text-sm font-medium text-white">Vectorless</p>
                                         <p className="text-xs text-gray-400 mt-1 line-clamp-2">

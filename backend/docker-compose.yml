@@ -18,11 +18,11 @@ services:
     #     networks:
     #         - docs-support-agent-network
 
-    # qdrant:
-    #     image: qdrant/qdrant:latest
-    #     container_name: qdrant
-    #     ports:
-    #         - "6333:6333"
+    qdrant:
+        image: qdrant/qdrant:latest
+        container_name: qdrant
+        ports:
+            - "6333:6333"
     #     volumes:
     #         - qdrant-vlm:/qdrant/storage
 

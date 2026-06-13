@@ -3,6 +3,13 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import { v4 as uuidv4 } from "uuid";
 import logger from "./utils/logger.js";
+import {
+    metricsMiddleware,
+    metricsAuthMiddleware,
+    checkHealth,
+    getPrometheusMetrics,
+    contentType,
+} from "./utils/metrics.js";
 
 const app = express();
 
@@ -24,6 +31,30 @@ app.use((req, res, next) => {
     });
   });
   next();
+});
+
+app.use(metricsMiddleware);
+
+// NOTE: /healthz and /metrics endpoints are registered here before standard middleware (cors, express.json, etc.)
+// to minimize processing overhead and ensure fast responses for monitoring tools.
+// If global middleware such as rate limiters or IP allow-lists are added later,
+// ensure they are registered before these endpoints if they should apply.
+
+// Health check endpoint
+app.get("/healthz", async (req, res) => {
+    const { isHealthy, status } = await checkHealth();
+    res.status(isHealthy ? 200 : 503).json(status);
+});
+
+// Prometheus metrics endpoint
+app.get("/metrics", metricsAuthMiddleware, async (req, res) => {
+    try {
+        const metrics = await getPrometheusMetrics();
+        res.set("Content-Type", contentType);
+        res.send(metrics);
+    } catch (error) {
+        res.status(500).send(error.message);
+    }
 });
 
 const errorHandler = (err, req, res, next) => {

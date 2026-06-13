@@ -31,7 +31,7 @@ To keep our repository organized, please name your branches following these pref
 ### 1. Fork and Clone
 Fork the repository on GitHub, and then clone your fork locally:
 ```bash
-git clone https://github.com/<your-username>/DocChat.git
+git clone https://github.com/avishek0769/DocChat.git
 cd DocChat
 ```
 

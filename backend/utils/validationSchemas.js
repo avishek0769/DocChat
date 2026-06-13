@@ -70,6 +70,13 @@ export const chatIdParamSchema = {
     }),
 };
 
+export const chatMessagesQuerySchema = {
+    query: z.object({
+        limit: z.coerce.number().int().min(1).max(100).default(50),
+        cursor: z.string().trim().optional(),
+    }),
+};
+
 export const messageIdParamSchema = {
     params: z.object({
         messageId: z.string().uuid("Invalid message ID"),
@@ -90,6 +97,7 @@ export const userIdParamSchema = {
 
 export const expectationQuerySchema = {
     query: z.object({
+        docsUrls: z.array(url).min(1),
         docsUrl: url,
         isVectorLess: z
             .union([z.boolean(), z.string(), z.number()])
@@ -123,6 +131,43 @@ export const expectationQuerySchema = {
 export const createChatSchema = {
     body: z.object({
         name: z.string().trim().optional(),
+        docsUrls: z.array(url).min(1),
+        docsUrl: url.optional(),
+        docsUrls: z.array(url).min(1, "At least one documentation URL is required").optional(),
+        isVectorLess: z
+            .union([z.boolean(), z.string(), z.number()])
+            .optional()
+            .transform((v, ctx) => {
+                if (v === undefined) return undefined;
+                if (typeof v === "boolean") return v;
+
+                if (typeof v === "number") {
+                    if (v === 1) return true;
+                    if (v === 0) return false;
+                }
+
+                if (typeof v === "string") {
+                    const normalized = v.trim().toLowerCase();
+
+                    if (["true", "1", "yes", "on"].includes(normalized)) return true;
+                    if (["false", "0", "no", "off"].includes(normalized)) return false;
+                }
+
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: "isVectorLess must be a boolean or a supported boolean-like value",
+                });
+
+                return z.NEVER;
+            }),
+    }).refine((data) => Boolean(data.docsUrl || data.docsUrls?.length), {
+        message: "docsUrl or docsUrls is required",
+        path: ["docsUrls"],
+    }),
+};
+
+export const addChatSourceSchema = {
+    body: z.object({
         docsUrl: url,
         isVectorLess: z
             .union([z.boolean(), z.string(), z.number()])
