@@ -9,6 +9,7 @@ import crypto from "crypto";
 import { createAuditEvent } from "../utils/audit.js";
 import { normalizeUrl } from "../utils/ragUtilities.js";
 import { getChatCreationQueue } from "../utils/queue.js";
+import { qdrant } from "../utils/ragClients.js";
 
 const normalizeDocsUrl = (docsUrl) => normalizeUrl(docsUrl);
 
@@ -970,6 +971,63 @@ const forkSharedChat = asyncHandler(async (req, res) => {
     );
 });
 
+const downloadRawSource = asyncHandler(async (req, res) => {
+    const { chatId, sourceId } = req.params;
+
+    const chatSource = await prisma.chatSource.findFirst({
+        where: {
+            id: sourceId,
+            chats: { some: { id: chatId } }
+        },
+        include: {
+            documentTree: true
+        }
+    });
+
+    if (!chatSource) {
+        throw new ApiError(404, "Source not found or does not belong to this chat");
+    }
+
+    let rawText = "";
+
+    if (chatSource.isVectorLess) {
+        if (!chatSource.documentTree?.sourceData) {
+            throw new ApiError(404, "Raw source data not available yet");
+        }
+        rawText = chatSource.documentTree.sourceData;
+    } else {
+        if (!chatSource.collectionName) {
+            throw new ApiError(404, "Vector collection not initialized");
+        }
+
+        let nextOffset = null;
+        do {
+            const response = await qdrant.scroll(chatSource.collectionName, {
+                filter: {
+                    must: [{ key: "chatSourceId", match: { value: sourceId } }]
+                },
+                limit: 1000,
+                offset: nextOffset
+            });
+
+            for (const point of response.points) {
+                rawText += `--- ${point.payload.title || 'Page'} (${point.payload.url}) ---\n`;
+                rawText += `${point.payload.body}\n\n`;
+            }
+
+            nextOffset = response.next_page_offset;
+        } while (nextOffset);
+
+        if (!rawText) {
+            throw new ApiError(404, "No raw text found in the vector database");
+        }
+    }
+
+    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Content-Disposition', `attachment; filename="source-${sourceId}-raw.txt"`);
+    res.send(rawText);
+});
+
 export {
     expectation,
     createChat,
@@ -989,4 +1047,5 @@ export {
     toggleShare,
     getSharedChatDetails,
     forkSharedChat,
+    downloadRawSource,
 };

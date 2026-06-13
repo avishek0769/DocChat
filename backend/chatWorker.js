@@ -141,6 +141,10 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId, 
             await qdrant.createCollection(collectionName, {
                 vectors: { size: 1536, distance: "Cosine" },
             });
+            await qdrant.createPayloadIndex(collectionName, {
+                field_name: "body",
+                field_schema: "text",
+            });
         }
 
         let processedLinks = 0;
