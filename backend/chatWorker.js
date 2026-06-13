@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { Worker } from "bullmq";
+import crypto from "crypto";
 import redis, { getChatProgressKey } from "./utils/redis.js";
 
 /**
@@ -85,6 +86,71 @@ function getWorkerConfig() {
     };
 }
 
+function computeContentHash(body) {
+    return crypto.createHash("sha256").update(body).digest("hex");
+}
+
+function getCheckpointKey(chatId) {
+    return `checkpoint:${chatId}`;
+}
+
+function getVectorLessCheckpointKey(chatId) {
+    return `checkpoint:vectorLess:${chatId}`;
+}
+
+async function saveCheckpoint(chatId, processedIndex) {
+    await redis.setex(getCheckpointKey(chatId), 86400, String(processedIndex));
+}
+
+async function getCheckpoint(chatId) {
+    const val = await redis.get(getCheckpointKey(chatId));
+    return val ? Number.parseInt(val, 10) : 0;
+}
+
+async function clearCheckpoint(chatId) {
+    await redis.del(getCheckpointKey(chatId));
+}
+
+async function removeOldQdrantPoints(collectionName, pageUrl) {
+    try {
+        const scroll = await qdrant.scroll(collectionName, {
+            filter: {
+                must: [{ key: "url", match: { value: pageUrl } }],
+            },
+            limit: 100,
+        });
+        if (scroll.points.length > 0) {
+            const pointIds = scroll.points.map((p) => p.id);
+            await qdrant.delete(collectionName, { wait: true, points: pointIds });
+        }
+    } catch (err) {
+        console.error(`Failed to remove old Qdrant points for ${pageUrl}:`, err.message);
+    }
+}
+
+async function getActivePages(chatSourceId) {
+    const pages = await prisma.documentPage.findMany({
+        where: { chatSourceId, isActive: true },
+    });
+    return new Map(pages.map((p) => [p.pageUrl, p]));
+}
+
+async function markPagesRemoved(chatSourceId, currentUrls) {
+    const stale = await prisma.documentPage.findMany({
+        where: {
+            chatSourceId,
+            isActive: true,
+            pageUrl: { notIn: currentUrls },
+        },
+    });
+    if (stale.length === 0) return stale;
+    await prisma.documentPage.updateMany({
+        where: { id: { in: stale.map((p) => p.id) } },
+        data: { isActive: false },
+    });
+    return stale;
+}
+
 function isChatSourceReady(chatSource) {
     if (!chatSource) return false;
     if (chatSource.isVectorLess) return Boolean(chatSource.documentTree);
@@ -132,18 +198,24 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId, 
         console.log("Scraping root:", rootUrl);
 
         const { internalLinks } = await scrapeWebpage(rootUrl, rootUrl);
-        // Combined logic: enforce effective limit, then filter valid docs
         const effectiveLimit = typeof scrapeLimit === 'number' && scrapeLimit > 0 ? scrapeLimit : maxPagesPerJob;
         const allLinks = internalLinks.slice(0, effectiveLimit).filter(link => isValidDocUrl(link, rootUrl));
         const totalLinks = allLinks.length;
 
         console.log("Total unique valid links found:", totalLinks);
 
+        const resumeFrom = await getCheckpoint(chatId);
+        if (resumeFrom > 0) {
+            console.log(`Resuming from page ${resumeFrom} of ${totalLinks}`);
+        }
+
+        const existingPages = await getActivePages(chatSourceId);
+
         await updateChatProgress(chatId, {
             status: "PROCESSING",
-            current: 0,
+            current: resumeFrom,
             total: totalLinks,
-            progress: 0,
+            progress: totalLinks > 0 ? Math.round((resumeFrom / totalLinks) * 100) : 0,
         });
 
         const collections = await qdrant.getCollections();
@@ -157,85 +229,136 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId, 
             });
         }
 
-        let processedLinks = 0;
+        let processedLinks = resumeFrom;
         const limiter = new Bottleneck({ maxConcurrent: 5 });
 
-        await Promise.all(allLinks.map((link) => limiter.schedule(async () => {
-            try {
-                const { body, title } = await scrapeWebpage(link, rootUrl);
-                const splitter = new RecursiveCharacterTextSplitter({
-                    chunkSize: 1000,
-                    chunkOverlap: 150,
-                });
-                const chunks = await splitter.splitText(body);
+        const linksToProcess = allLinks.slice(resumeFrom);
+        if (linksToProcess.length > 0) {
+            await Promise.all(linksToProcess.map((link) => limiter.schedule(async () => {
+                try {
+                    const { body, title } = await scrapeWebpage(link, rootUrl);
+                    const contentHash = computeContentHash(body);
 
-                console.log(`Processing: ${link} (${chunks.length} chunks)`);
-
-                if (chunks.length > 0) {
-                    let allEmbeddings = [];
-                    // Process embeddings in batches of 100
-                    const batchSize = 100;
-                    for (let i = 0; i < chunks.length; i += batchSize) {
-                        const chunkBatch = chunks.slice(i, i + batchSize);
-                        const embeddingsBatch = await generateVectorEmbeddings(chunkBatch);
-                        // Make sure we concat correctly depending on whether generation returns an array
-                        const batchArray = Array.isArray(embeddingsBatch) ? embeddingsBatch : [embeddingsBatch];
-                        allEmbeddings = allEmbeddings.concat(batchArray);
+                    const existing = existingPages.get(link);
+                    if (existing && existing.contentHash === contentHash) {
+                        console.log(`Skipping unchanged: ${link}`);
+                        processedLinks++;
+                        pagesCrawled++;
+                        await saveCheckpoint(chatId, processedLinks);
+                        await updateChatProgress(chatId, {
+                            status: "PROCESSING",
+                            current: processedLinks,
+                            total: totalLinks,
+                            progress: Math.round((processedLinks / totalLinks) * 100),
+                        });
+                        return;
                     }
 
-                    const points = chunks.map((chunk, i) => ({
-                        id: uuidv4(),
-                        vector: allEmbeddings[i],
-                        payload: {
-                            url: link,
-                            body: chunk,
-                            chatId,
-                            title,
-                            chatSourceId,
-                        },
-                    }));
-
-                    await qdrant.upsert(collectionName, {
-                        wait: true,
-                        points,
+                    const splitter = new RecursiveCharacterTextSplitter({
+                        chunkSize: 1000,
+                        chunkOverlap: 150,
                     });
+                    const chunks = await splitter.splitText(body);
 
-                    await prisma.documentPage.create({
-                        data: {
-                            pageUrl: link,
-                            heading: title,
-                            chatSourceId,
-                        },
-                    }).catch((err) => {
-                        console.error("Failed to update indexed pages:", err.message);
+                    console.log(`${existing ? "Updating" : "Processing"}: ${link} (${chunks.length} chunks)`);
+
+                    if (chunks.length > 0) {
+                        let allEmbeddings = [];
+                        const batchSize = 100;
+                        for (let i = 0; i < chunks.length; i += batchSize) {
+                            const chunkBatch = chunks.slice(i, i + batchSize);
+                            const embeddingsBatch = await generateVectorEmbeddings(chunkBatch);
+                            const batchArray = Array.isArray(embeddingsBatch) ? embeddingsBatch : [embeddingsBatch];
+                            allEmbeddings = allEmbeddings.concat(batchArray);
+                        }
+
+                        if (existing) {
+                            await removeOldQdrantPoints(collectionName, link);
+                        }
+
+                        const points = chunks.map((chunk, i) => ({
+                            id: uuidv4(),
+                            vector: allEmbeddings[i],
+                            payload: {
+                                url: link,
+                                body: chunk,
+                                chatId,
+                                title,
+                                chatSourceId,
+                            },
+                        }));
+
+                        await qdrant.upsert(collectionName, {
+                            wait: true,
+                            points,
+                        });
+
+                        if (existing) {
+                            await prisma.documentPage.update({
+                                where: { id: existing.id },
+                                data: {
+                                    contentHash,
+                                    lastFetchedAt: new Date(),
+                                    heading: title,
+                                },
+                            }).catch((err) => {
+                                console.error("Failed to update indexed page:", err.message);
+                            });
+                        } else {
+                            await prisma.documentPage.create({
+                                data: {
+                                    pageUrl: link,
+                                    heading: title,
+                                    chatSourceId,
+                                    contentHash,
+                                    lastFetchedAt: new Date(),
+                                },
+                            }).catch((err) => {
+                                console.error("Failed to create indexed page:", err.message);
+                            });
+                        }
+                    }
+
+                    pagesCrawled++;
+                    processedLinks++;
+                    await saveCheckpoint(chatId, processedLinks);
+                    await updateChatProgress(chatId, {
+                        status: "PROCESSING",
+                        current: processedLinks,
+                        total: totalLinks,
+                        progress: Math.round((processedLinks / totalLinks) * 100),
+                    });
+                } catch (err) {
+                    pagesFailed++;
+                    console.error(`Failed link ${link}:`, err.message);
+                    processedLinks++;
+                    await saveCheckpoint(chatId, processedLinks);
+                    await updateChatProgress(chatId, {
+                        status: "PROCESSING",
+                        current: processedLinks,
+                        total: totalLinks,
+                        progress: Math.round((processedLinks / totalLinks) * 100),
                     });
                 }
+            })));
+        }
 
-                pagesCrawled++;
-                processedLinks++;
-                await updateChatProgress(chatId, {
-                    status: "PROCESSING",
-                    current: processedLinks,
-                    total: totalLinks,
-                    progress: Math.round((processedLinks / totalLinks) * 100),
-                });
-            } catch (err) {
-                pagesFailed++;
-                console.error(`Failed link ${link}:`, err.message);
-                // Concurrency branch logic: update progress rather than throwing/breaking out
-                processedLinks++;
-                await updateChatProgress(chatId, {
-                    status: "PROCESSING",
-                    current: processedLinks,
-                    total: totalLinks,
-                    progress: Math.round((processedLinks / totalLinks) * 100),
-                });
-            }
-        })));
+        const removedPages = await markPagesRemoved(chatSourceId, allLinks);
+        for (const page of removedPages) {
+            await removeOldQdrantPoints(collectionName, page.pageUrl);
+            console.log(`Removed deleted page: ${page.pageUrl}`);
+        }
+
+        await clearCheckpoint(chatId);
 
         await prisma.chatSource.update({
             where: { id: chatSourceId },
             data: { collectionName },
+        });
+
+        await prisma.chatSource.update({
+            where: { id: chatSourceId },
+            data: { totalPages: allLinks.length },
         });
 
         return { pagesCrawled, pagesFailed };
@@ -252,7 +375,6 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId, scrapeLimit)
     let pagesFailed = 0;
     try {
         const { maxPagesPerJob, vectorlessBatchSize } = getWorkerConfig();
-        await updateChatProgress(chatId, { status: "PROCESSING", progress: 0 });
 
         const rootUrl = normalizeUrl(docsRootUrl);
         console.log("Scraping root:", rootUrl);
@@ -265,10 +387,9 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId, scrapeLimit)
         console.log("Total unique links found:", totalLinks);
 
         let allData = "";
-        let i = 0;
         const pages = [];
 
-        while (i < totalLinks) {
+        for (let i = 0; i < totalLinks; i += vectorlessBatchSize) {
             const batchLinks = allLinks.slice(i, i + vectorlessBatchSize);
             if (batchLinks.length === 0) break;
             const results = await Promise.all(
@@ -276,8 +397,9 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId, scrapeLimit)
                     if (!isValidDocUrl(link, rootUrl)) return null;
                     try {
                         const { title, body } = await scrapeWebpage(link, rootUrl);
+                        const contentHash = computeContentHash(body);
                         pagesCrawled++;
-                        return { link, title, body };
+                        return { link, title, body, contentHash };
                     } catch (error) {
                         pagesFailed++;
                         console.error(`Failed: ${link}`, error.message);
@@ -297,15 +419,15 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId, scrapeLimit)
                     heading: res.title,
                     startIndex: start,
                     endIndex: end,
+                    contentHash: res.contentHash,
                 });
             }
-            i += vectorlessBatchSize;
 
             await updateChatProgress(chatId, {
                 status: "PROCESSING",
-                current: Math.min(i, totalLinks),
+                current: Math.min(i + vectorlessBatchSize, totalLinks),
                 total: totalLinks,
-                progress: totalLinks ? Math.round((Math.min(i, totalLinks) / totalLinks) * 100) : 0,
+                progress: totalLinks ? Math.round((Math.min(i + vectorlessBatchSize, totalLinks) / totalLinks) * 100) : 0,
             });
         }
 
@@ -317,6 +439,11 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId, scrapeLimit)
         const tree = await treeindex.generateTree();
         console.log("Generated Tree Length:", tree.length);
 
+        const removedPages = await markPagesRemoved(chatSourceId, allLinks);
+        for (const page of removedPages) {
+            console.log(`Removed deleted page: ${page.pageUrl}`);
+        }
+
         const docTree = await prisma.documentTree.create({
             data: {
                 chatSourceId,
@@ -325,28 +452,51 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId, scrapeLimit)
             },
         });
 
-        if (pages.length > 0) {
-            await prisma.documentPage.createMany({
-                data: pages.map((page) => ({
-                    pageUrl: page.pageUrl,
-                    heading: page.heading,
-                    chatSourceId,
-                    startIndex: page.startIndex,
-                    endIndex: page.endIndex,
-                })),
-            }).catch((err) => {
-                console.error("Failed to update indexed pages:", err.message);
-            });
+        const existingActive = await prisma.documentPage.findMany({
+            where: { chatSourceId, isActive: true },
+        });
+        const existingMap = new Map(existingActive.map((p) => [p.pageUrl, p]));
+
+        for (const page of pages) {
+            const existing = existingMap.get(page.pageUrl);
+            if (existing) {
+                await prisma.documentPage.update({
+                    where: { id: existing.id },
+                    data: {
+                        heading: page.heading,
+                        startIndex: page.startIndex,
+                        endIndex: page.endIndex,
+                        contentHash: page.contentHash,
+                        lastFetchedAt: new Date(),
+                    },
+                }).catch((err) => {
+                    console.error("Failed to update indexed page:", err.message);
+                });
+            } else {
+                await prisma.documentPage.create({
+                    data: {
+                        pageUrl: page.pageUrl,
+                        heading: page.heading,
+                        chatSourceId,
+                        startIndex: page.startIndex,
+                        endIndex: page.endIndex,
+                        contentHash: page.contentHash,
+                        lastFetchedAt: new Date(),
+                    },
+                }).catch((err) => {
+                    console.error("Failed to create indexed page:", err.message);
+                });
+            }
         }
+
         await redis.setex(getChatProgressKey(chatId), 3600, JSON.stringify({ status: "READY", progress: 100 }));
         await updateChatProgress(chatId, { status: "READY", progress: 100 });
 
         await prisma.chatSource.update({
             where: { id: chatSourceId },
-            data: { collectionName: docTree.id },
+            data: { collectionName: docTree.id, totalPages: pages.length },
         });
 
-        const actualPages = pages.length;
         await prisma.chat.update({
             where: { id: chatId },
             data: {
@@ -357,7 +507,7 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId, scrapeLimit)
                         where: { id: chatSourceId },
                         data: {
                             collectionName: docTree.id,
-                            totalPages: actualPages,
+                            totalPages: pages.length,
                         },
                     },
                 },
