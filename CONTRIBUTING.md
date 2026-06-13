@@ -84,11 +84,11 @@ pnpm run lint
 pnpm run build
 ```
 
-5. Commit with a clear message:
+5. Commit with a clear message following the [Conventional Commits](#commit-messages) format:
 
 ```bash
-git commit -m "feat: short description" # for features
-git commit -m "fix: short description" # or for bugs
+git commit -m "feat: add dark mode toggle"
+git commit -m "fix: resolve session expiration race condition"
 ```
 
 6. Push your branch:
@@ -125,6 +125,106 @@ git push origin <your-branch-name>
 - Avoid bundling unrelated changes in one PR.
 
 Note: Please do not open a PR without a corresponding issue assignment.
+
+---
+
+## Commit Messages
+
+DocChat enforces [Conventional Commits](https://www.conventionalcommits.org/) via a `commit-msg` hook. Non-conforming commits are rejected automatically.
+
+### Format
+
+```
+<type>[optional scope]: <description>
+
+[optional body]
+
+[optional footer(s)]
+```
+
+### Allowed Types
+
+| Type | When to use |
+|------|-------------|
+| `feat` | New feature |
+| `fix` | Bug fix |
+| `docs` | Documentation changes only |
+| `style` | Formatting, whitespace (no logic change) |
+| `refactor` | Code restructure without feature or fix |
+| `perf` | Performance improvement |
+| `test` | Adding or fixing tests |
+| `build` | Build system or dependency changes |
+| `ci` | CI/CD configuration changes |
+| `chore` | Maintenance tasks |
+| `revert` | Reverting a previous commit |
+
+### Rules
+
+- Use **imperative mood**: "add" not "added" or "adds"
+- Keep the description **under 72 characters**
+- Start description with **lowercase**
+- No period at the end
+- Scope is optional but must be **kebab-case** when used
+
+### Good Examples
+
+```bash
+feat: add pagination to chat history
+fix(auth): prevent redirect loop on token expiry
+docs: update environment variable setup steps
+refactor(retrieval): extract chunking logic to separate module
+perf: cache user session data to reduce DB queries
+ci: add lint check to GitHub Actions workflow
+```
+
+### Bad Examples
+
+```bash
+# No type prefix
+added dark mode
+
+# Wrong tense
+feat: added dark mode
+
+# Too vague
+fix: fixed bug
+
+# Uppercase start
+feat: Add dark mode
+
+# Period at end
+fix: resolve login issue.
+
+# Multiple unrelated changes in one message
+feat: add dark mode and fix auth bug and update readme
+
+# WIP or placeholder messages
+WIP
+temp
+misc changes
+update stuff
+```
+
+### Breaking Changes
+
+Add `!` after the type, or include a `BREAKING CHANGE` footer:
+
+```bash
+feat(api)!: change response format to JSON:API
+
+BREAKING CHANGE: All API responses now use camelCase keys.
+Update client-side parsers accordingly.
+```
+
+### Issue References
+
+Link issues in the footer:
+
+```bash
+fix(upload): handle empty file gracefully
+
+Fixes #142
+```
 
 ---
 
