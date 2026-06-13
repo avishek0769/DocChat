@@ -182,7 +182,7 @@ const userLogIn = asyncHandler(async (req, res) => {
     const loggedInUser = await prisma.user.update({
         where: { id: user.id },
         data: { refreshToken },
-        select: { id: true, fullname: true, username: true, email: true, isAdmin: true },
+        select: { id: true, fullname: true, username: true, email: true },
     });
 
     try {
@@ -374,22 +374,40 @@ const deleteMyData = asyncHandler(async (req, res) => {
         })
       ).map((c) => c.id);
 
-      // Find ChatSource IDs used by this user's chats
+      // Find ChatSources used by this user's chats
       const userChatSources = await tx.chatSource.findMany({
-        where: { chatId: { in: userChatIds } },
-        select: { id: true, docsUrl: true },
+        where: {
+          chats: {
+            some: {
+              id: {
+                in: userChatIds,
+              },
+            },
+          },
+        },
+        select: {
+          id: true,
+          documentationUrl: true,
+        },
       });
 
-      // Only delete ChatSources not referenced by any other chat
+      // Only delete ChatSources not referenced by any other user's chats
       for (const cs of userChatSources) {
         const otherChatCount = await tx.chat.count({
           where: {
-            chatSources: { some: { docsUrl: cs.docsUrl } },
             userId: { not: userId },
+            chatSources: {
+              some: {
+                documentationUrl: cs.documentationUrl,
+              },
+            },
           },
         });
+
         if (otherChatCount === 0) {
-          await tx.chatSource.delete({ where: { id: cs.id } });
+          await tx.chatSource.delete({
+            where: { id: cs.id },
+          });
         }
       }
 

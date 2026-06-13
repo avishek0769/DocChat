@@ -1,7 +1,17 @@
 import "dotenv/config";
 import { Worker } from "bullmq";
-import Bottleneck from "bottleneck";
-import redis, { getChatProgressKey, updateChatProgress } from "./utils/redis.js";
+import redis, { getChatProgressKey } from "./utils/redis.js";
+
+/**
+ * Redis Ingestion Progress Payload Shape:
+ * {
+ *   "status": "QUEUED" | "PROCESSING" | "READY" | "FAILED",
+ *   "progress": number,       // 0 to 100 percentage
+ *   "current": number,        // number of pages processed so far
+ *   "total": number,          // total pages to be processed
+ *   "failureReason": string   // optional message if failed
+ * }
+ */
 import {
     normalizeUrl,
     isValidDocUrl,
@@ -140,6 +150,10 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId, 
         if (!collections.collections.some((c) => c.name === collectionName)) {
             await qdrant.createCollection(collectionName, {
                 vectors: { size: 1536, distance: "Cosine" },
+            });
+            await qdrant.createPayloadIndex(collectionName, {
+                field_name: "body",
+                field_schema: "text",
             });
         }
 
@@ -459,23 +473,28 @@ worker.on("failed", (job, err) => {
 
 worker.on("completed", async (job) => {
     console.log(`Job ${job.id} completed!`);
-    await refreshChatStatus(job.data.chatId).catch((err) => {
-        console.error("Update status Failed:", err.message);
-    });
+    
+    // Always write the final READY status in Redis using the chatId progress key.
+    await redis.setex(
+        getChatProgressKey(job.data.chatId),
+        3600,
+        JSON.stringify({ status: "READY", progress: 100 }),
+    );
+
+    await prisma.chat
+        .update({
+            where: { id: job.data.chatId },
+            data: { status: "READY" },
+        })
+        .catch((err) => {
+            console.error("Update status Failed:", err.message);
+        });
 });
 
 worker.on("failed", async (job, err) => {
-    console.log(err);
     console.error(`Job ${job?.id} failed: ${err.message}`);
     
     if (job?.data?.chatId) {
-        await updateChatProgress(job.data.chatId, { status: "FAILED" });
-        prisma.chat
-            .update({
-                where: { id: job.data.chatId },
-                data: { status: "FAILED" },
-            })
-            .catch(() => {});
-        redis.setex(job.data.chatId, 3600, JSON.stringify({ status: "FAILED" })).catch(() => {});
+        await markChatFailed(job.data.chatId, err);
     }
 });
