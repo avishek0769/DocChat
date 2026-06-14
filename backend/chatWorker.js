@@ -18,8 +18,8 @@ import {
     isValidDocUrl,
     scrapeWebpage,
     generateVectorEmbeddings,
+    splitDocumentationContent,
 } from "./utils/ragUtilities.js";
-import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { treeindex, qdrant } from "./utils/ragClients.js";
 import { v4 as uuidv4 } from "uuid";
 import prisma from "./utils/prismaClient.js";
@@ -306,11 +306,11 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId, 
                         return;
                     }
 
-                    const splitter = new RecursiveCharacterTextSplitter({
+                    const chunkObjects = splitDocumentationContent(body, {
                         chunkSize: 1000,
                         chunkOverlap: 150,
                     });
-                    const chunks = await splitter.splitText(body);
+                    const chunks = chunkObjects.map((chunk) => chunk.content);
 
                     console.log(`${existing ? "Updating" : "Processing"}: ${link} (${chunks.length} chunks)`);
 
@@ -338,6 +338,9 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId, 
                                 chatId,
                                 title,
                                 chatSourceId,
+                                heading: chunkObjects[i]?.heading ?? null,
+                                hasCodeBlock: Boolean(chunkObjects[i]?.hasCodeBlock),
+                                chunkType: chunkObjects[i]?.chunkType ?? "content",
                             },
                         }));
 
