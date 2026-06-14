@@ -4,7 +4,12 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
 import { scrapeWebpage } from "../utils/ragUtilities.js";
 import { cleanupQdrantCollections } from "../utils/qdrantCleanup.js";
-import redis, { getChatProgressKey, getChatProgressChannel, progressEmitter, redisSubscriber } from "../utils/redis.js";
+import redis, {
+    getChatProgressKey,
+    getChatProgressChannel,
+    progressEmitter,
+    redisSubscriber,
+} from "../utils/redis.js";
 import crypto from "crypto";
 import { createAuditEvent } from "../utils/audit.js";
 import { normalizeUrl } from "../utils/ragUtilities.js";
@@ -37,10 +42,7 @@ async function findReusableChatSource(docsUrl, isVectorLessChat) {
     return prisma.chatSource.findFirst({
         where: {
             isVectorLess: isVectorLessChat,
-            OR: [
-                { documentationUrl: docsUrl },
-                { documentationUrl: normalizedUrl },
-            ],
+            OR: [{ documentationUrl: docsUrl }, { documentationUrl: normalizedUrl }],
         },
         include: {
             _count: {
@@ -58,10 +60,11 @@ function isChatSourceReady(chatSource) {
 }
 
 function buildSourceCollectionName(source, fallbackName = "source") {
-    const base = String(source?.heading || fallbackName)
-        .replace(/\s+/g, "-")
-        .replace(/[^a-zA-Z0-9-_]/g, "")
-        .slice(0, 48) || fallbackName;
+    const base =
+        String(source?.heading || fallbackName)
+            .replace(/\s+/g, "-")
+            .replace(/[^a-zA-Z0-9-_]/g, "")
+            .slice(0, 48) || fallbackName;
     return `${base}-${Date.now()}`;
 }
 
@@ -127,7 +130,7 @@ const expectation = asyncHandler(async (req, res) => {
         let totalBodyLengthOfCount = 0;
 
         for (const link of sampleLinks) {
-            const { body } = await scrapeWebpage(link, docsUrls);
+            const { body } = await scrapeWebpage(link, normalizedDocsUrl);
             if (body) {
                 totalBodyLengthOfCount += body.length;
                 count++;
@@ -162,16 +165,16 @@ const expectation = asyncHandler(async (req, res) => {
 
 const createChat = asyncHandler(async (req, res) => {
     let { name, docsUrl, docsUrls, isVectorLess, scrapeLimit } = req.body;
-    
+
     const isVectorLessChat = normalizeBooleanLike(isVectorLess);
     const urls = Array.from(new Set([...(docsUrls || []), ...(docsUrl ? [docsUrl] : [])]));
-    
+
     if (!urls.length) {
         throw new ApiError(400, "At least one documentation URL is required.");
     }
 
     let resolvedName = name;
-    
+
     if (!resolvedName) {
         const normalizedDocsUrl = normalizeDocsUrl(urls[0]);
         const { title } = await scrapeWebpage(normalizedDocsUrl, normalizedDocsUrl);
@@ -193,7 +196,9 @@ const createChat = asyncHandler(async (req, res) => {
                     totalPages: internalLinks.length,
                     heading: title || resolvedName || "Untitled Chat",
                     documentationUrl: normalizedUrl,
-                    collectionName: isVectorLessChat ? null : buildSourceCollectionName({ heading: title || resolvedName }),
+                    collectionName: isVectorLessChat
+                        ? null
+                        : buildSourceCollectionName({ heading: title || resolvedName }),
                     isVectorLess: isVectorLessChat,
                     scrapeLimit: scrapeLimit ? Number(scrapeLimit) : null,
                 },
@@ -231,15 +236,17 @@ const createChat = asyncHandler(async (req, res) => {
         await enqueueSourceIngestion({ chatId: chat.id, chatSource: source, isVectorLessChat });
     }
 
-    return res.status(200).json(
-        new ApiResponse(
-            200,
-            { chatId: chat.id, status: chat.status },
-            needsIngestion
-                ? "Chat creation initiated successfully"
-                : "Documentation already ingested, returning existing sources with new chat",
-        ),
-    );
+    return res
+        .status(200)
+        .json(
+            new ApiResponse(
+                200,
+                { chatId: chat.id, status: chat.status },
+                needsIngestion
+                    ? "Chat creation initiated successfully"
+                    : "Documentation already ingested, returning existing sources with new chat",
+            ),
+        );
 });
 
 const addChatSource = asyncHandler(async (req, res) => {
@@ -251,7 +258,7 @@ const addChatSource = asyncHandler(async (req, res) => {
         where: { id: chatId },
         include: { chatSources: true },
     });
-    
+
     if (!chat) {
         throw new ApiError(404, "Chat not found");
     }
@@ -285,7 +292,8 @@ const addChatSource = asyncHandler(async (req, res) => {
             needsIngestion = true;
             isNew = true;
         } catch (error) {
-            if (error.code === "P2002") { // Unique constraint violation
+            if (error.code === "P2002") {
+                // Unique constraint violation
                 chatSource = await prisma.chatSource.findUnique({
                     where: {
                         documentationUrl_isVectorLess: {
@@ -296,10 +304,13 @@ const addChatSource = asyncHandler(async (req, res) => {
                     include: {
                         _count: { select: { pagesIndexed: true } },
                         documentTree: true,
-                    }
+                    },
                 });
                 if (!chatSource) {
-                    throw new ApiError(500, "Failed to retrieve existing ChatSource after unique constraint violation.");
+                    throw new ApiError(
+                        500,
+                        "Failed to retrieve existing ChatSource after unique constraint violation.",
+                    );
                 }
             } else {
                 throw error; // Rethrow other errors
@@ -350,14 +361,16 @@ const removeChatSource = asyncHandler(async (req, res) => {
         where: { id: chatId },
         include: { chatSources: true },
     });
-    
+
     if (!chat) {
         throw new ApiError(404, "Chat not found");
     }
 
     const normalizedUrl = normalizeDocsUrl(docsUrl);
     const chatSource = chat.chatSources.find(
-        (source) => source.isVectorLess === isVectorLessChat && sourceUrlMatches(source.documentationUrl, normalizedUrl),
+        (source) =>
+            source.isVectorLess === isVectorLessChat &&
+            sourceUrlMatches(source.documentationUrl, normalizedUrl),
     );
 
     if (!chatSource) {
@@ -471,7 +484,7 @@ const progressStatus = asyncHandler(async (req, res) => {
               sanitizeFailureReason(latestIngestionRun?.errorMessage) ||
               sanitizeFailureReason(redisProgress?.failureReason)
             : null;
-            
+
     const progress = normalizeProgress(
         redisProgress || {
             status: chat.status,
@@ -514,7 +527,7 @@ const streamChatStatus = asyncHandler(async (req, res) => {
 
     const redisData = await redis.get(getChatProgressKey(chatId));
     const initialProgress = normalizeProgress(redisData ? JSON.parse(redisData) : DEFAULT_PROGRESS);
-    
+
     res.write(`data: ${JSON.stringify({ progress: initialProgress })}\n\n`);
 
     if (["READY", "FAILED", "CANCELLED"].includes(initialProgress.status)) {
@@ -531,7 +544,7 @@ const streamChatStatus = asyncHandler(async (req, res) => {
     const listener = (message) => {
         const progress = normalizeProgress(JSON.parse(message));
         res.write(`data: ${JSON.stringify({ progress })}\n\n`);
-        
+
         if (["READY", "FAILED", "CANCELLED"].includes(progress.status)) {
             cleanup();
         }
@@ -868,7 +881,11 @@ const cancelProcessing = asyncHandler(async (req, res) => {
         await job.remove();
     }
 
-    await redis.setex(getChatProgressKey(chatId), 3600, JSON.stringify({ status: "READY", progress: 100 }));
+    await redis.setex(
+        getChatProgressKey(chatId),
+        3600,
+        JSON.stringify({ status: "READY", progress: 100 }),
+    );
 
     await prisma.chat
         .update({
@@ -913,9 +930,7 @@ const deleteChat = asyncHandler(async (req, res) => {
 
     await createAuditEvent("chat.deleted", req.user.id, chatId, {});
 
-    res.status(200).json(
-        new ApiResponse(200, null, "Chat deleted successfully"),
-    );
+    res.status(200).json(new ApiResponse(200, null, "Chat deleted successfully"));
 });
 
 const restoreChat = asyncHandler(async (req, res) => {
@@ -949,9 +964,7 @@ const restoreChat = asyncHandler(async (req, res) => {
 
     await createAuditEvent("chat.restored", req.user.id, chatId, {});
 
-    res.status(200).json(
-        new ApiResponse(200, null, "Chat restored successfully"),
-    );
+    res.status(200).json(new ApiResponse(200, null, "Chat restored successfully"));
 });
 
 const toggleShare = asyncHandler(async (req, res) => {
@@ -1074,11 +1087,11 @@ const downloadRawSource = asyncHandler(async (req, res) => {
     const chatSource = await prisma.chatSource.findFirst({
         where: {
             id: sourceId,
-            chats: { some: { id: chatId } }
+            chats: { some: { id: chatId } },
         },
         include: {
-            documentTree: true
-        }
+            documentTree: true,
+        },
     });
 
     if (!chatSource) {
@@ -1101,14 +1114,14 @@ const downloadRawSource = asyncHandler(async (req, res) => {
         do {
             const response = await qdrant.scroll(chatSource.collectionName, {
                 filter: {
-                    must: [{ key: "chatSourceId", match: { value: sourceId } }]
+                    must: [{ key: "chatSourceId", match: { value: sourceId } }],
                 },
                 limit: 1000,
-                offset: nextOffset
+                offset: nextOffset,
             });
 
             for (const point of response.points) {
-                rawText += `--- ${point.payload.title || 'Page'} (${point.payload.url}) ---\n`;
+                rawText += `--- ${point.payload.title || "Page"} (${point.payload.url}) ---\n`;
                 rawText += `${point.payload.body}\n\n`;
             }
 
@@ -1120,8 +1133,8 @@ const downloadRawSource = asyncHandler(async (req, res) => {
         }
     }
 
-    res.setHeader('Content-Type', 'text/plain');
-    res.setHeader('Content-Disposition', `attachment; filename="source-${sourceId}-raw.txt"`);
+    res.setHeader("Content-Type", "text/plain");
+    res.setHeader("Content-Disposition", `attachment; filename="source-${sourceId}-raw.txt"`);
     res.send(rawText);
 });
 
