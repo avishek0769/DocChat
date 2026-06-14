@@ -1,26 +1,44 @@
+import { Suspense, lazy } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import LandingPage from "./pages/LandingPage";
-import Dashboard from "./pages/Dashboard";
-import AllChats from "./pages/AllChats";
-import Settings from "./pages/Settings";
-import SignIn from "./pages/SignIn";
-import SignUp from "./pages/SignUp";
-import Profile from "./pages/Profile";
-import { ChatPage } from "./pages/ChatPage";
-import { SharedChatPage } from "./pages/SharedChatPage";
-import { Usage } from "./pages/Usage";
-import AdminOverview from "./pages/AdminOverview";
-import AdminUsers from "./pages/AdminUsers";
-import AdminUserDetail from "./pages/AdminUserDetail";
-import AdminUsage from "./pages/AdminUsage";
-import AdminIngestion from "./pages/AdminIngestion";
 import { ProtectedRoute, PublicOnlyRoute } from "./components/ProtectedRoute";
 import { isAuthenticated } from "./lib/auth";
+
+// Lazy load route pages
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const AllChats = lazy(() => import("./pages/AllChats"));
+const Settings = lazy(() => import("./pages/Settings"));
+const SignIn = lazy(() => import("./pages/SignIn"));
+const SignUp = lazy(() => import("./pages/SignUp"));
+const Profile = lazy(() => import("./pages/Profile"));
+const ChatPage = lazy(() =>
+    import("./pages/ChatPage").then((module) => ({ default: module.ChatPage }))
+);
+const SharedChatPage = lazy(() =>
+    import("./pages/SharedChatPage").then((module) => ({
+        default: module.SharedChatPage,
+    }))
+);
+const Usage = lazy(() =>
+    import("./pages/Usage").then((module) => ({ default: module.Usage }))
+);
+const AdminOverview = lazy(() => import("./pages/AdminOverview"));
+const AdminUsers = lazy(() => import("./pages/AdminUsers"));
+const AdminUserDetail = lazy(() => import("./pages/AdminUserDetail"));
+const AdminUsage = lazy(() => import("./pages/AdminUsage"));
+const AdminIngestion = lazy(() => import("./pages/AdminIngestion"));
 
 function App() {
     return (
         <BrowserRouter>
-            <Routes>
+            <Suspense
+                fallback={
+                    <div className="min-h-screen bg-[#0b0b0f] flex items-center justify-center">
+                        <div className="w-8 h-8 border-2 border-accent-blue/30 border-t-accent-blue rounded-full animate-spin" />
+                    </div>
+                }
+            >
+                <Routes>
             <Route
                 path="/"
                 element={
@@ -140,6 +158,7 @@ function App() {
                     }
                 />
             </Routes>
+            </Suspense>
         </BrowserRouter>
     );
 }

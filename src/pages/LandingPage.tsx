@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, type ReactNode } from "react";
 import { Link as RouterLink } from "react-router-dom";
 import { motion } from "framer-motion";
-import demoImage from "../components/image.png";
+import demoImage from "../components/image.webp";
 import ScrollToTop from "../components/ScrollToTop";
 import {
     MessageSquare,
@@ -95,8 +95,11 @@ const LandingPage = () => {
                     {/* Logo */}
                     <div className="flex items-center gap-2">
                         <img
-                            src="/docchat-logo.png"
+                            src="/docchat-logo.webp"
                             alt="DocChat"
+                            width={1101}
+                            height={395}
+                            fetchPriority="high"
                             className="h-14 w-auto drop-shadow-[0_0_8px_rgba(99,102,241,0.4)]"
                         />
                     </div>
@@ -365,7 +368,10 @@ const LandingPage = () => {
                         <img
                             src={demoImage}
                             alt="DocChat interface preview"
-                            className="w-full h-full object-cover rounded-lg border border-white/10"
+                            width={1412}
+                            height={927}
+                            loading="lazy"
+                            className="w-full h-auto rounded-lg border border-white/10"
                         />
                     </div>
                     <div className="order-1 md:order-2 w-full max-w-xl md:justify-self-center text-left">
@@ -587,7 +593,14 @@ const LandingPage = () => {
             <footer className="relative z-10 border-t border-white/10 bg-[#0a0a0c] py-8 px-6">
                 <div className="max-w-4xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
                     <div className="flex items-center gap-2">
-                        <img src="/docchat-logo.png" alt="DocChat" className="h-16 w-auto" />
+                        <img
+                            src="/docchat-logo.webp"
+                            alt="DocChat"
+                            width={1101}
+                            height={395}
+                            loading="lazy"
+                            className="h-16 w-auto"
+                        />
                     </div>
                     <div className="flex gap-6 text-sm text-gray-500">
                         <a
