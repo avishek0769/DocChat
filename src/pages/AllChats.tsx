@@ -8,13 +8,14 @@ import {
     Database,
     Clock,
     Trash2,
+    Pencil,
     AlertCircle,
     Loader2,
     CheckCircle2,
     ExternalLink,
 } from "lucide-react";
 import { Sidebar } from "../components/Sidebar";
-import { deleteChat, getChats, getChatStatus, subscribeToChatStatus, type ChatItem } from "../lib/api";
+import { deleteChat, getChats, getChatStatus, renameChat, subscribeToChatStatus, type ChatItem } from "../lib/api";
 import { formatTokens } from "../lib/format";
 
 type ChatRow = {
@@ -66,6 +67,10 @@ const AllChats = () => {
     const [deleteTarget, setDeleteTarget] = useState<ChatRow | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
     const [deleteError, setDeleteError] = useState("");
+    const [renameTarget, setRenameTarget] = useState<ChatRow | null>(null);
+    const [renameName, setRenameName] = useState("");
+    const [isRenaming, setIsRenaming] = useState(false);
+    const [renameError, setRenameError] = useState("");
 
     const loadChats = async () => {
         setIsLoading(true);
@@ -182,6 +187,50 @@ const AllChats = () => {
             setDeleteError(err instanceof Error ? err.message : "Failed to delete chat.");
         } finally {
             setIsDeleting(false);
+        }
+    };
+
+    const openRenameModal = (chat: ChatRow) => {
+        setRenameError("");
+        setRenameTarget(chat);
+        setRenameName(chat.title);
+    };
+
+    const closeRenameModal = () => {
+        if (isRenaming) return;
+        setRenameError("");
+        setRenameTarget(null);
+        setRenameName("");
+    };
+
+    const handleRename = async () => {
+        if (!renameTarget) return;
+
+        const nextName = renameName.trim();
+        if (!nextName) {
+            setRenameError("Chat name is required.");
+            return;
+        }
+        if (nextName.length > 100) {
+            setRenameError("Chat name must be 100 characters or fewer.");
+            return;
+        }
+
+        setIsRenaming(true);
+        setRenameError("");
+        setError("");
+        try {
+            const response = await renameChat(renameTarget.id, nextName);
+            const updatedName = response?.chat?.name || nextName;
+            setChats((prev) =>
+                prev.map((chat) => (chat.id === renameTarget.id ? { ...chat, title: updatedName } : chat)),
+            );
+            setRenameTarget(null);
+            setRenameName("");
+        } catch (err) {
+            setRenameError(err instanceof Error ? err.message : "Failed to rename chat.");
+        } finally {
+            setIsRenaming(false);
         }
     };
 
@@ -386,8 +435,14 @@ const AllChats = () => {
                                                 onClick={() => openDeleteModal(chat)}
                                                 className="p-1.5 rounded-md text-gray-500 hover:text-red-400 hover:bg-red-400/10 transition-colors"
                                             >
-
                                                 <Trash2 className="w-4 h-4" />
+                                            </button>
+                                            <button
+                                                title="Rename Chat"
+                                                onClick={() => openRenameModal(chat)}
+                                                className="p-1.5 rounded-md text-gray-500 hover:text-accent-blue hover:bg-accent-blue/10 transition-colors"
+                                            >
+                                                <Pencil className="w-4 h-4" />
                                             </button>
                                         </div>
                                     </div>
@@ -452,6 +507,78 @@ const AllChats = () => {
                                 </button>
                             </div>
                         </div>
+                    </div>
+                )}
+
+                {/* Rename Chat Modal */}
+                {renameTarget && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                        <div
+                            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                            onClick={closeRenameModal}
+                        />
+                        <form
+                            onSubmit={(e) => {
+                                e.preventDefault();
+                                handleRename();
+                            }}
+                            className="relative w-full max-w-sm bg-[#0b0b0f] border border-white/10 rounded-2xl shadow-2xl p-6 text-left"
+                        >
+                            <div className="w-14 h-14 rounded-full bg-accent-blue/10 border border-accent-blue/20 flex items-center justify-center mx-auto mb-4">
+                                <Pencil className="w-6 h-6 text-accent-blue" />
+                            </div>
+                            <h3 className="text-lg font-semibold mb-2 text-center">Rename Chat</h3>
+                            <p className="text-sm text-gray-400 mb-4 text-center">
+                                Give <strong className="text-gray-200">"{renameTarget.title}"</strong> a clearer name.
+                            </p>
+                            <label htmlFor="allchats-rename-chat" className="block text-sm text-gray-300 mb-2">
+                                Chat name
+                            </label>
+                            <input
+                                id="allchats-rename-chat"
+                                type="text"
+                                value={renameName}
+                                onChange={(e) => {
+                                    setRenameName(e.target.value);
+                                    if (renameError) setRenameError("");
+                                }}
+                                maxLength={100}
+                                autoFocus
+                                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-gray-500 focus:border-accent-blue/50 focus:outline-none focus:ring-1 focus:ring-accent-blue/50"
+                                placeholder="Enter chat name"
+                            />
+                            <p className="mt-2 text-xs text-gray-500">Up to 100 characters.</p>
+                            {renameError && (
+                                <div className="mt-4 flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-left text-sm text-red-400">
+                                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                                    <span>{renameError}</span>
+                                </div>
+                            )}
+                            <div className="mt-6 flex gap-3">
+                                <button
+                                    type="button"
+                                    onClick={closeRenameModal}
+                                    disabled={isRenaming}
+                                    className="flex-1 px-4 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 transition-colors disabled:opacity-60"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isRenaming || !renameName.trim() || renameName.trim().length > 100}
+                                    className="flex-1 px-4 py-2 rounded-lg text-sm font-medium text-white bg-accent-blue hover:bg-accent-blue/90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors inline-flex items-center justify-center gap-2"
+                                >
+                                    {isRenaming ? (
+                                        <>
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                            Saving...
+                                        </>
+                                    ) : (
+                                        "Save"
+                                    )}
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 )}
             </main>

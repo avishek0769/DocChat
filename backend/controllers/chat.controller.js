@@ -734,6 +734,93 @@ const chatDetails = asyncHandler(async (req, res) => {
     res.status(200).json(new ApiResponse(200, { chat }, "Chat details fetched successfully"));
 });
 
+const renameChat = asyncHandler(async (req, res) => {
+    const { chatId } = req.params;
+    const { name } = req.body;
+    const nextName = typeof name === "string" ? name.trim() : "";
+
+    if (!nextName) {
+        throw new ApiError(400, "Chat name is required");
+    }
+
+    if (nextName.length > 100) {
+        throw new ApiError(400, "Chat name must be 100 characters or fewer");
+    }
+
+    const chat = await prisma.chat.findFirst({
+        where: {
+            id: chatId,
+            userId: req.user.id,
+            deletedAt: null,
+        },
+        include: {
+            chatSources: {
+                include: {
+                    _count: { select: { pagesIndexed: true } },
+                    pagesIndexed: true,
+                },
+            },
+            usageEvents: {
+                select: {
+                    inputTokens: true,
+                    outputTokens: true,
+                },
+            },
+        },
+    });
+
+    if (!chat) {
+        throw new ApiError(404, "Chat not found");
+    }
+
+    const updatedChat = await prisma.chat.update({
+        where: { id: chatId },
+        data: { name: nextName },
+        include: {
+            chatSources: {
+                include: {
+                    _count: { select: { pagesIndexed: true } },
+                    pagesIndexed: true,
+                },
+            },
+            usageEvents: {
+                select: {
+                    inputTokens: true,
+                    outputTokens: true,
+                },
+            },
+        },
+    });
+
+    const totals = updatedChat.usageEvents.reduce(
+        (acc, curr) => {
+            acc.inputTokens += curr.inputTokens ?? 0;
+            acc.outputTokens += curr.outputTokens ?? 0;
+            return acc;
+        },
+        { inputTokens: 0, outputTokens: 0 },
+    );
+
+    const { usageEvents, ...chatData } = updatedChat;
+
+    res.status(200).json(
+        new ApiResponse(
+            200,
+            {
+                chat: {
+                    ...chatData,
+                    totalUsage: {
+                        input: totals.inputTokens,
+                        output: totals.outputTokens,
+                        total: totals.inputTokens + totals.outputTokens,
+                    },
+                },
+            },
+            "Chat renamed successfully",
+        ),
+    );
+});
+
 const listAllPagesIndexed = asyncHandler(async (req, res) => {
     const { chatId } = req.params;
 
@@ -1049,6 +1136,7 @@ export {
     qdrantCleanup,
     listAllChats,
     chatDetails,
+    renameChat,
     cancelProcessing,
     deleteChat,
     restoreChat,

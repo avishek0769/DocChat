@@ -352,13 +352,6 @@ const Settings = () => {
                                             >
                                                 <Edit2 className="w-4 h-4" />
                                             </button>
-                                            <button
-                                                onClick={() => handleDeleteKey(key.id)}
-                                                className="p-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors"
-                                                title="Delete Key"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
                                         </div>
                                     </div>
                                 ))

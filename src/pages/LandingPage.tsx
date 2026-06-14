@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, type ReactNode } from "react";
 import { Link as RouterLink } from "react-router-dom";
 import { motion } from "framer-motion";
 import demoImage from "../components/image.png";
+import ScrollToTop from "../components/ScrollToTop";
 import {
     MessageSquare,
     Zap,
@@ -614,6 +615,7 @@ const LandingPage = () => {
                     </div>
                 </div>
             </footer>
+            <ScrollToTop />
         </div>
     );
 };

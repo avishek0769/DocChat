@@ -166,6 +166,35 @@ export const createChatSchema = {
     }),
 };
 
+export const renameChatSchema = {
+    body: z.object({
+        name: z
+            .string()
+            .optional()
+            .transform((value, ctx) => {
+                const trimmed = typeof value === "string" ? value.trim() : "";
+
+                if (!trimmed) {
+                    ctx.addIssue({
+                        code: z.ZodIssueCode.custom,
+                        message: "Chat name is required",
+                    });
+                    return z.NEVER;
+                }
+
+                if (trimmed.length > 100) {
+                    ctx.addIssue({
+                        code: z.ZodIssueCode.custom,
+                        message: "Chat name must be 100 characters or fewer",
+                    });
+                    return z.NEVER;
+                }
+
+                return trimmed;
+            }),
+    }),
+};
+
 export const addChatSourceSchema = {
     body: z.object({
         docsUrl: url,

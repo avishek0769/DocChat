@@ -10,6 +10,7 @@ import {
     Database,
     Clock,
     Trash2,
+    Pencil,
     AlertCircle,
     Loader2,
     CheckCircle2,
@@ -20,6 +21,7 @@ import {
     createChat,
     deleteChat,
     getChatStatus,
+    renameChat,
     subscribeToChatStatus,
     getLifetimeTokens,
     getRecentChats,
@@ -96,8 +98,14 @@ const Dashboard = () => {
     const [isCreating, setIsCreating] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isCancelling, setIsCancelling] = useState(false);
+    const [renameTarget, setRenameTarget] = useState<Chat | null>(null);
+    const [renameName, setRenameName] = useState("");
+    const [isRenaming, setIsRenaming] = useState(false);
+    const [renameError, setRenameError] = useState("");
     const [lifetimeTokens, setLifetimeTokens] = useState(0);
     const [failedRuns, setFailedRuns] = useState<FailedIngestionRunItem[]>([]);
+    const [searchTerm, setSearchTerm] = useState("");
+    const [statusFilter, setStatusFilter] = useState("all");
     const [chatProgress, setChatProgress] = useState<
         Record<string, { status: string; progress: number }>
     >({});
@@ -124,6 +132,23 @@ const Dashboard = () => {
         setToast(message);
         setTimeout(() => setToast(null), 2500);
     }, []);
+
+    const filteredChats = chats.filter((chat) => {
+        const liveStatus = normalizeStatus(
+            chatProgress[chat.id]?.status || chat.status,
+        );
+
+        const search = searchTerm.trim().toLowerCase();
+
+        const matchesSearch =
+            !search ||
+            chat.title.toLowerCase().includes(search) ||
+            chat.urls.some((url) => url.toLowerCase().includes(search));
+
+        const matchesStatus = statusFilter === "all" || liveStatus === statusFilter;
+
+        return matchesSearch && matchesStatus;
+    });
 
     const loadDashboardData = useCallback(async () => {
         setError("");
@@ -397,6 +422,50 @@ const Dashboard = () => {
         }
     };
 
+    const openRenameModal = (chat: Chat) => {
+        setRenameError("");
+        setRenameTarget(chat);
+        setRenameName(chat.title);
+    };
+
+    const closeRenameModal = () => {
+        if (isRenaming) return;
+        setRenameError("");
+        setRenameTarget(null);
+        setRenameName("");
+    };
+
+    const handleRenameChat = async () => {
+        if (!renameTarget) return;
+
+        const nextName = renameName.trim();
+        if (!nextName) {
+            setRenameError("Chat name is required.");
+            return;
+        }
+        if (nextName.length > 100) {
+            setRenameError("Chat name must be 100 characters or fewer.");
+            return;
+        }
+
+        setIsRenaming(true);
+        setRenameError("");
+        try {
+            const response = await renameChat(renameTarget.id, nextName);
+            const updatedName = response?.chat?.name || nextName;
+            setChats((prev) =>
+                prev.map((chat) => (chat.id === renameTarget.id ? { ...chat, title: updatedName } : chat)),
+            );
+            setRenameTarget(null);
+            setRenameName("");
+            showToast(`Renamed to "${updatedName}".`);
+        } catch (err) {
+            setRenameError(err instanceof Error ? err.message : "Failed to rename chat.");
+        } finally {
+            setIsRenaming(false);
+        }
+    };
+
     const handleCancelChat = async (chatId: string) => {
         setIsCancelling(true);
         try {
@@ -615,12 +684,36 @@ const Dashboard = () => {
 
                     {/* Chat List Section */}
                     <div>
-                        <h2 className="text-lg font-semibold mb-6 flex items-center gap-2">
-                            Recent Chats{" "}
-                            <span className="px-2 py-0.5 rounded-full bg-white/10 text-xs font-mono text-gray-400">
-                                {chats.length}
-                            </span>
-                        </h2>
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+                            <h2 className="text-lg font-semibold flex items-center gap-2">
+                                Recent Chats
+                                <span className="px-2 py-0.5 rounded-full bg-white/10 text-xs font-mono text-gray-400">
+                                    {filteredChats.length}
+                                </span>
+                            </h2>
+
+                            <div className="flex flex-col sm:flex-row gap-3">
+                                <input
+                                    type="text"
+                                    placeholder="Search chats..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    className="bg-[#0d0d12] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-accent-blue"
+                                />
+
+                                <select
+                                    value={statusFilter}
+                                    onChange={(e) => setStatusFilter(e.target.value)}
+                                    className="bg-[#0d0d12] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent-blue"
+                                >
+                                    <option value="all">All</option>
+                                    <option value="ready">Ready</option>
+                                    <option value="processing">Processing</option>
+                                    <option value="queued">Queued</option>
+                                    <option value="failed">Failed</option>
+                                </select>
+                            </div>
+                        </div>
 
                         {isLoading ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -635,9 +728,9 @@ const Dashboard = () => {
                                     </div>
                                 ))}
                             </div>
-                        ) : chats.length > 0 ? (
+                        ) : filteredChats.length > 0 ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {chats.map((chat) => {
+                                {filteredChats.map((chat) => {
                                     const liveStatus = normalizeStatus(
                                         chatProgress[chat.id]?.status || chat.status,
                                     );
@@ -781,6 +874,13 @@ const Dashboard = () => {
                                                     </button>
                                                 )}
                                                 <button
+                                                    aria-label="Rename"
+                                                    onClick={() => openRenameModal(chat)}
+                                                    className="p-2 rounded-lg text-gray-500 hover:text-accent-blue hover:bg-accent-blue/10 transition-colors border border-transparent hover:border-accent-blue/20"
+                                                >
+                                                    <Pencil className="w-4 h-4" />
+                                                </button>
+                                                <button
                                                     aria-label="Delete"
                                                     onClick={() => setDeleteTarget(chat)}
                                                     className="p-2 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-400/10 transition-colors border border-transparent hover:border-red-400/20"
@@ -798,10 +898,13 @@ const Dashboard = () => {
                                 <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mb-4 border border-white/10">
                                     <Database className="w-8 h-8 text-gray-400" />
                                 </div>
-                                <h3 className="text-xl font-semibold mb-2">No chats yet</h3>
+                                <h3 className="text-xl font-semibold mb-2">
+                                    {chats.length === 0 ? "No chats found yet." : "No chats match the current search or filter."}
+                                </h3>
                                 <p className="text-gray-400 max-w-sm mb-6">
-                                    You haven't processed any documentation. Create your first knowledge
-                                    base to start chatting.
+                                    {chats.length === 0
+                                        ? "You haven't processed any documentation. Create your first knowledge base to start chatting."
+                                        : "Try a different search term or clear the status filter to see more chats."}
                                 </p>
                                 <button
                                     onClick={() => setIsModalOpen(true)}
@@ -1099,6 +1202,78 @@ const Dashboard = () => {
                             </button>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* Rename Chat Modal */}
+            {renameTarget && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div
+                        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                        onClick={closeRenameModal}
+                    />
+                    <form
+                        onSubmit={(e) => {
+                            e.preventDefault();
+                            handleRenameChat();
+                        }}
+                        className="relative w-full max-w-sm bg-[#0b0b0f] border border-white/10 rounded-2xl shadow-2xl p-6 text-left"
+                    >
+                        <div className="w-14 h-14 rounded-full bg-accent-blue/10 border border-accent-blue/20 flex items-center justify-center mx-auto mb-4">
+                            <Pencil className="w-6 h-6 text-accent-blue" />
+                        </div>
+                        <h3 className="text-lg font-semibold mb-2 text-center">Rename Chat</h3>
+                        <p className="text-sm text-gray-400 mb-4 text-center">
+                            Give <strong className="text-gray-200">"{renameTarget.title}"</strong> a clearer name.
+                        </p>
+                        <label htmlFor="dashboard-rename-chat" className="block text-sm text-gray-300 mb-2">
+                            Chat name
+                        </label>
+                        <input
+                            id="dashboard-rename-chat"
+                            type="text"
+                            value={renameName}
+                            onChange={(e) => {
+                                setRenameName(e.target.value);
+                                if (renameError) setRenameError("");
+                            }}
+                            maxLength={100}
+                            autoFocus
+                            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-gray-500 focus:border-accent-blue/50 focus:outline-none focus:ring-1 focus:ring-accent-blue/50"
+                            placeholder="Enter chat name"
+                        />
+                        <p className="mt-2 text-xs text-gray-500">Up to 100 characters.</p>
+                        {renameError && (
+                            <div className="mt-4 flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-left text-sm text-red-400">
+                                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                                <span>{renameError}</span>
+                            </div>
+                        )}
+                        <div className="mt-6 flex gap-3">
+                            <button
+                                type="button"
+                                onClick={closeRenameModal}
+                                disabled={isRenaming}
+                                className="flex-1 px-4 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 transition-colors disabled:opacity-60"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                disabled={isRenaming || !renameName.trim() || renameName.trim().length > 100}
+                                className="flex-1 px-4 py-2 rounded-lg text-sm font-medium text-white bg-accent-blue hover:bg-accent-blue/90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors inline-flex items-center justify-center gap-2"
+                            >
+                                {isRenaming ? (
+                                    <>
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        Saving...
+                                    </>
+                                ) : (
+                                    "Save"
+                                )}
+                            </button>
+                        </div>
+                    </form>
                 </div>
             )}
 

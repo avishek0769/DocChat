@@ -5,6 +5,7 @@ import { verifyChatOwnership } from "../middlewares/chat.middleware.js";
 import {
     expectationQuerySchema,
     createChatSchema,
+    renameChatSchema,
     addChatSourceSchema,
     chatIdParamSchema,
     qdrantCleanupSchema,
@@ -14,6 +15,7 @@ import {
     addChatSource,
     chatDetails,
     createChat,
+    renameChat,
     deleteChat,
     restoreChat,
     expectation,
@@ -59,7 +61,8 @@ chatRouter
 
 chatRouter
     .route("/:chatId")
-    .get(verifyStrictJWT, validate(chatIdParamSchema), verifyChatOwnership, chatDetails);
+    .get(verifyStrictJWT, validate(chatIdParamSchema), verifyChatOwnership, chatDetails)
+    .patch(verifyStrictJWT, validate(chatIdParamSchema), validate(renameChatSchema), verifyChatOwnership, renameChat);
 chatRouter
     .route("/pages-indexed/:chatId")
     .get(verifyStrictJWT, validate(chatIdParamSchema), verifyChatOwnership, listAllPagesIndexed);

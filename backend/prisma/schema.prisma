@@ -105,13 +105,16 @@ model IngestionRun {
 }
 
 model DocumentPage {
-    id           String     @id @unique @default(uuid())
-    heading      String
-    pageUrl      String     @map("page_url")
-    chatSourceId String     @map("chat_source_id")
-    startIndex   Int?       @map("start_index")
-    endIndex     Int?       @map("end_index")
-    chatSource   ChatSource @relation(fields: [chatSourceId], references: [id], onDelete: Cascade)
+    id            String     @id @unique @default(uuid())
+    heading       String
+    pageUrl       String     @map("page_url")
+    chatSourceId  String     @map("chat_source_id")
+    startIndex    Int?       @map("start_index")
+    endIndex      Int?       @map("end_index")
+    contentHash   String?    @map("content_hash")
+    lastFetchedAt DateTime?  @map("last_fetched_at")
+    isActive      Boolean    @default(true) @map("is_active")
+    chatSource    ChatSource @relation(fields: [chatSourceId], references: [id], onDelete: Cascade)
 }
 
 model DocumentTree {

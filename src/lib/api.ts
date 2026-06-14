@@ -266,6 +266,15 @@ export const deleteChat = async (chatId: string) => {
     return result;
 };
 
+export const renameChat = async (chatId: string, name: string) => {
+    const result = await apiRequest<{ chat: ChatItem }>(`/chat/${chatId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ name }),
+    });
+    invalidateChatCaches();
+    return result;
+};
+
 export const getChatStatus = (chatId: string) =>
     apiRequest<{
         progress: {
