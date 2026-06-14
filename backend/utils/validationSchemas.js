@@ -70,6 +70,12 @@ export const chatIdParamSchema = {
     }),
 };
 
+export const bulkDeleteChatsSchema = {
+    body: z.object({
+        chatIds: z.array(chatId).min(1, "At least one chat ID is required"),
+    }),
+};
+
 export const chatMessagesQuerySchema = {
     query: z.object({
         limit: z.coerce.number().int().min(1).max(100).default(50),

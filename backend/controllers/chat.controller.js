@@ -933,6 +933,60 @@ const deleteChat = asyncHandler(async (req, res) => {
     res.status(200).json(new ApiResponse(200, null, "Chat deleted successfully"));
 });
 
+const bulkDeleteChats = asyncHandler(async (req, res) => {
+    const { chatIds } = req.body;
+
+    if (!Array.isArray(chatIds) || chatIds.length === 0) {
+        throw new ApiError(400, "At least one chat ID is required");
+    }
+
+    const chats = await prisma.chat.findMany({
+        where: {
+            id: { in: chatIds },
+        },
+        select: {
+            id: true,
+            userId: true,
+            deletedAt: true,
+        },
+    });
+
+    const ownedChatIds = chats
+        .filter((chat) => chat.userId === req.user.id && !chat.deletedAt)
+        .map((chat) => chat.id);
+
+    if (ownedChatIds.length === 0) {
+        return res.status(200).json(
+            new ApiResponse(200, { deletedCount: 0 }, "No chats deleted"),
+        );
+    }
+
+    const result = await prisma.chat.updateMany({
+        where: {
+            id: { in: ownedChatIds },
+            userId: req.user.id,
+            deletedAt: null,
+        },
+        data: {
+            deletedAt: new Date(),
+        },
+    });
+
+    const deletedCount = result.count ?? 0;
+
+    if (deletedCount > 0) {
+        await Promise.all(
+            ownedChatIds.map((chatId) =>
+                createAuditEvent("chat.deleted", req.user.id, chatId, {}).catch(() => {}),
+            ),
+        );
+    }
+
+    res.status(200).json(
+        new ApiResponse(200, { deletedCount }, "Chats deleted successfully"),
+    );
+});
+
 const restoreChat = asyncHandler(async (req, res) => {
     const { chatId } = req.params;
 
@@ -1152,6 +1206,7 @@ export {
     renameChat,
     cancelProcessing,
     deleteChat,
+    bulkDeleteChats,
     restoreChat,
     listAllPagesIndexed,
     recentChats,

@@ -8,6 +8,7 @@ import {
     renameChatSchema,
     addChatSourceSchema,
     chatIdParamSchema,
+    bulkDeleteChatsSchema,
     qdrantCleanupSchema,
 } from "../utils/validationSchemas.js";
 import {
@@ -17,6 +18,7 @@ import {
     createChat,
     renameChat,
     deleteChat,
+    bulkDeleteChats,
     restoreChat,
     expectation,
     removeChatSource,
@@ -69,6 +71,9 @@ chatRouter
 chatRouter
     .route("/:chatId/sources/:sourceId/raw")
     .get(verifyStrictJWT, validate(chatIdParamSchema), verifyChatOwnership, downloadRawSource);
+chatRouter
+    .route("/bulk-delete")
+    .post(verifyStrictJWT, validate(bulkDeleteChatsSchema), bulkDeleteChats);
 chatRouter
     .route("/:chatId")
     .delete(verifyStrictJWT, validate(chatIdParamSchema), verifyChatOwnership, deleteChat);

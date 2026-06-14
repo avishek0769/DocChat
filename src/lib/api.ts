@@ -266,6 +266,16 @@ export const deleteChat = async (chatId: string) => {
     return result;
 };
 
+export const bulkDeleteChats = async (chatIds: string[]) => {
+    const result = await apiRequest("/chat/bulk-delete", {
+        method: "POST",
+        body: JSON.stringify({ chatIds }),
+    });
+
+    invalidateChatCaches();
+    return result;
+};
+
 export const renameChat = async (chatId: string, name: string) => {
     const result = await apiRequest<{ chat: ChatItem }>(`/chat/${chatId}`, {
         method: "PATCH",

@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import {
     createChat,
+    bulkDeleteChats,
     deleteChat,
     getChatStatus,
     renameChat,
@@ -97,6 +98,7 @@ const Dashboard = () => {
     const [error, setError] = useState("");
     const [isCreating, setIsCreating] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [selectedChats, setSelectedChats] = useState<string[]>([]);
     const [isCancelling, setIsCancelling] = useState(false);
     const [renameTarget, setRenameTarget] = useState<Chat | null>(null);
     const [renameName, setRenameName] = useState("");
@@ -132,6 +134,14 @@ const Dashboard = () => {
         setToast(message);
         setTimeout(() => setToast(null), 2500);
     }, []);
+
+    const toggleChatSelection = (chatId: string) => {
+        setSelectedChats((prev) =>
+            prev.includes(chatId)
+                ? prev.filter((id) => id !== chatId)
+                : [...prev, chatId]
+        );
+    };
 
     const filteredChats = chats.filter((chat) => {
         const liveStatus = normalizeStatus(
@@ -417,6 +427,32 @@ const Dashboard = () => {
             showToast(`"${title}" deleted successfully.`);
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to delete chat.");
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+
+    const handleBulkDelete = async () => {
+        if (!selectedChats.length) return;
+
+        try {
+            setIsDeleting(true);
+
+            await bulkDeleteChats(selectedChats);
+
+            setChats((prev) =>
+                prev.filter((chat) => !selectedChats.includes(chat.id))
+            );
+
+            showToast(`${selectedChats.length} chats deleted`);
+
+            setSelectedChats([]);
+        } catch (err) {
+            setError(
+                err instanceof Error
+                    ? err.message
+                    : "Failed to delete selected chats."
+            );
         } finally {
             setIsDeleting(false);
         }
@@ -715,6 +751,23 @@ const Dashboard = () => {
                             </div>
                         </div>
 
+                        {selectedChats.length > 0 && (
+                            <div className="mb-4 flex items-center justify-between rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3">
+                                <span className="text-sm text-gray-300">
+                                    {selectedChats.length} chat{selectedChats.length > 1 ? "s" : ""} selected
+                                </span>
+
+                                <button
+                                    onClick={handleBulkDelete}
+                                    disabled={isDeleting}
+                                    className="flex items-center gap-2 rounded-lg bg-red-600 px-3 py-2 text-sm text-white hover:bg-red-700"
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                    Delete Selected
+                                </button>
+                            </div>
+                        )}
+
                         {isLoading ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                 {[1, 2, 3].map((i) => (
@@ -746,32 +799,41 @@ const Dashboard = () => {
                                             className="group relative flex flex-col bg-[#0d0d12] rounded-xl border border-white/5 hover:border-white/15 p-5 transition-all hover:shadow-2xl hover:-translate-y-1"
                                         >
                                             <div className="flex justify-between items-start mb-4">
-                                                <div className="truncate pr-4">
-                                                    <h3
-                                                        className="font-semibold text-gray-100 truncate"
-                                                        title={chat.title}
-                                                    >
-                                                        {chat.title}
-                                                    </h3>
-                                                    <div className="flex flex-wrap gap-1.5 mt-2">
-                                                        {chat.urls.map((u, i) => (
-                                                            <a
-                                                                key={i}
-                                                                href={u}
-                                                                target="_blank"
-                                                                rel="noreferrer"
-                                                                className="text-xs text-gray-500 hover:text-accent-blue bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 px-2 py-0.5 rounded transition-all truncate max-w-37.5"
-                                                                title={u}
-                                                            >
-                                                                {(() => {
-                                                                    try {
-                                                                        return new URL(u).hostname;
-                                                                    } catch {
-                                                                        return u;
-                                                                    }
-                                                                })()}
-                                                            </a>
-                                                        ))}
+                                                <div className="flex items-start gap-3 flex-1">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedChats.includes(chat.id)}
+                                                        onChange={() => toggleChatSelection(chat.id)}
+                                                        className="mt-1"
+                                                    />
+
+                                                    <div className="truncate pr-4">
+                                                        <h3
+                                                            className="font-semibold text-gray-100 truncate"
+                                                            title={chat.title}
+                                                        >
+                                                            {chat.title}
+                                                        </h3>
+                                                        <div className="flex flex-wrap gap-1.5 mt-2">
+                                                            {chat.urls.map((u, i) => (
+                                                                <a
+                                                                    key={i}
+                                                                    href={u}
+                                                                    target="_blank"
+                                                                    rel="noreferrer"
+                                                                    className="text-xs text-gray-500 hover:text-accent-blue bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 px-2 py-0.5 rounded transition-all truncate max-w-37.5"
+                                                                    title={u}
+                                                                >
+                                                                    {(() => {
+                                                                        try {
+                                                                            return new URL(u).hostname;
+                                                                        } catch {
+                                                                            return u;
+                                                                        }
+                                                                    })()}
+                                                                </a>
+                                                            ))}
+                                                        </div>
                                                     </div>
                                                 </div>
                                                 <div className="shrink-0">
