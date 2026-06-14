@@ -74,6 +74,7 @@ model ChatSource {
     isVectorLess     Boolean        @default(false) @map("is_vector_less")
     documentationUrl String         @map("documentation_url")
     totalPages       Int?           @map("total_pages")
+    lastIndexedAt    DateTime?      @map("last_indexed_at")
     pagesIndexed     DocumentPage[]
     chats            Chat[]         @relation("ChatToChatSource")
     collectionName   String?        @default("") @map("collection_name")

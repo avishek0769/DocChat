@@ -51,6 +51,7 @@ export type ChatItem = {
         id: string;
         documentationUrl: string;
         totalPages: number;
+        lastIndexedAt?: string | null;
         isVectorLess?: boolean;
         _count?: { pagesIndexed: number };
         pagesIndexed?: Array<{ pageUrl: string; title?: string | null }>;

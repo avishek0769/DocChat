@@ -387,6 +387,7 @@ const deleteMyData = asyncHandler(async (req, res) => {
                 select: {
                     id: true,
                     documentationUrl: true,
+                    lastIndexedAt: true,
                 },
             });
 

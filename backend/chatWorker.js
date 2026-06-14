@@ -619,6 +619,13 @@ const worker = new Worker(
                 stats = await processVectorLess(docsUrl, chatId, chatSourceId, scrapeLimit);
             }
 
+            await prisma.chatSource.update({
+                where: { id: chatSourceId },
+                data: {
+                    lastIndexedAt: new Date(),
+                },
+            });
+
             await prisma.ingestionRun.update({
                 where: { id: run.id },
                 data: {

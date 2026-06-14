@@ -31,12 +31,16 @@ import {
     type ChatItem,
     type FailedIngestionRunItem,
 } from "../lib/api";
-import { formatTokens } from "../lib/format";
+import { formatDistanceToNow, formatTokens } from "../lib/format";
 
 interface Chat {
     id: string;
     title: string;
     urls: string[];
+    sources: Array<{
+        documentationUrl: string;
+        lastIndexedAt?: string | null;
+    }>;
     isVectorLess: boolean;
     status: string;
     pages: number;
@@ -65,6 +69,10 @@ const mapBackendChat = (chat: ChatItem): Chat => {
         id: chat.id,
         title: chat.name,
         urls: (chat.chatSources || []).map((s) => s.documentationUrl),
+        sources: (chat.chatSources || []).map((s) => ({
+            documentationUrl: s.documentationUrl,
+            lastIndexedAt: s.lastIndexedAt || null,
+        })),
         isVectorLess: Boolean(source?.isVectorLess),
         status: String(chat.status || "QUEUED").toLowerCase(),
         pages: pagesIndexed,
@@ -947,7 +955,7 @@ const Dashboard = () => {
                                 chats
                                     .filter((c) => c.status === "ready")
                                     .flatMap((chat) =>
-                                        chat.urls.map((url, i) => (
+                                        chat.sources.map((source, i) => (
                                             <div
                                                 key={`${chat.id}-${i}`}
                                                 className="p-3 bg-white/5 border border-white/10 rounded-xl hover:border-white/20 transition-colors"
@@ -956,13 +964,25 @@ const Dashboard = () => {
                                                     {chat.title}
                                                 </h3>
                                                 <a
-                                                    href={url}
+                                                    href={source.documentationUrl}
                                                     target="_blank"
                                                     rel="noreferrer"
                                                     className="text-xs text-accent-blue hover:underline truncate block mt-1"
                                                 >
-                                                    {url}
+                                                    {source.documentationUrl}
                                                 </a>
+                                                <p
+                                                    className="text-[11px] text-gray-500 mt-2"
+                                                    title={
+                                                        source.lastIndexedAt
+                                                            ? new Date(source.lastIndexedAt).toLocaleString()
+                                                            : undefined
+                                                    }
+                                                >
+                                                    {source.lastIndexedAt
+                                                        ? `Indexed ${formatDistanceToNow(new Date(source.lastIndexedAt), { addSuffix: true })}`
+                                                        : "Never indexed"}
+                                                </p>
                                             </div>
                                         )),
                                     )
