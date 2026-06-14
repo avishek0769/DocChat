@@ -2,10 +2,12 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Sidebar } from "../components/Sidebar";
 import Skeleton from "../components/Skeleton";
+import EmptyState from "../components/EmptyState";
 
 import {
     MessageSquare,
     Plus,
+    PlusCircle,
     FileText,
     Database,
     Clock,
@@ -893,26 +895,27 @@ const Dashboard = () => {
                                 })}
                             </div>
                         ) : (
-                            /* Empty State */
-                            <div className="rounded-2xl border border-white/5 border-dashed bg-white/1 p-12 text-center flex flex-col items-center">
-                                <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mb-4 border border-white/10">
-                                    <Database className="w-8 h-8 text-gray-400" />
+                            chats.length === 0 ? (
+                                <EmptyState
+                                    icon={<PlusCircle className="w-12 h-12" />}
+                                    title="Create your first documentation chat"
+                                    description="Add a documentation URL and build a knowledge base. Once indexing is complete, you can start asking questions about your docs."
+                                    actionLabel="Create New Chat"
+                                    onAction={() => setIsModalOpen(true)}
+                                />
+                            ) : (
+                                <div className="rounded-2xl border border-white/5 border-dashed bg-white/1 p-12 text-center flex flex-col items-center">
+                                    <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mb-4 border border-white/10">
+                                        <Database className="w-8 h-8 text-gray-400" />
+                                    </div>
+                                    <h3 className="text-xl font-semibold mb-2">
+                                        No chats match the current search or filter.
+                                    </h3>
+                                    <p className="text-gray-400 max-w-sm mb-6">
+                                        Try a different search term or clear the status filter to see more chats.
+                                    </p>
                                 </div>
-                                <h3 className="text-xl font-semibold mb-2">
-                                    {chats.length === 0 ? "No chats found yet." : "No chats match the current search or filter."}
-                                </h3>
-                                <p className="text-gray-400 max-w-sm mb-6">
-                                    {chats.length === 0
-                                        ? "You haven't processed any documentation. Create your first knowledge base to start chatting."
-                                        : "Try a different search term or clear the status filter to see more chats."}
-                                </p>
-                                <button
-                                    onClick={() => setIsModalOpen(true)}
-                                    className="px-6 py-2.5 rounded-lg bg-white/10 hover:bg-white/15 text-white font-medium transition-colors border border-white/10"
-                                >
-                                    Create your first chat
-                                </button>
-                            </div>
+                            )
                         )}
                     </div>
                 </div>

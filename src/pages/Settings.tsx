@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Sidebar } from "../components/Sidebar";
-import { Key, Trash2, AlertCircle, Eye, EyeOff, Plus, Network, Edit2 } from "lucide-react";
+import EmptyState from "../components/EmptyState";
+import { KeyRound, Trash2, AlertCircle, Eye, EyeOff, Plus, Network, Edit2 } from "lucide-react";
 import {
     createApiKey,
     updateApiKey,
@@ -181,7 +182,7 @@ const Settings = () => {
 
                     <section className="space-y-6">
                         <div className="flex items-center gap-3 border-b border-white/10 pb-4">
-                            <Key className="w-6 h-6 text-accent-blue" />
+                            <KeyRound className="w-6 h-6 text-accent-blue" />
                             <h2 className="text-xl font-semibold text-gray-200">
                                 API Keys Configuration
                             </h2>
@@ -356,10 +357,11 @@ const Settings = () => {
                                     </div>
                                 ))
                             ) : (
-                                <div className="p-8 text-center bg-white/1 border border-white/5 border-dashed rounded-xl">
-                                    <Key className="w-6 h-6 text-gray-600 mx-auto mb-3" />
-                                    <p className="text-sm text-gray-400">No API keys configured yet.</p>
-                                </div>
+                                <EmptyState
+                                    icon={<KeyRound className="w-12 h-12" />}
+                                    title="No API keys configured"
+                                    description="Add an API key to enable AI-powered documentation chat."
+                                />
                             )}
                         </div>
                     </section>

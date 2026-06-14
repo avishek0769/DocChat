@@ -13,8 +13,10 @@ import {
     Loader2,
     CheckCircle2,
     ExternalLink,
+    MessageSquarePlus,
 } from "lucide-react";
 import { Sidebar } from "../components/Sidebar";
+import EmptyState from "../components/EmptyState";
 import { deleteChat, getChats, getChatStatus, renameChat, subscribeToChatStatus, type ChatItem } from "../lib/api";
 import { formatTokens } from "../lib/format";
 
@@ -449,10 +451,13 @@ const AllChats = () => {
                                 </div>
                             ))
                         ) : (
-                            <div className="text-center py-20 bg-white/1 rounded-xl border border-white/5 border-dashed">
-                                <Database className="w-8 h-8 text-gray-600 mx-auto mb-3" />
-                                <p className="text-gray-400">No chats found.</p>
-                            </div>
+                            <EmptyState
+                                icon={<MessageSquarePlus className="w-12 h-12" />}
+                                title="No chats yet"
+                                description="Create your first documentation chat from the dashboard and start exploring your indexed content."
+                                actionLabel="Go to Dashboard"
+                                onAction={() => navigate("/")}
+                            />
                         )}
                     </div>
                 </div>
