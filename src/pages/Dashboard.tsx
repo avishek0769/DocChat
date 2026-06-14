@@ -98,6 +98,8 @@ const Dashboard = () => {
     const [isCancelling, setIsCancelling] = useState(false);
     const [lifetimeTokens, setLifetimeTokens] = useState(0);
     const [failedRuns, setFailedRuns] = useState<FailedIngestionRunItem[]>([]);
+    const [searchTerm, setSearchTerm] = useState("");
+    const [statusFilter, setStatusFilter] = useState("all");
     const [chatProgress, setChatProgress] = useState<
         Record<string, { status: string; progress: number }>
     >({});
@@ -124,6 +126,23 @@ const Dashboard = () => {
         setToast(message);
         setTimeout(() => setToast(null), 2500);
     }, []);
+
+    const filteredChats = chats.filter((chat) => {
+        const liveStatus = normalizeStatus(
+            chatProgress[chat.id]?.status || chat.status,
+        );
+
+        const search = searchTerm.trim().toLowerCase();
+
+        const matchesSearch =
+            !search ||
+            chat.title.toLowerCase().includes(search) ||
+            chat.urls.some((url) => url.toLowerCase().includes(search));
+
+        const matchesStatus = statusFilter === "all" || liveStatus === statusFilter;
+
+        return matchesSearch && matchesStatus;
+    });
 
     const loadDashboardData = useCallback(async () => {
         setError("");
@@ -615,12 +634,36 @@ const Dashboard = () => {
 
                     {/* Chat List Section */}
                     <div>
-                        <h2 className="text-lg font-semibold mb-6 flex items-center gap-2">
-                            Recent Chats{" "}
-                            <span className="px-2 py-0.5 rounded-full bg-white/10 text-xs font-mono text-gray-400">
-                                {chats.length}
-                            </span>
-                        </h2>
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+                            <h2 className="text-lg font-semibold flex items-center gap-2">
+                                Recent Chats
+                                <span className="px-2 py-0.5 rounded-full bg-white/10 text-xs font-mono text-gray-400">
+                                    {filteredChats.length}
+                                </span>
+                            </h2>
+
+                            <div className="flex flex-col sm:flex-row gap-3">
+                                <input
+                                    type="text"
+                                    placeholder="Search chats..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    className="bg-[#0d0d12] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-accent-blue"
+                                />
+
+                                <select
+                                    value={statusFilter}
+                                    onChange={(e) => setStatusFilter(e.target.value)}
+                                    className="bg-[#0d0d12] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent-blue"
+                                >
+                                    <option value="all">All</option>
+                                    <option value="ready">Ready</option>
+                                    <option value="processing">Processing</option>
+                                    <option value="queued">Queued</option>
+                                    <option value="failed">Failed</option>
+                                </select>
+                            </div>
+                        </div>
 
                         {isLoading ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -635,9 +678,9 @@ const Dashboard = () => {
                                     </div>
                                 ))}
                             </div>
-                        ) : chats.length > 0 ? (
+                        ) : filteredChats.length > 0 ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {chats.map((chat) => {
+                                {filteredChats.map((chat) => {
                                     const liveStatus = normalizeStatus(
                                         chatProgress[chat.id]?.status || chat.status,
                                     );
@@ -798,10 +841,13 @@ const Dashboard = () => {
                                 <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mb-4 border border-white/10">
                                     <Database className="w-8 h-8 text-gray-400" />
                                 </div>
-                                <h3 className="text-xl font-semibold mb-2">No chats yet</h3>
+                                <h3 className="text-xl font-semibold mb-2">
+                                    {chats.length === 0 ? "No chats found yet." : "No chats match the current search or filter."}
+                                </h3>
                                 <p className="text-gray-400 max-w-sm mb-6">
-                                    You haven't processed any documentation. Create your first knowledge
-                                    base to start chatting.
+                                    {chats.length === 0
+                                        ? "You haven't processed any documentation. Create your first knowledge base to start chatting."
+                                        : "Try a different search term or clear the status filter to see more chats."}
                                 </p>
                                 <button
                                     onClick={() => setIsModalOpen(true)}
