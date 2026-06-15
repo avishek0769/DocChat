@@ -144,7 +144,85 @@ const userDetails = asyncHandler(async (req, res) => {
         throw new ApiError(404, "User not found");
     }
 
-    return res.status(200).json(new ApiResponse(200, { user }, "Admin user details retrieved successfully"));
+    const [usageAggregate, recentChats, auditEvents, rawBreakdown] = await Promise.all([
+        prisma.usageEvents.aggregate({
+            where: { userId },
+            _sum: {
+                inputTokens: true,
+                outputTokens: true,
+            },
+        }),
+        prisma.chat.findMany({
+            where: { userId },
+            orderBy: { createdAt: "desc" },
+            take: 5,
+            select: {
+                id: true,
+                name: true,
+                status: true,
+                createdAt: true,
+            },
+        }),
+        prisma.auditEvent.findMany({
+            where: { userId },
+            orderBy: { createdAt: "desc" },
+            take: 10,
+            select: {
+                id: true,
+                type: true,
+                metadata: true,
+                createdAt: true,
+            },
+        }),
+        prisma.$queryRaw`
+            SELECT
+                m."llm_model" AS "model",
+                SUM(u."input_tokens")::int AS "totalInputTokens",
+                SUM(u."output_tokens")::int AS "totalOutputTokens"
+            FROM "UsageEvents" u
+            JOIN "ChatMessage" m ON u."message_id" = m."id"
+            WHERE u."user_id" = ${userId}
+            GROUP BY m."llm_model"
+            ORDER BY (SUM(u."input_tokens") + SUM(u."output_tokens")) DESC
+        `,
+    ]);
+
+    const totalTokens = (usageAggregate._sum.inputTokens || 0) + (usageAggregate._sum.outputTokens || 0);
+
+    const recentActivity = auditEvents.map((event) => {
+        const meta = event.metadata || {};
+
+        return {
+            id: event.id,
+            type: event.type,
+            title: meta.title || null,
+            detail: meta.detail || null,
+            createdAt: event.createdAt,
+        };
+    });
+
+    const usageBreakdown = rawBreakdown.map((row) => ({
+        model: row.model,
+        totalInputTokens: Number(row.totalInputTokens || 0),
+        totalOutputTokens: Number(row.totalOutputTokens || 0),
+        totalTokens: Number(row.totalInputTokens || 0) + Number(row.totalOutputTokens || 0),
+    }));
+
+    return res.status(200).json(
+        new ApiResponse(
+            200,
+            {
+                user: {
+                    ...user,
+                    totalTokens,
+                },
+                recentChats,
+                recentActivity,
+                usageBreakdown,
+            },
+            "Admin user details retrieved successfully",
+        ),
+    );
 });
 
 const usage = asyncHandler(async (req, res) => {
