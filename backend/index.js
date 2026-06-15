@@ -1,7 +1,9 @@
 import "dotenv/config";
 import { app } from "./app.js";
 import connectDB from "./utils/connectDB.js";
+import validateEnv from "./utils/validateEnv.js";
 
+validateEnv();
 connectDB()
     .then(async () => {
         app.on("error", (error) => {
