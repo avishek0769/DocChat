@@ -88,8 +88,10 @@ export const Sidebar = ({ isCollapsed = false }: SidebarProps) => {
         >
             <div className={clsx("p-6 flex items-center gap-2", isCollapsed && "justify-center px-0")}>
                 <img
-                    src="/docchat-logo.png"
+                    src="/docchat-logo.webp"
                     alt="DocChat"
+                    width={1101}
+                    height={395}
                     className={clsx("w-auto shrink-0", isCollapsed ? "h-16" : "h-10")}
                 />
             </div>

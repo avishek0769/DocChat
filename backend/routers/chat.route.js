@@ -5,8 +5,10 @@ import { verifyChatOwnership } from "../middlewares/chat.middleware.js";
 import {
     expectationQuerySchema,
     createChatSchema,
+    renameChatSchema,
     addChatSourceSchema,
     chatIdParamSchema,
+    bulkDeleteChatsSchema,
     qdrantCleanupSchema,
 } from "../utils/validationSchemas.js";
 import {
@@ -14,7 +16,9 @@ import {
     addChatSource,
     chatDetails,
     createChat,
+    renameChat,
     deleteChat,
+    bulkDeleteChats,
     restoreChat,
     expectation,
     removeChatSource,
@@ -27,7 +31,9 @@ import {
     getSharedChatDetails,
     forkSharedChat,
     qdrantCleanup,
+    chunkPreview,
     streamChatStatus,
+    downloadRawSource,
 } from "../controllers/chat.controller.js";
 
 const chatRouter = Router();
@@ -48,6 +54,7 @@ chatRouter
 chatRouter.route("/ingestion-runs/failed").get(verifyStrictJWT, recentFailedIngestionRuns);
 chatRouter.route("/list").get(verifyStrictJWT, listAllChats);
 chatRouter.route("/recent").get(verifyStrictJWT, recentChats);
+chatRouter.route("/chunk-preview").post(verifyStrictJWT, chunkPreview);
 
 // Shared Chat Routes
 chatRouter.route("/shared/:shareToken").get(getSharedChatDetails);
@@ -58,10 +65,17 @@ chatRouter
 
 chatRouter
     .route("/:chatId")
-    .get(verifyStrictJWT, validate(chatIdParamSchema), verifyChatOwnership, chatDetails);
+    .get(verifyStrictJWT, validate(chatIdParamSchema), verifyChatOwnership, chatDetails)
+    .patch(verifyStrictJWT, validate(chatIdParamSchema), validate(renameChatSchema), verifyChatOwnership, renameChat);
 chatRouter
     .route("/pages-indexed/:chatId")
     .get(verifyStrictJWT, validate(chatIdParamSchema), verifyChatOwnership, listAllPagesIndexed);
+chatRouter
+    .route("/:chatId/sources/:sourceId/raw")
+    .get(verifyStrictJWT, validate(chatIdParamSchema), verifyChatOwnership, downloadRawSource);
+chatRouter
+    .route("/bulk-delete")
+    .post(verifyStrictJWT, validate(bulkDeleteChatsSchema), bulkDeleteChats);
 chatRouter
     .route("/:chatId")
     .delete(verifyStrictJWT, validate(chatIdParamSchema), verifyChatOwnership, deleteChat);

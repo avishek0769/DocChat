@@ -70,6 +70,12 @@ export const chatIdParamSchema = {
     }),
 };
 
+export const bulkDeleteChatsSchema = {
+    body: z.object({
+        chatIds: z.array(chatId).min(1, "At least one chat ID is required"),
+    }),
+};
+
 export const chatMessagesQuerySchema = {
     query: z.object({
         limit: z.coerce.number().int().min(1).max(100).default(50),
@@ -163,6 +169,35 @@ export const createChatSchema = {
     }).refine((data) => Boolean(data.docsUrl || data.docsUrls?.length), {
         message: "docsUrl or docsUrls is required",
         path: ["docsUrls"],
+    }),
+};
+
+export const renameChatSchema = {
+    body: z.object({
+        name: z
+            .string()
+            .optional()
+            .transform((value, ctx) => {
+                const trimmed = typeof value === "string" ? value.trim() : "";
+
+                if (!trimmed) {
+                    ctx.addIssue({
+                        code: z.ZodIssueCode.custom,
+                        message: "Chat name is required",
+                    });
+                    return z.NEVER;
+                }
+
+                if (trimmed.length > 100) {
+                    ctx.addIssue({
+                        code: z.ZodIssueCode.custom,
+                        message: "Chat name must be 100 characters or fewer",
+                    });
+                    return z.NEVER;
+                }
+
+                return trimmed;
+            }),
     }),
 };
 

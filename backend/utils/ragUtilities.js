@@ -413,6 +413,144 @@ function resetCrawlStateForTests() {
     domainLimiters.clear();
 }
 
+function classifyChunk(content, heading, hasCodeBlock) {
+    const text = content.trim();
+    const firstMeaningfulLine = text.split("\n").find((line) => line.trim())?.trim() || "";
+    const headingIsApi = heading ? /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+\S+/i.test(heading) : false;
+    const bodyIsApi = /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+\S+/i.test(firstMeaningfulLine);
+
+    if (hasCodeBlock) return "code";
+    if (headingIsApi || bodyIsApi) return "api";
+    if (/^#{1,6}\s/.test(firstMeaningfulLine)) return "heading";
+    return "content";
+}
+
+function makeChunk(content, heading, hasCodeBlock) {
+    const trimmed = content.trim();
+    if (!trimmed) return null;
+    return {
+        content: trimmed,
+        heading: heading || null,
+        hasCodeBlock: Boolean(hasCodeBlock),
+        chunkType: classifyChunk(trimmed, heading, hasCodeBlock),
+    };
+}
+
+function splitDocumentationContent(text, options = {}) {
+    const chunkSize = options.chunkSize ?? 1000;
+    const overlap = options.chunkOverlap ?? 150;
+
+    const chunks = [];
+    const lines = text.replace(/\r\n/g, "\n").split("\n");
+
+    let currentLines = [];
+    let currentHeading = "";
+    let inCodeFence = false;
+    let currentBlock = [];
+    let currentBlockType = "text";
+
+    const pushBlock = () => {
+        if (!currentBlock.length) return;
+        currentLines.push({
+            type: currentBlockType,
+            text: currentBlock.join("\n"),
+        });
+        currentBlock = [];
+        currentBlockType = "text";
+    };
+
+    const pushChunkFromLines = (linesToUse, hasCodeBlock) => {
+        const content = linesToUse.map((line) => line.text).join("\n").trim();
+        const chunk = makeChunk(content, currentHeading, hasCodeBlock);
+        if (chunk) chunks.push(chunk);
+    };
+
+    for (const line of lines) {
+        const trimmed = line.trim();
+
+        if (trimmed.startsWith("```")) {
+            pushBlock();
+            inCodeFence = !inCodeFence;
+            currentBlockType = "code";
+        }
+
+        const isHeading =
+            !inCodeFence &&
+            /^#{1,6}\s/.test(trimmed);
+
+        if (isHeading) {
+            pushBlock();
+            if (currentLines.length) {
+                pushChunkFromLines(currentLines, currentLines.some((item) => item.type === "code"));
+                currentLines = [];
+            }
+            currentHeading = trimmed;
+        }
+
+        if (inCodeFence) {
+            currentBlock.push(line);
+            if (trimmed.startsWith("```")) {
+                pushBlock();
+            }
+            continue;
+        }
+
+        if (!trimmed) {
+            pushBlock();
+            currentLines.push({ type: "blank", text: "" });
+            continue;
+        }
+
+        const isApiLine = /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+\S+/i.test(trimmed);
+        const isStructuralLine = isApiLine || /^\|.*\|$/.test(trimmed) || /^\s*[\-\*\+]\s+/.test(trimmed) || /^\s*\d+\.\s+/.test(trimmed);
+        currentBlockType = isApiLine ? "api" : (currentBlockType === "code" ? "code" : "text");
+
+        if (isStructuralLine && currentBlock.length) {
+            pushBlock();
+        }
+
+        currentBlock.push(line);
+    }
+
+    pushBlock();
+    if (currentLines.length) {
+        pushChunkFromLines(currentLines, currentLines.some((item) => item.type === "code"));
+    }
+
+    const finalChunks = [];
+    let buffer = [];
+    let bufferLength = 0;
+
+    for (const chunk of chunks) {
+        const contentLength = chunk.content.length;
+        if (chunk.chunkType === "code" || contentLength > chunkSize) {
+            if (buffer.length) {
+                finalChunks.push(makeChunk(buffer.map((item) => item.content).join("\n\n"), buffer[0].heading, buffer.some((item) => item.hasCodeBlock)));
+                buffer = [];
+                bufferLength = 0;
+            }
+            finalChunks.push(chunk);
+            continue;
+        }
+
+        const extraLength = buffer.length ? 2 : 0;
+        if (bufferLength + extraLength + contentLength > chunkSize && buffer.length) {
+            finalChunks.push(makeChunk(buffer.map((item) => item.content).join("\n\n"), buffer[0].heading, buffer.some((item) => item.hasCodeBlock)));
+            buffer = [];
+            bufferLength = 0;
+        }
+
+        buffer.push(chunk);
+        bufferLength += contentLength + (buffer.length > 1 ? 2 : 0);
+    }
+
+    if (buffer.length) {
+        finalChunks.push(makeChunk(buffer.map((item) => item.content).join("\n\n"), buffer[0].heading, buffer.some((item) => item.hasCodeBlock)));
+    }
+
+    return finalChunks.filter(Boolean);
+}
+
 export {
     normalizeUrl,
     isValidDocUrl,
@@ -424,4 +562,5 @@ export {
     isUrlAllowedByRobots,
     scheduleCrawl,
     resetCrawlStateForTests,
+    splitDocumentationContent,
 };
