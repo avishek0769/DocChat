@@ -5,6 +5,7 @@ import { verifyChatOwnership } from "../middlewares/chat.middleware.js";
 import {
     sendMessageSchema,
     chatIdParamSchema,
+    chatMessagesQuerySchema,
     messageIdParamSchema,
 } from "../utils/validationSchemas.js";
 import {
@@ -14,6 +15,7 @@ import {
     getChatMessageSources,
     exportChatMessages,
     getSharedChatMessages,
+    getSharedChatMessageSources,
 } from "../controllers/chatMessage.controller.js";
 
 const chatMessageRouter = Router();
@@ -24,7 +26,7 @@ chatMessageRouter
     .post(verifyStrictJWT, validate(sendMessageSchema), verifyChatOwnership, sendMessage);
 chatMessageRouter
     .route("/all/:chatId")
-    .get(verifyStrictJWT, validate(chatIdParamSchema), verifyChatOwnership, getChatMessages);
+    .get(verifyStrictJWT, validate(chatIdParamSchema, chatMessagesQuerySchema), verifyChatOwnership, getChatMessages);
 chatMessageRouter
     .route("/sources/:messageId")
     .get(verifyStrictJWT, validate(messageIdParamSchema), getChatMessageSources);
@@ -34,5 +36,6 @@ chatMessageRouter
 
 // Shared Chat Messages Route
 chatMessageRouter.route("/shared/:shareToken/messages").get(getSharedChatMessages);
+chatMessageRouter.route("/shared/:shareToken/messages/:messageId/sources").get(getSharedChatMessageSources);
 
 export default chatMessageRouter;

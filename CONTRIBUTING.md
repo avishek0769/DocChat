@@ -1,115 +1,92 @@
 # Contributing Guide
 
-Thank you for your interest in contributing to DocChat.
+Thank you for your interest in contributing to **DocChat**! 
 
-DocChat is a RAG-based app that lets users chat with documentation. Contributions are welcome across frontend, backend, scraping, ingestion, retrieval, and docs.
+DocChat is a RAG-based application that allows users to chat with documentation. Contributions are welcome across the entire stack—frontend UX/UI, backend APIs, crawling, text processing, vector search, and documentation.
 
 ---
 
-## Getting Started
+## 🚀 Quick Links
+* **Guides**: Refer to the [Architecture Guide](file:///c:/Users/Rushabh%20Mahajan/Documents/GitHub/DocChat/docs/architecture.md) and [Troubleshooting Guide](file:///c:/Users/Rushabh%20Mahajan/Documents/GitHub/DocChat/docs/troubleshooting.md) for local environment setup.
+* **Pull Request Template**: [.github/pull_request_template.md](file:///c:/Users/Rushabh%20Mahajan/Documents/GitHub/DocChat/.github/pull_request_template.md)
+* **Issue Templates**:
+  * Report a bug: [Bug Report Template](file:///c:/Users/Rushabh%20Mahajan/Documents/GitHub/DocChat/.github/ISSUE_TEMPLATE/bug_report.md)
+  * Propose a feature: [Feature Request Template](file:///c:/Users/Rushabh%20Mahajan/Documents/GitHub/DocChat/.github/ISSUE_TEMPLATE/feature_request.md)
+
+---
+
+## Branching & Naming Conventions
+
+To keep our repository organized, please name your branches following these prefixes:
+* `feat/short-description` — for new features or capabilities.
+* `fix/short-description` — for bug fixes or errors.
+* `docs/short-description` — for changes or improvements to documentation.
+* `refactor/short-description` — for codebase rewrites that do not add features or fix bugs.
+* `perf/short-description` — for changes that improve indexing speeds or response latencies.
+
+---
+
+## Development Workflow
 
 ### 1. Fork and Clone
-
+Fork the repository on GitHub, and then clone your fork locally:
 ```bash
-git clone https://github.com/<your-username>/DocChat.git
+git clone https://github.com/avishek0769/DocChat.git
 cd DocChat
 ```
 
 ### 2. Install Dependencies
-
-Install frontend dependencies:
-
+Install packages in both directories:
 ```bash
+# Install frontend packages (at root)
 pnpm install
-```
 
-Install backend dependencies:
-
-```bash
+# Install backend packages
 cd backend
 pnpm install
 cd ..
 ```
 
-### 3. Set Up Environment Variables
-
-Backend env file is located in the backend directory:
-
+### 3. Create a Local Branch
+Always work on a separate, descriptive branch created from the latest `main`:
 ```bash
-cp backend/.env.example backend/.env
+git checkout -b feat/my-new-feature
 ```
 
-Fill all required variables in `backend/.env` before running the backend.
+### 4. Make Changes & Test Locally
+Before committing any changes, verify that the project builds and runs without errors.
 
-### 4. Run the Project
-
-Run frontend (from repo root):
-
-```bash
-pnpm run dev
-```
-
-Run backend (in another terminal):
-
+#### Running Tests
+DocChat contains backend integration and unit tests using **Vitest**. Make sure all tests pass before proposing a PR:
 ```bash
 cd backend
-pnpm run dev
+pnpm test
+```
+*To run tests in watch mode:*
+```bash
+pnpm dlx vitest
 ```
 
----
-
-## Before You Start
-
-- Check existing issues before starting work.
-- If an issue already exists, comment and get it assigned.
-- For new features, open an issue first to discuss scope.
-
----
-
-## How to Contribute
-
-1. Fork the repository.
-2. Create a focused branch:
-
+#### Linting & Formatting Checks
+Verify that eslint runs successfully:
 ```bash
-git checkout -b feat/short-feature-name  # for features
-git checkout -b fix/short-bug-name  # or for bugs
-```
-
-3. Make your changes.
-4. Run checks locally before opening a PR:
-
-```bash
+# Run lint check from the root directory
 pnpm run lint
 pnpm run build
 ```
 
-5. Commit with a clear message:
+5. Commit with a clear message following the [Conventional Commits](#commit-messages) format:
 
 ```bash
-git commit -m "feat: short description" # for features
-git commit -m "fix: short description" # or for bugs
+git commit -m "feat: add dark mode toggle"
+git commit -m "fix: resolve session expiration race condition"
 ```
 
 6. Push your branch:
 
-```bash
-git push origin <your-branch-name>
+# Check production compile build
+pnpm run build
 ```
-
-7. Open a Pull Request.
-
----
-
-## Contribution Areas
-
-- Performance improvements (scraping, ingestion, retrieval)
-- UI/UX enhancements
-- Better chunking strategies (especially code-aware splitting)
-- Crawling improvements (depth control, filtering)
-- Bug fixes
-- Documentation improvements (not minor typo/grammar-only changes; focus on structure, clarity, and better explanations)
-- API and backend optimizations
 
 ---
 
@@ -125,6 +102,106 @@ git push origin <your-branch-name>
 - Avoid bundling unrelated changes in one PR.
 
 Note: Please do not open a PR without a corresponding issue assignment.
+
+---
+
+## Commit Messages
+
+DocChat enforces [Conventional Commits](https://www.conventionalcommits.org/) via a `commit-msg` hook. Non-conforming commits are rejected automatically.
+
+### Format
+
+```
+<type>[optional scope]: <description>
+
+[optional body]
+
+[optional footer(s)]
+```
+
+### Allowed Types
+
+| Type | When to use |
+|------|-------------|
+| `feat` | New feature |
+| `fix` | Bug fix |
+| `docs` | Documentation changes only |
+| `style` | Formatting, whitespace (no logic change) |
+| `refactor` | Code restructure without feature or fix |
+| `perf` | Performance improvement |
+| `test` | Adding or fixing tests |
+| `build` | Build system or dependency changes |
+| `ci` | CI/CD configuration changes |
+| `chore` | Maintenance tasks |
+| `revert` | Reverting a previous commit |
+
+### Rules
+
+- Use **imperative mood**: "add" not "added" or "adds"
+- Keep the description **under 72 characters**
+- Start description with **lowercase**
+- No period at the end
+- Scope is optional but must be **kebab-case** when used
+
+### Good Examples
+
+```bash
+feat: add pagination to chat history
+fix(auth): prevent redirect loop on token expiry
+docs: update environment variable setup steps
+refactor(retrieval): extract chunking logic to separate module
+perf: cache user session data to reduce DB queries
+ci: add lint check to GitHub Actions workflow
+```
+
+### Bad Examples
+
+```bash
+# No type prefix
+added dark mode
+
+# Wrong tense
+feat: added dark mode
+
+# Too vague
+fix: fixed bug
+
+# Uppercase start
+feat: Add dark mode
+
+# Period at end
+fix: resolve login issue.
+
+# Multiple unrelated changes in one message
+feat: add dark mode and fix auth bug and update readme
+
+# WIP or placeholder messages
+WIP
+temp
+misc changes
+update stuff
+```
+
+### Breaking Changes
+
+Add `!` after the type, or include a `BREAKING CHANGE` footer:
+
+```bash
+feat(api)!: change response format to JSON:API
+
+BREAKING CHANGE: All API responses now use camelCase keys.
+Update client-side parsers accordingly.
+```
+
+### Issue References
+
+Link issues in the footer:
+
+```bash
+fix(upload): handle empty file gracefully
+
+Fixes #142
+```
 
 ---
 
@@ -149,5 +226,10 @@ If you are new, look for issues labeled `good first issue`.
 - Join Discord: [Discord Server](https://discord.gg/t6B7YDAk8y)
 
 ---
+## Pull Request Guidelines
 
-Thanks for contributing and helping improve DocChat.
+1. **Prior Discussion**: We prefer that contributions map to an open issue. Please comment on the issue you wish to resolve and wait for maintainer assignment before starting work.
+2. **Focus**: Keep PRs small and focused. Avoid mixing unrelated bug fixes or cosmetic styling edits with feature implementations.
+3. **Checklist Documentation**: Fill out the [Pull Request Template](file:///c:/Users/Rushabh%20Mahajan/Documents/GitHub/DocChat/.github/pull_request_template.md) fields completely when opening your PR.
+4. **Visual Demonstrations**: If your changes affect the user interface, attach screenshots or a short screen recording demonstrating the modified states.
+5. **No Exposure of Credentials**: Do not push or log active API keys, encryption secrets, or local configuration files (`.env` is excluded in `.gitignore`).

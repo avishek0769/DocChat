@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Sidebar } from "../components/Sidebar";
-import { Key, Trash2, AlertCircle, Eye, EyeOff, Plus, Network, Edit2 } from "lucide-react";
+import EmptyState from "../components/EmptyState";
+import { KeyRound, Trash2, AlertCircle, Eye, EyeOff, Plus, Network, Edit2 } from "lucide-react";
 import {
     createApiKey,
     updateApiKey,
@@ -56,6 +57,7 @@ const Settings = () => {
     const [selectedProvider, setSelectedProvider] = useState<Provider | "">("");
     const [showKey, setShowKey] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [deletingKeyId, setDeletingKeyId] = useState<string | null>(null);
     const [editingKeyId, setEditingKeyId] = useState<string | null>(null);
 
     const loadApiKeys = async () => {
@@ -130,11 +132,14 @@ const Settings = () => {
 
     const handleDeleteKey = async (id: string) => {
         setError("");
+        setDeletingKeyId(id);
         try {
             await deleteApiKey(id);
             await loadApiKeys();
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to delete API key.");
+        } finally {
+            setDeletingKeyId(null);
         }
     };
 
@@ -177,7 +182,7 @@ const Settings = () => {
 
                     <section className="space-y-6">
                         <div className="flex items-center gap-3 border-b border-white/10 pb-4">
-                            <Key className="w-6 h-6 text-accent-blue" />
+                            <KeyRound className="w-6 h-6 text-accent-blue" />
                             <h2 className="text-xl font-semibold text-gray-200">
                                 API Keys Configuration
                             </h2>
@@ -322,6 +327,18 @@ const Settings = () => {
                                             </div>
                                         </div>
 
+                                        <button
+                                            onClick={() => handleDeleteKey(key.id)}
+                                            disabled={deletingKeyId !== null}
+                                            className="p-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors self-end sm:self-auto shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            title="Delete Key"
+                                        >
+                                            {deletingKeyId === key.id ? (
+                                                <span className="text-xs">Deleting...</span>
+                                            ) : (
+                                                <Trash2 className="w-4 h-4" />
+                                            )}
+                                        </button>
                                         <div className="flex gap-2 self-end sm:self-auto shrink-0">
                                             <button
                                                 onClick={() => {
@@ -336,21 +353,15 @@ const Settings = () => {
                                             >
                                                 <Edit2 className="w-4 h-4" />
                                             </button>
-                                            <button
-                                                onClick={() => handleDeleteKey(key.id)}
-                                                className="p-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors"
-                                                title="Delete Key"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
                                         </div>
                                     </div>
                                 ))
                             ) : (
-                                <div className="p-8 text-center bg-white/1 border border-white/5 border-dashed rounded-xl">
-                                    <Key className="w-6 h-6 text-gray-600 mx-auto mb-3" />
-                                    <p className="text-sm text-gray-400">No API keys configured yet.</p>
-                                </div>
+                                <EmptyState
+                                    icon={<KeyRound className="w-12 h-12" />}
+                                    title="No API keys configured"
+                                    description="Add an API key to enable AI-powered documentation chat."
+                                />
                             )}
                         </div>
                     </section>

@@ -22,8 +22,10 @@ type UsagePoint = {
     period: string;
     usageByModels: Array<{
         model: string;
+        provider: string | null;
         totalInput: number;
         totalOutput: number;
+        estimatedCostUsd: number;
     }>;
 };
 
@@ -89,6 +91,7 @@ export const Usage = () => {
     const [timeframe, setTimeframe] = useState<Timeframe>("month");
     const [usagePoints, setUsagePoints] = useState<UsagePoint[]>([]);
     const [lifetimeTotal, setLifetimeTotal] = useState(0);
+    const [lifetimeCost, setLifetimeCost] = useState(0);
     const [apiKeyCount, setApiKeyCount] = useState(0);
     const [topChats, setTopChats] = useState<Array<{ name: string; tokens: number; color: string }>>([]);
     const [error, setError] = useState("");
@@ -126,6 +129,7 @@ export const Usage = () => {
                 const input = lifetime?._sum?.inputTokens || 0;
                 const output = lifetime?._sum?.outputTokens || 0;
                 setLifetimeTotal(input + output);
+                setLifetimeCost(Number(lifetime?._sum?.estimatedCostUsd || 0));
                 setApiKeyCount(keys.count || 0);
 
                 const ranked = [...(topChatsByUsage || [])]
@@ -342,6 +346,16 @@ export const Usage = () => {
                         </div>
                     </div>
 
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div className="p-6 rounded-xl bg-white/2 border border-white/5">
+                            <p className="text-sm font-medium text-gray-400">Estimated Lifetime Cost</p>
+                            <h3 className="text-3xl font-bold text-white mt-2">${lifetimeCost.toFixed(4)}</h3>
+                            <p className="text-xs text-gray-500 font-medium mt-2">
+                                Deterministic estimate stored on usage events
+                            </p>
+                        </div>
+                    </div>
+
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         {/* Token Usage Chart */}
                         <div className="lg:col-span-2 p-6 rounded-xl bg-white/2 border border-white/5 flex flex-col">
@@ -425,6 +439,7 @@ export const Usage = () => {
                                             <th className="text-left pb-3 font-medium">Provider</th>
                                             <th className="text-right pb-3 font-medium">Input</th>
                                             <th className="text-right pb-3 font-medium">Output</th>
+                                            <th className="text-right pb-3 font-medium">Cost</th>
                                             <th className="text-right pb-3 font-medium">Total</th>
                                             <th className="text-right pb-3 font-medium">Requests</th>
                                         </tr>
@@ -436,6 +451,7 @@ export const Usage = () => {
                                                 <td className="py-3 text-gray-400">{item.provider || "—"}</td>
                                                 <td className="py-3 text-right text-gray-300">{formatTokens(item.totalInputTokens)}</td>
                                                 <td className="py-3 text-right text-gray-300">{formatTokens(item.totalOutputTokens)}</td>
+                                                <td className="py-3 text-right text-gray-300">${item.estimatedCostUsd.toFixed(4)}</td>
                                                 <td className="py-3 text-right font-semibold text-white">{formatTokens(item.totalTokens)}</td>
                                                 <td className="py-3 text-right text-gray-400">{item.requestCount}</td>
                                             </tr>

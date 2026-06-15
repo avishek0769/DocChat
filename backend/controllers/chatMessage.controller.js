@@ -3,13 +3,21 @@ import redis from "../utils/redis.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
-import { LLM_MODELS, PROVIDERS_BASE_URLS, MEM0_ENABLED, DAILY_TOKEN_BUDGET } from "../utils/constants.js";
+import {
+    LLM_MODELS,
+    PROVIDERS_BASE_URLS,
+    MEM0_ENABLED,
+    DAILY_TOKEN_BUDGET,
+    estimateUsageCostUsd,
+} from "../utils/constants.js";
 import OpenAI from "openai";
 import { qdrant, treeindex } from "../utils/ragClients.js";
 import { decryptApiKey } from "../utils/decrypt.js";
 import { generateVectorEmbeddings } from "../utils/ragUtilities.js";
 import { buildMessagesForLLM } from "../utils/contextBuilder.js";
 import { MemoryClient } from "mem0ai";
+import PDFDocument from "pdfkit";
+import { createAuditEvent } from "../utils/audit.js";
 
 const memory = MEM0_ENABLED ? new MemoryClient({ apiKey: process.env.MEM0_API_KEY }) : null;
 
@@ -80,7 +88,14 @@ const sendMessage = asyncHandler(async (req, res) => {
 
     const chat = await prisma.chat.findUnique({
         where: { id: chatId },
-        include: { chatSources: { orderBy: { createdAt: "asc" } } },
+        include: {
+            chatSources: {
+                orderBy: { createdAt: "asc" },
+                include: {
+                    documentTree: true,
+                },
+            },
+        },
     });
     if (!chat) {
         throw new ApiError(404, "Chat not found.");
@@ -135,35 +150,112 @@ const sendMessage = asyncHandler(async (req, res) => {
         });
     }
 
-    let relevantSources = [];
-    let relevantNodes = [];
-    let relevantNodeIds = [];
-    if (!chat.chatSources[0].isVectorLess) {
-        const userPromptEmbeddings = await generateVectorEmbeddings(userPrompt);
-        relevantSources = await qdrant.query(chat.collectionName, {
+   let relevantSources = [];
+let relevantNodes = [];
+let relevantNodeIds = [];
+
+if (!chat.chatSources[0].isVectorLess) {
+    const userPromptEmbeddings = await generateVectorEmbeddings(userPrompt);
+
+    let allDensePoints = [];
+    let allKeywordPoints = [];
+
+    const calculateTermFrequency = (text, queryTerms) => {
+        if (!text) return 0;
+        const lowerText = text.toLowerCase();
+        return queryTerms.reduce((count, term) => {
+            let termCount = 0;
+            let index = lowerText.indexOf(term);
+            while (index !== -1) {
+                termCount++;
+                index = lowerText.indexOf(term, index + term.length);
+            }
+            return count + termCount;
+        }, 0);
+    };
+
+    const queryTerms = userPrompt
+        .toLowerCase()
+        .replace(/[^\w\s]/g, "")
+        .split(/\s+/)
+        .filter((t) => t.length > 2);
+
+    for (const source of chat.chatSources) {
+        if (!source.collectionName) continue;
+
+        try {
+            await qdrant.createPayloadIndex(source.collectionName, { field_name: "body", field_schema: "text" });
+        } catch (e) {
+            // Ignore index exists or other non-fatal indexing errors
+        }
+
+        const denseTask = qdrant.query(source.collectionName, {
             query: userPromptEmbeddings,
-            limit: 5,
+            limit: 10,
             with_payload: true,
             score_threshold: 0.35,
         });
-    } else {
+
+        const keywordTask = qdrant.scroll(source.collectionName, {
+            filter: {
+                must: [{ key: "body", match: { text: userPrompt } }],
+            },
+            limit: 20,
+            with_payload: true,
+        });
+
+        const [denseResults, keywordResults] = await Promise.all([denseTask, keywordTask]);
+
+        if (denseResults?.points?.length) {
+            allDensePoints.push(...denseResults.points);
+        }
+
+        if (keywordResults?.points?.length) {
+            const scoredKeywordPoints = keywordResults.points.map((pt) => {
+                const score = calculateTermFrequency(pt.payload.body, queryTerms);
+                return { ...pt, local_score: score };
+            });
+            scoredKeywordPoints.sort((a, b) => b.local_score - a.local_score);
+            allKeywordPoints.push(...scoredKeywordPoints);
+        }
+    }
+
+    allDensePoints.sort((a, b) => b.score - a.score);
+    allKeywordPoints.sort((a, b) => b.local_score - a.local_score);
+
+    const fusedScores = {};
+    const fusedPayloads = {};
+    const k = 60;
+
+    allDensePoints.forEach((pt, index) => {
+        if (!fusedScores[pt.id]) fusedScores[pt.id] = 0;
+        fusedScores[pt.id] += 1 / (k + index + 1);
+        fusedPayloads[pt.id] = pt;
+    });
+
+    allKeywordPoints.forEach((pt, index) => {
+        if (!fusedScores[pt.id]) fusedScores[pt.id] = 0;
+        fusedScores[pt.id] += 1 / (k + index + 1);
+        if (!fusedPayloads[pt.id]) fusedPayloads[pt.id] = pt;
+    });
+
+    const sortedFusedIds = Object.keys(fusedScores).sort((a, b) => fusedScores[b] - fusedScores[a]);
+    const topFusedPoints = sortedFusedIds.slice(0, 5).map((id) => ({
+        ...fusedPayloads[id],
+        score: fusedScores[id],
+    }));
+
+    relevantSources = {
+        points: topFusedPoints,
+    };
+} else {
         const docTree = await prisma.documentTree.findUnique({
             where: { id: chat.collectionName },
         });
-        treeindex.loadData(docTree.sourceData);
-        treeindex.loadTree(docTree.treeData);
-
-        relevantNodeIds = await treeindex.retrieveRelevantNodes(userPrompt);
-        if (relevantNodeIds.length === 0) {
-            res.write("No relevant sources found, for this query");
-            res.end();
-            return;
-        }
-        relevantNodes = treeindex.findNodes(relevantNodeIds);
     }
 
     let systemInstructions = "You are a helpful assistant for answering questions. \n";
-    if (relevantSources.points?.length || relevantNodes.length) {
+    if (relevantSources.length || relevantNodes.length) {
         systemInstructions +=
             "Use the provided documentation sources to answer. If the answer isn't in the sources, say you don't know. Be concise, use Markdown, and wrap code in triple backticks.";
     } else {
@@ -190,7 +282,7 @@ const sendMessage = asyncHandler(async (req, res) => {
 
     const messagesForLLM = buildMessagesForLLM({
         systemInstructions,
-        relevantSources: relevantSources.points || [],
+        relevantSources,
         relevantNodes,
         memories,
         history: messages,
@@ -260,9 +352,9 @@ const sendMessage = asyncHandler(async (req, res) => {
             },
         });
 
-        if (relevantSources.points?.length) {
+        if (relevantSources.length) {
             await prisma.chatMessageSource.createMany({
-                data: relevantSources.points.map((point) => ({
+                data: relevantSources.map((point) => ({
                     chunkText: point.payload.body,
                     heading: point.payload.title,
                     pageUrl: point.payload.url,
@@ -270,26 +362,24 @@ const sendMessage = asyncHandler(async (req, res) => {
                     score: Math.round(point.score * 100),
                 })),
             });
-        } else if (relevantNodes.length) {
+        }
+        if (relevantNodes.length) {
             await prisma.chatMessageSource.createMany({
-                data: relevantNodes.map((node, index) => {
-                    const nodeId = node.id || relevantNodeIds[index] || `idx-${index}`;
-                    let fallbackHeading = "Vectorless Source";
-                    if (node.data) {
-                        const firstLine = node.data.split("\n")[0].trim();
-                        fallbackHeading = firstLine.substring(0, 60);
-                        if (firstLine.length > 60) fallbackHeading += "...";
-                    }
-
-                    return {
-                        chunkText: node.data,
-                        heading: fallbackHeading,
-                        pageUrl: `vectorless://node/${nodeId}`,
-                        chatMessageId: chatMessage.id,
-                    };
-                }),
+                data: relevantNodes.map((node) => ({
+                    chunkText: node.data,
+                    heading: node.heading,
+                    pageUrl: node.pageUrl,
+                    chatMessageId: chatMessage.id,
+                })),
             });
         }
+
+        const usageCost = estimateUsageCostUsd({
+            provider: provider === "DEFAULT" ? "DEFAULT" : apiKey.provider,
+            model,
+            inputTokens,
+            outputTokens,
+        });
 
         let usageEventData = {
             userId: req.user.id,
@@ -297,6 +387,8 @@ const sendMessage = asyncHandler(async (req, res) => {
             inputTokens,
             outputTokens,
             chatId: chat.id,
+            estimatedCostUsd: usageCost.estimatedCostUsd,
+            priceVersion: usageCost.priceVersion,
         };
         if (model != "default" && provider != "DEFAULT" && apiKeyId) {
             usageEventData = {
@@ -308,6 +400,13 @@ const sendMessage = asyncHandler(async (req, res) => {
             data: usageEventData,
         });
 
+        await createAuditEvent("message.sent", req.user.id, chat.id, {
+            chatMessageId: chatMessage.id,
+            model,
+            provider,
+            inputTokens,
+            outputTokens,
+        });
         if (DAILY_TOKEN_BUDGET) {
             const budgetKey = dailyBudgetKey(req.user.id);
             await redis.incrby(budgetKey, (inputTokens || 0) + (outputTokens || 0));
@@ -316,8 +415,52 @@ const sendMessage = asyncHandler(async (req, res) => {
     }
 });
 
+const getChatMessages = asyncHandler(async (req, res) => {
+    const { chatId } = req.params;
+    const limit = req.query.limit ?? 50;
+    const cursor = req.query.cursor || undefined;
+
+    const chat = await prisma.chat.findUnique({
+        where: { id: chatId },
+    });
+
+    if (!chat) {
+        throw new ApiError(404, "Chat not found.");
+    }
+
+    const messages = await prisma.chatMessage.findMany({
+        where: { chatId },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: limit + 1,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+        include: { chatMessageSources: true },
+    });
+
+    const hasMore = messages.length > limit;
+    const pageMessages = hasMore ? messages.slice(0, limit) : messages;
+    const nextCursor = hasMore ? pageMessages[pageMessages.length - 1]?.id || null : null;
+    const orderedMessages = pageMessages.reverse();
+
+    if (!orderedMessages.length) {
+        return res
+            .status(200)
+            .json(new ApiResponse(200, { messages: [], nextCursor: null, hasMore: false }, "No messages found for this chat."));
+    }
+
+    const messagesWithMeta = orderedMessages.map(({ chatMessageSources, ...msg }) => ({
+        ...msg,
+        hasSystemInstructions: chatMessageSources.length > 0,
+    }));
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, { messages: messagesWithMeta, nextCursor, hasMore }, "Chat messages retrieved successfully."));
+});
+
+
 // NOTE: No relation between ChatMessage and Chat in the current schema
 const exportChatMessages = asyncHandler(async (req, res) => {
+    const { format = "txt" } = req.query;
     const { chatId } = req.params;
 
     const chat = await prisma.chat.findUnique({
@@ -336,6 +479,23 @@ const exportChatMessages = asyncHandler(async (req, res) => {
     const escapeForPlainText = (text) => text || "";
 
     const chatName = chat.name || "Untitled Chat";
+    if (format === "md") {
+    let markdown = `# ${chatName}\n\n`;
+
+    messages.forEach((msg, index) => {
+        markdown += `## Message ${index + 1}\n\n`;
+        markdown += `### User\n\n${msg.userPrompt}\n\n`;
+        markdown += `### Assistant\n\n${msg.llmResponse}\n\n`;
+    });
+
+    res.setHeader("Content-Type", "text/markdown; charset=utf-8");
+    res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="chat-export-${chatId}.md"`
+    );
+
+    return res.send(markdown);
+}
     const exportDate = new Date();
     const header = [
         "DocChat Conversation Export",
@@ -346,6 +506,37 @@ const exportChatMessages = asyncHandler(async (req, res) => {
         `Total Messages: ${messages.length * 2}`,
         "",
     ].join("\n");
+
+    if (format === "pdf") {
+    const doc = new PDFDocument();
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="chat-export-${chatId}.pdf"`
+    );
+
+    doc.pipe(res);
+
+    doc.fontSize(18).text(chatName);
+    doc.moveDown();
+
+    messages.forEach((msg, index) => {
+        doc.fontSize(14).text(`Message ${index + 1}`);
+        doc.moveDown(0.5);
+
+        doc.fontSize(12).text("User:");
+        doc.text(msg.userPrompt || "");
+        doc.moveDown();
+
+        doc.text("Assistant:");
+        doc.text(msg.llmResponse || "");
+        doc.moveDown();
+    });
+
+    doc.end();
+    return;
+}
 
     res.setHeader("Content-Type", "text/plain; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename="chat-export-${chatId}.txt"`);
@@ -382,35 +573,68 @@ const exportChatMessages = asyncHandler(async (req, res) => {
     res.end();
 });
 
-const getChatMessages = asyncHandler(async (req, res) => {
-    const { chatId } = req.params;
+const getChatMessageSources = asyncHandler(async (req, res) => {
+    const { messageId } = req.params;
 
-    const chat = await prisma.chat.findUnique({
-        where: { id: chatId },
+    // Fetch the message with its parent chat to check ownership
+    const message = await prisma.chatMessage.findUnique({
+        where: { id: messageId },
+        include: {
+            chat: {
+                select: { userId: true },
+            },
+        },
     });
 
-    if (!chat) {
-        throw new ApiError(404, "Chat not found.");
+    // Message does not exist
+    if (!message) {
+        throw new ApiError(404, "Message not found.");
     }
 
-    const messages = await prisma.chatMessage.findMany({
-        where: { chatId },
+    // Message exists but caller does not own the parent chat
+    // Return 404 (not 403) so we don't reveal the resource exists
+    if (message.chat.userId !== req.user.id) {
+        throw new ApiError(404, "Message not found.");
+    }
+
+    // Ownership verified — fetch sources
+    const messageSources = await prisma.chatMessageSource.findMany({
+        where: { chatMessageId: messageId },
         orderBy: { createdAt: "asc" },
     });
 
-    if (!messages.length) {
+    if (!messageSources.length) {
         return res
             .status(200)
-            .json(new ApiResponse(200, { messages: [] }, "No messages found for this chat."));
+            .json(
+                new ApiResponse(200, { messageSources: [] }, "No sources found for this chat message."),
+            );
     }
 
     return res
         .status(200)
-        .json(new ApiResponse(200, { messages: messages }, "Chat messages retrieved successfully."));
+        .json(
+            new ApiResponse(200, { messageSources }, "Chat message sources retrieved successfully."),
+        );
 });
+const getSharedChatMessageSources = asyncHandler(async (req, res) => {
+    const { shareToken, messageId } = req.params;
 
-const getChatMessageSources = asyncHandler(async (req, res) => {
-    const { messageId } = req.params;
+    const chat = await prisma.chat.findUnique({
+        where: { shareToken },
+    });
+
+    if (!chat) {
+        throw new ApiError(404, "Shared chat not found");
+    }
+
+    const message = await prisma.chatMessage.findUnique({
+        where: { id: messageId },
+    });
+
+    if (!message || message.chatId !== chat.id) {
+        throw new ApiError(404, "Message not found.");
+    }
 
     const messageSources = await prisma.chatMessageSource.findMany({
         where: { chatMessageId: messageId },
@@ -444,6 +668,7 @@ const getSharedChatMessages = asyncHandler(async (req, res) => {
     const messages = await prisma.chatMessage.findMany({
         where: { chatId: chat.id },
         orderBy: { createdAt: "asc" },
+        include: { chatMessageSources: true },
     });
 
     if (!messages.length) {
@@ -452,9 +677,14 @@ const getSharedChatMessages = asyncHandler(async (req, res) => {
             .json(new ApiResponse(200, { messages: [] }, "No messages found for this chat."));
     }
 
+    const messagesWithMeta = messages.map(({ chatMessageSources, ...msg }) => ({
+        ...msg,
+        hasSystemInstructions: chatMessageSources.length > 0,
+    }));
+
     return res
         .status(200)
-        .json(new ApiResponse(200, { messages: messages }, "Chat messages retrieved successfully."));
+        .json(new ApiResponse(200, { messages: messagesWithMeta }, "Chat messages retrieved successfully."));
 });
 
 export {
@@ -464,4 +694,5 @@ export {
     getChatMessageSources,
     exportChatMessages,
     getSharedChatMessages,
+    getSharedChatMessageSources,
 };

@@ -6,9 +6,11 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import redis from "../utils/redis.js";
 import { Resend } from "resend";
+import { createAuditEvent } from "../utils/audit.js";
 
-
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = process.env.RESEND_API_KEY
+    ? new Resend(process.env.RESEND_API_KEY)
+    : null;
 
 const AccessOptions = {
     httpOnly: true,
@@ -92,6 +94,13 @@ const sendVerificationCode = asyncHandler(async (req, res) => {
     const code = generateVerificationCode();
     await redis.set(email, code, "EX", 3 * 60);
 
+    if (!resend) {
+        throw new ApiError(
+            503,
+            "Email service is not configured. Please set RESEND_API_KEY.",
+        );
+    }
+
     await resend.emails.send({
         from: "DocChat <onboarding@avishekadhikary.tech>",
         to: email,
@@ -133,7 +142,7 @@ const userRegister = asyncHandler(async (req, res) => {
     if (!existingUser) {
         throw new ApiError(400, "Email not verified. Request a verification code first.");
     }
-    
+
     if (!existingUser.isVerified) {
         throw new ApiError(400, "User not verified");
     }
@@ -183,6 +192,15 @@ const userLogIn = asyncHandler(async (req, res) => {
         data: { refreshToken },
         select: { id: true, fullname: true, username: true, email: true },
     });
+
+    try {
+        await createAuditEvent("user.login", user.id, null, {
+            username: user.username,
+            email: user.email,
+        });
+    } catch (error) {
+        console.error("Failed to write user.login audit event:", error.message);
+    }
 
     res.status(200)
         .cookie("accessToken", accessToken, AccessOptions)
@@ -266,11 +284,11 @@ const refreshTokens = asyncHandler(async (req, res) => {
 
 const currentUserProfile = asyncHandler(async (req, res) => {
     const user = {
-        id:req.user.id,
-        fullname:req.user.fullname,
-        username:req.user.username,
-        email:req.user.email,
-    }
+        id: req.user.id,
+        fullname: req.user.fullname,
+        username: req.user.username,
+        email: req.user.email,
+    };
     res.status(200).json(new ApiResponse(200, user, "Current user profile fetched successfully !"));
 });
 
@@ -287,6 +305,13 @@ const sendResetCode = asyncHandler(async (req, res) => {
 
     const code = generateVerificationCode();
     await redis.set(email, code, "EX", 3 * 60);
+
+    if (!resend) {
+        throw new ApiError(
+            503,
+            "Email service is not configured. Please set RESEND_API_KEY.",
+        );
+    }
 
     await resend.emails.send({
         from: "DocChat <onboarding@avishekadhikary.tech>",
@@ -325,6 +350,104 @@ const resetPassword = asyncHandler(async (req, res) => {
     res.status(200).json(new ApiResponse(200, { reset: true }, "Password reset successfully !!"));
 });
 
+const deleteMyData = asyncHandler(async (req, res) => {
+    const userId = req.user.id; // set by your auth middleware
+    const { confirm } = req.query;
+
+    // Acceptance criteria: require explicit confirmation flag
+    if (confirm !== "true") {
+        return res.status(400).json({
+            success: false,
+            message: "Pass confirm=true as a query param to confirm deletion.",
+        });
+    }
+
+    try {
+        await prisma.$transaction(async (tx) => {
+            // 1. Delete ChatMessageSources (deepest dependency first)
+            await tx.chatMessageSource.deleteMany({
+                where: { chatMessage: { chat: { userId } } },
+            });
+
+            // 2. Delete ChatMessages
+            await tx.chatMessage.deleteMany({
+                where: { chat: { userId } },
+            });
+
+            // 3. Delete UsageEvents (onDelete: SetNull means we must handle these)
+            await tx.usageEvents.deleteMany({ where: { userId } });
+
+            // 4. Delete ApiKeys
+            await tx.apiKey.deleteMany({ where: { userId } });
+
+            // 5. Delete ChatSources that belong ONLY to this user's chats
+            //    Safe detach: only remove if no other user's chat references them
+            const userChatIds = (
+                await tx.chat.findMany({
+                    where: { userId },
+                    select: { id: true },
+                })
+            ).map((c) => c.id);
+
+            // Find ChatSources used by this user's chats
+            const userChatSources = await tx.chatSource.findMany({
+                where: {
+                    chats: {
+                        some: {
+                            id: {
+                                in: userChatIds,
+                            },
+                        },
+                    },
+                },
+                select: {
+                    id: true,
+                    documentationUrl: true,
+                    lastIndexedAt: true,
+                },
+            });
+
+            // Only delete ChatSources not referenced by any other user's chats
+            for (const cs of userChatSources) {
+                const otherChatCount = await tx.chat.count({
+                    where: {
+                        userId: { not: userId },
+                        chatSources: {
+                            some: {
+                                documentationUrl: cs.documentationUrl,
+                            },
+                        },
+                    },
+                });
+
+                if (otherChatCount === 0) {
+                    await tx.chatSource.delete({
+                        where: { id: cs.id },
+                    });
+                }
+            }
+
+            // 6. Delete Chats
+            await tx.chat.deleteMany({ where: { userId } });
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: "All your data has been deleted.",
+        });
+    } catch (error) {
+        // Idempotent: if already deleted, return success
+        if (error.code === "P2025") {
+            return res.status(200).json({
+                success: true,
+                message: "Data already deleted or not found.",
+            });
+        }
+        console.error("deleteMyData error:", error);
+        return res.status(500).json({ success: false, message: "Server error." });
+    }
+});
+
 export {
     userRegister,
     userLogIn,
@@ -335,4 +458,5 @@ export {
     currentUserProfile,
     resetPassword,
     sendResetCode,
+    deleteMyData,
 };

@@ -10,11 +10,24 @@ const totalTokensUsedInLifetime = asyncHandler(async (req, res) => {
         _sum: {
             inputTokens: true,
             outputTokens: true,
+            estimatedCostUsd: true,
         },
     });
     return res
         .status(200)
-        .json(new ApiResponse(200, usage, "Total tokens used in lifetime retrieved successfully"));
+        .json(
+            new ApiResponse(
+                200,
+                {
+                    _sum: {
+                        inputTokens: usage._sum.inputTokens || 0,
+                        outputTokens: usage._sum.outputTokens || 0,
+                        estimatedCostUsd: Number(usage._sum.estimatedCostUsd || 0),
+                    },
+                },
+                "Total tokens used in lifetime retrieved successfully",
+            ),
+        );
 });
 
 const tokensUsedByGroup = asyncHandler(async (req, res) => {
@@ -60,12 +73,15 @@ const tokensUsedByGroup = asyncHandler(async (req, res) => {
         SELECT 
             DATE_TRUNC(${truncUnit}, u."timestamp") AS period,
             m."llm_model" AS "model",
+            a."provider" AS "provider",
             SUM(u."input_tokens") AS "totalInput",
-            SUM(u."output_tokens") AS "totalOutput"
+            SUM(u."output_tokens") AS "totalOutput",
+            SUM(u."estimated_cost_usd")::float8 AS "estimatedCostUsd"
         FROM "UsageEvents" u
         JOIN "ChatMessage" m ON u."message_id" = m."id"
+        LEFT JOIN "ApiKey" a ON u."apikey_id" = a."id"
         WHERE u."user_id" = ${req.user.id}
-        GROUP BY period, "model"
+        GROUP BY period, "model", "provider"
         ORDER BY period DESC, "totalInput" DESC;
     `;
 
@@ -79,8 +95,10 @@ const tokensUsedByGroup = asyncHandler(async (req, res) => {
         }
         acc[periodKey].usageByModels.push({
             model: curr.model,
+            provider: curr.provider,
             totalInput: Number(curr.totalInput || 0),
             totalOutput: Number(curr.totalOutput || 0),
+            estimatedCostUsd: Number(curr.estimatedCostUsd || 0),
         });
         return acc;
     }, {});
@@ -106,6 +124,7 @@ const topChatsByTokensUsed = asyncHandler(async (req, res) => {
         _sum: {
             inputTokens: true,
             outputTokens: true,
+            estimatedCostUsd: true,
         },
         orderBy: {
             _sum: {
@@ -130,7 +149,17 @@ const topChatsByTokensUsed = asyncHandler(async (req, res) => {
     const result = topChats
         .map((usage) => {
             const chat = chatDetails.find((c) => c.id === usage.chatId);
-            return chat ? { ...usage, name: chat.name } : null;
+            return chat
+                ? {
+                      ...usage,
+                      _sum: {
+                          inputTokens: usage._sum.inputTokens || 0,
+                          outputTokens: usage._sum.outputTokens || 0,
+                          estimatedCostUsd: Number(usage._sum.estimatedCostUsd || 0),
+                      },
+                      name: chat.name,
+                  }
+                : null;
         })
         .filter(Boolean);
 
@@ -155,6 +184,7 @@ const usageBreakdownByModel = asyncHandler(async (req, res) => {
             SUM(u."input_tokens")::int                              AS "totalInputTokens",
             SUM(u."output_tokens")::int                             AS "totalOutputTokens",
             (SUM(u."input_tokens") + SUM(u."output_tokens"))::int   AS "totalTokens",
+            SUM(u."estimated_cost_usd")::float8                     AS "estimatedCostUsd",
             COUNT(*)::int                                           AS "requestCount"
         FROM "UsageEvents" u
         JOIN "ChatMessage" m ON u."message_id" = m."id"

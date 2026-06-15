@@ -1,0 +1,10 @@
+version: '3.8'
+services:
+  test-db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: testuser
+      POSTGRES_PASSWORD: testpassword
+      POSTGRES_DB: docchat_test
+    ports:
+      - "5433:5432" # Use an alternate port to avoid dev conflicts
