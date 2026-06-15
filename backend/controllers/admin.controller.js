@@ -339,4 +339,50 @@ const ingestion = asyncHandler(async (req, res) => {
     );
 });
 
-export { overview, users, userDetails, usage, ingestion };
+const getSettings = asyncHandler(async (req, res) => {
+    const { getWebhookConfig } = await import("../utils/notificationDispatcher.js");
+    const config = await getWebhookConfig();
+    return res.status(200).json(
+        new ApiResponse(200, { webhook: config || {} }, "Settings retrieved successfully"),
+    );
+});
+
+const updateSettings = asyncHandler(async (req, res) => {
+    const { saveWebhookConfig } = await import("../utils/notificationDispatcher.js");
+    const { webhook } = req.body;
+
+    if (!webhook || typeof webhook !== "object") {
+        throw new ApiError(400, "Invalid settings payload");
+    }
+
+    const sanitized = {
+        slackUrl: typeof webhook.slackUrl === "string" ? webhook.slackUrl.trim() || null : null,
+        discordUrl: typeof webhook.discordUrl === "string" ? webhook.discordUrl.trim() || null : null,
+        customUrl: typeof webhook.customUrl === "string" ? webhook.customUrl.trim() || null : null,
+        enabledAlerts: Array.isArray(webhook.enabledAlerts) ? webhook.enabledAlerts : ["queue_depth", "ingestion_failure", "api_error"],
+    };
+
+    await saveWebhookConfig(sanitized);
+
+    return res.status(200).json(
+        new ApiResponse(200, { webhook: sanitized }, "Settings updated successfully"),
+    );
+});
+
+const testWebhook = asyncHandler(async (req, res) => {
+    const { dispatchAlert } = await import("../utils/notificationDispatcher.js");
+
+    await dispatchAlert({
+        type: "test",
+        title: "Test Alert from DocChat",
+        message: "This is a test webhook notification. If you received this, your webhook configuration is working correctly.",
+        severity: "info",
+        source: "admin",
+    });
+
+    return res.status(200).json(
+        new ApiResponse(200, null, "Test webhook sent successfully"),
+    );
+});
+
+export { overview, users, userDetails, usage, ingestion, getSettings, updateSettings, testWebhook };

@@ -2,6 +2,8 @@ import "dotenv/config";
 import { Worker } from "bullmq";
 import crypto from "crypto";
 import redis, { getChatProgressKey } from "./utils/redis.js";
+import { dispatchAlert } from "./utils/notificationDispatcher.js";
+import { getChatCreationQueue } from "./utils/queue.js";
 
 /**
  * Redis Ingestion Progress Payload Shape:
@@ -72,6 +74,36 @@ function getErrorCode(err) {
     if (typeof err.name === "string" && err.name.trim()) return err.name.trim().slice(0, 64);
     return "UNKNOWN_ERROR";
 }
+
+function getConsecutiveFailKey(chatSourceId) {
+    return `consecutive-fail:${chatSourceId}`;
+}
+
+const QUEUE_DEPTH_THRESHOLD = 50;
+let queueAlertCooldown = 0;
+
+async function checkQueueDepth() {
+    try {
+        const now = Date.now();
+        if (now < queueAlertCooldown) return;
+        const counts = await getChatCreationQueue().getJobCounts();
+        const waiting = (counts.waiting || 0) + (counts.delayed || 0);
+        if (waiting > QUEUE_DEPTH_THRESHOLD) {
+            queueAlertCooldown = now + 5 * 60 * 1000;
+            await dispatchAlert({
+                type: "queue_depth",
+                title: "BullMQ Queue Depth Alert",
+                message: `Chat creation queue has ${waiting} pending jobs (threshold: ${QUEUE_DEPTH_THRESHOLD}). Consider scaling workers.`,
+                severity: "warning",
+                source: "chatWorker",
+            });
+        }
+    } catch (error) {
+        console.error("Failed to check queue depth:", error.message);
+    }
+}
+
+setInterval(checkQueueDepth, 60_000);
 
 function readPositiveInt(value, fallback) {
     const parsed = Number.parseInt(value, 10);
@@ -623,8 +655,11 @@ worker.on("failed", (job, err) => {
 
 worker.on("completed", async (job) => {
     console.log(`Job ${job.id} completed!`);
-    
-    // Always write the final READY status in Redis using the chatId progress key.
+
+    if (job.data.chatSourceId) {
+        await redis.del(getConsecutiveFailKey(job.data.chatSourceId));
+    }
+
     await redis.setex(
         getChatProgressKey(job.data.chatId),
         3600,
@@ -643,8 +678,24 @@ worker.on("completed", async (job) => {
 
 worker.on("failed", async (job, err) => {
     console.error(`Job ${job?.id} failed: ${err.message}`);
-    
+
     if (job?.data?.chatId) {
         await markChatFailed(job.data.chatId, err);
+    }
+
+    if (job?.data?.chatSourceId) {
+        const key = getConsecutiveFailKey(job.data.chatSourceId);
+        const count = await redis.incr(key);
+        await redis.expire(key, 86400);
+        if (count >= 3) {
+            await redis.del(key);
+            await dispatchAlert({
+                type: "ingestion_failure",
+                title: "Ingestion Job Failure Alert",
+                message: `Chat source ${job.data.chatSourceId} has failed ${count} consecutive ingestion attempts. Last error: ${err?.message || "Unknown error"}`,
+                severity: "critical",
+                source: "chatWorker",
+            });
+        }
     }
 });
