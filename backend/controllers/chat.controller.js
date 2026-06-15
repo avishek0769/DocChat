@@ -1213,19 +1213,22 @@ const downloadRawSource = asyncHandler(async (req, res) => {
         throw new ApiError(404, "Source not found or does not belong to this chat");
     }
 
-    let rawText = "";
+    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Content-Disposition', `attachment; filename="source-${sourceId}-raw.txt"`);
 
     if (chatSource.isVectorLess) {
         if (!chatSource.documentTree?.sourceData) {
             throw new ApiError(404, "Raw source data not available yet");
         }
-        rawText = chatSource.documentTree.sourceData;
+        res.write(chatSource.documentTree.sourceData);
+        return res.end();
     } else {
         if (!chatSource.collectionName) {
             throw new ApiError(404, "Vector collection not initialized");
         }
 
         let nextOffset = null;
+        let hasData = false;
         do {
             const response = await qdrant.scroll(chatSource.collectionName, {
                 filter: {
@@ -1235,22 +1238,19 @@ const downloadRawSource = asyncHandler(async (req, res) => {
                 offset: nextOffset,
             });
 
-            for (const point of response.points) {
-                rawText += `--- ${point.payload.title || "Page"} (${point.payload.url}) ---\n`;
-                rawText += `${point.payload.body}\n\n`;
+                hasData = true;
+                res.write(`--- ${point.payload.title || 'Page'} (${point.payload.url}) ---\n`);
+                res.write(`${point.payload.body}\n\n`);
             }
 
             nextOffset = response.next_page_offset;
         } while (nextOffset);
 
-        if (!rawText) {
+        if (!hasData) {
             throw new ApiError(404, "No raw text found in the vector database");
         }
+        return res.end();
     }
-
-    res.setHeader("Content-Type", "text/plain");
-    res.setHeader("Content-Disposition", `attachment; filename="source-${sourceId}-raw.txt"`);
-    res.send(rawText);
 });
 
 export {
