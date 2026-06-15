@@ -8,6 +8,7 @@ import {
     removeApiKey,
     getApiKey,
     totalNumberOfApiKeys,
+    updateApiKey,
 } from "../controllers/apikey.controller.js";
 
 const apikeyRouter = Router();
@@ -17,5 +18,5 @@ apikeyRouter.route("/list").get(verifyStrictJWT, listApiKeys);
 apikeyRouter.route("/count").get(verifyStrictJWT, totalNumberOfApiKeys);
 apikeyRouter.route("/:id").delete(verifyStrictJWT, validate(apiKeyIdParamSchema), removeApiKey);
 apikeyRouter.route("/:id").get(verifyStrictJWT, validate(apiKeyIdParamSchema), getApiKey);
-
+apikeyRouter.route("/:id").patch(verifyStrictJWT, updateApiKey);
 export default apikeyRouter;

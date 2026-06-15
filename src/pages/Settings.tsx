@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { Sidebar } from "../components/Sidebar";
-import { Key, Trash2, AlertCircle, Eye, EyeOff, Plus, Network } from "lucide-react";
+import EmptyState from "../components/EmptyState";
+import { KeyRound, Trash2, AlertCircle, Eye, EyeOff, Plus, Network, Edit2 } from "lucide-react";
 import {
     createApiKey,
+    updateApiKey,
     deleteApiKey,
     getApiKeyCount,
     getApiKeys,
@@ -55,6 +57,8 @@ const Settings = () => {
     const [selectedProvider, setSelectedProvider] = useState<Provider | "">("");
     const [showKey, setShowKey] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [deletingKeyId, setDeletingKeyId] = useState<string | null>(null);
+    const [editingKeyId, setEditingKeyId] = useState<string | null>(null);
 
     const loadApiKeys = async () => {
         setIsLoading(true);
@@ -96,20 +100,28 @@ const Settings = () => {
     };
 
     const handleSaveKey = async () => {
-        if (!newKeyName || !newKeyValue || !selectedProvider) return;
+        if (!newKeyName || (!newKeyValue && !editingKeyId) || !selectedProvider) return;
 
         setIsSaving(true);
         setError("");
         try {
-            await createApiKey({
-                key: newKeyValue,
-                name: newKeyName,
-                provider: selectedProvider,
-            });
+            if (editingKeyId) {
+                await updateApiKey(editingKeyId, {
+                    name: newKeyName,
+                    ...(newKeyValue ? { key: newKeyValue } : {})
+                });
+            } else {
+                await createApiKey({
+                    key: newKeyValue,
+                    name: newKeyName,
+                    provider: selectedProvider,
+                });
+            }
             setNewKeyName("");
             setNewKeyValue("");
             setSelectedProvider("");
             setShowKey(false);
+            setEditingKeyId(null);
             await loadApiKeys();
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to save API key.");
@@ -120,11 +132,14 @@ const Settings = () => {
 
     const handleDeleteKey = async (id: string) => {
         setError("");
+        setDeletingKeyId(id);
         try {
             await deleteApiKey(id);
             await loadApiKeys();
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to delete API key.");
+        } finally {
+            setDeletingKeyId(null);
         }
     };
 
@@ -167,7 +182,7 @@ const Settings = () => {
 
                     <section className="space-y-6">
                         <div className="flex items-center gap-3 border-b border-white/10 pb-4">
-                            <Key className="w-6 h-6 text-accent-blue" />
+                            <KeyRound className="w-6 h-6 text-accent-blue" />
                             <h2 className="text-xl font-semibold text-gray-200">
                                 API Keys Configuration
                             </h2>
@@ -179,7 +194,9 @@ const Settings = () => {
                                 <div className="w-10 h-10 rounded-lg bg-accent-blue/10 flex items-center justify-center border border-accent-blue/20 text-accent-blue">
                                     <Network className="w-5 h-5" />
                                 </div>
-                                <h3 className="text-lg font-medium text-gray-200">Add New Key</h3>
+                                <h3 className="text-lg font-medium text-gray-200">
+                                    {editingKeyId ? "Edit Key" : "Add New Key"}
+                                </h3>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-5 relative z-10">
@@ -203,7 +220,7 @@ const Settings = () => {
                                             type={showKey ? "text" : "password"}
                                             value={newKeyValue}
                                             onChange={(e) => handleKeyChange(e.target.value)}
-                                            placeholder="sk-... (Auto-detects provider)"
+                                            placeholder={editingKeyId ? "(Leave blank to keep existing key)" : "sk-... (Auto-detects provider)"}
                                             className="w-full bg-[#111] border border-white/10 rounded-lg pl-4 pr-12 py-2.5 text-white focus:outline-none focus:border-accent-blue/50 font-mono text-sm"
                                         />
                                         <button
@@ -224,7 +241,8 @@ const Settings = () => {
                                     <select
                                         value={selectedProvider}
                                         onChange={(e) => handleProviderChange(e.target.value)}
-                                        className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-accent-blue/50 appearance-none"
+                                        disabled={!!editingKeyId}
+                                        className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-accent-blue/50 appearance-none disabled:opacity-50"
                                     >
                                         <option value="">Select a provider...</option>
                                         {PROVIDERS.map((p) => (
@@ -236,16 +254,26 @@ const Settings = () => {
                                 </div>
                             </div>
 
-                            <div className="pt-4 border-t border-white/5 mt-4 relative z-10 flex justify-end">
+                            <div className="pt-4 border-t border-white/5 mt-4 relative z-10 flex flex-col-reverse sm:flex-row justify-end gap-3">
+                                {editingKeyId && (
+                                    <button
+                                        onClick={() => {
+                                            setEditingKeyId(null);
+                                            setNewKeyName("");
+                                            setNewKeyValue("");
+                                            setSelectedProvider("");
+                                        }}
+                                        className="bg-white/10 hover:bg-white/20 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-colors w-full sm:w-auto"
+                                    >
+                                        Cancel Edit
+                                    </button>
+                                )}
                                 <button
                                     onClick={handleSaveKey}
-                                    disabled={
-                                        isSaving || !newKeyName || !newKeyValue || !selectedProvider
-                                    }
+                                    disabled={isSaving || !newKeyName || (!newKeyValue && !editingKeyId) || !selectedProvider}
                                     className="bg-accent-blue hover:bg-blue-600 disabled:opacity-50 disabled:bg-gray-700 disabled:cursor-not-allowed text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 justify-center shrink-0 w-full sm:w-auto"
                                 >
-                                    <Plus className="w-4 h-4" />
-                                    {isSaving ? "Saving..." : "Save Key Configuration"}
+                                    {isSaving ? "Saving..." : (editingKeyId ? "Update Key" : <><Plus className="w-4 h-4" /> Save Key Configuration</>)}
                                 </button>
                             </div>
                         </div>
@@ -301,18 +329,39 @@ const Settings = () => {
 
                                         <button
                                             onClick={() => handleDeleteKey(key.id)}
-                                            className="p-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors self-end sm:self-auto shrink-0"
+                                            disabled={deletingKeyId !== null}
+                                            className="p-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors self-end sm:self-auto shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                                             title="Delete Key"
                                         >
-                                            <Trash2 className="w-4 h-4" />
+                                            {deletingKeyId === key.id ? (
+                                                <span className="text-xs">Deleting...</span>
+                                            ) : (
+                                                <Trash2 className="w-4 h-4" />
+                                            )}
                                         </button>
+                                        <div className="flex gap-2 self-end sm:self-auto shrink-0">
+                                            <button
+                                                onClick={() => {
+                                                    setEditingKeyId(key.id);
+                                                    setNewKeyName(key.name);
+                                                    setNewKeyValue("");
+                                                    setSelectedProvider(key.provider as Provider);
+                                                    window.scrollTo({ top: 0, behavior: "smooth" });
+                                                }}
+                                                className="p-2 bg-accent-blue/10 text-accent-blue rounded-lg hover:bg-accent-blue/20 transition-colors"
+                                                title="Edit Key"
+                                            >
+                                                <Edit2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
                                     </div>
                                 ))
                             ) : (
-                                <div className="p-8 text-center bg-white/1 border border-white/5 border-dashed rounded-xl">
-                                    <Key className="w-6 h-6 text-gray-600 mx-auto mb-3" />
-                                    <p className="text-sm text-gray-400">No API keys configured yet.</p>
-                                </div>
+                                <EmptyState
+                                    icon={<KeyRound className="w-12 h-12" />}
+                                    title="No API keys configured"
+                                    description="Add an API key to enable AI-powered documentation chat."
+                                />
                             )}
                         </div>
                     </section>

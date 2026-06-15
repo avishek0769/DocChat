@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sidebar } from "../components/Sidebar";
+import Skeleton from "../components/Skeleton";
 
 export interface Source {
     id: string;
@@ -36,32 +37,35 @@ import {
     Search,
     ArrowLeft,
     Check,
-    Code,
     X,
     Loader2,
     Database,
     Download,
     Link as LinkIcon,
     Share2,
+    AlertCircle,
 } from "lucide-react";
 import clsx from "clsx";
-import hljs from "highlight.js";
-import "highlight.js/styles/atom-one-dark.css";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import CodeBlock from "../components/CodeBlock";
 import {
-    getApiKeys,
+    addChatSource,
+    removeChatSource,
+    getAvailableModels,
     getChatDetails,
     getChatMessages,
     getMessageSources,
     getPagesIndexed,
     sendMessageStream,
     exportChatMessages,
+    exportRawSource,
     toggleChatShare,
 } from "../lib/api";
 import { formatTokens } from "../lib/format";
 
 type CurrentLink = {
+    id?: string;
     title: string;
     url: string;
     isHighlight: boolean;
@@ -87,6 +91,38 @@ const toModelDisplayName = (model?: string) => {
     return model;
 };
 
+const mapApiMessagesToUiMessages = (messageList: Array<{
+    id: string;
+    userPrompt: string;
+    llmResponse: string;
+    llmModel: string;
+    createdAt: string;
+}>) => {
+    const messagePairs: Message[] = [];
+    for (const msg of messageList) {
+        messagePairs.push({
+            id: `${msg.id}-user`,
+            role: "user",
+            content: msg.userPrompt,
+            timestamp: new Date(msg.createdAt),
+        });
+
+        messagePairs.push({
+            id: `${msg.id}-ai`,
+            messageId: msg.id,
+            role: "ai",
+            content: msg.llmResponse,
+            model: toModelDisplayName(msg.llmModel),
+            sources: [],
+            sourcesLoaded: false,
+            timestamp: new Date(msg.createdAt),
+        });
+    }
+    return messagePairs;
+};
+
+const WARNING_LENGTH_THRESHOLD = 4000;
+
 export const ChatPage = () => {
     const navigate = useNavigate();
     const { id: chatId = "" } = useParams();
@@ -101,6 +137,7 @@ export const ChatPage = () => {
     });
     const [modelOptions, setModelOptions] = useState<ModelOption[]>([]);
     const [selectedModel, setSelectedModel] = useState("");
+    const [hasApiKeys, setHasApiKeys] = useState(true);
     const [isPageLoading, setIsPageLoading] = useState(true);
     const [isMessagesLoading, setIsMessagesLoading] = useState(true);
     const [error, setError] = useState("");
@@ -113,6 +150,9 @@ export const ChatPage = () => {
     // Chat state
     const [input, setInput] = useState("");
     const [messages, setMessages] = useState<Message[]>([]);
+    const [nextCursor, setNextCursor] = useState<string | null>(null);
+    const [hasMore, setHasMore] = useState(false);
+    const [isLoadingOlder, setIsLoadingOlder] = useState(false);
     const [isTyping, setIsTyping] = useState(false);
     const [isAwaitingFirstChunk, setIsAwaitingFirstChunk] = useState(false);
     const [selectedSources, setSelectedSources] = useState<Source[]>([]);
@@ -120,13 +160,17 @@ export const ChatPage = () => {
     const [sourceFetchAttempted, setSourceFetchAttempted] = useState(false);
 
     const [isExporting, setIsExporting] = useState(false);
+    const [isExportingSources, setIsExportingSources] = useState(false);
     const [isIndexedModalOpen, setIsIndexedModalOpen] = useState(false);
     const [currentLinks, setCurrentLinks] = useState<CurrentLink[]>([]);
     const [indexedPages, setIndexedPages] = useState<IndexedPage[]>([]);
+    const [newSourceUrl, setNewSourceUrl] = useState("");
 
     const [isSharing, setIsSharing] = useState(false);
     const [shareToken, setShareToken] = useState<string | null>(null);
     const [shareModalOpen, setShareModalOpen] = useState(false);
+    const [exportFormat, setExportFormat] = useState<"txt" | "md" | "pdf">("txt");
+
 
     const handleShare = () => {
         setShareModalOpen(true);
@@ -148,13 +192,32 @@ export const ChatPage = () => {
 
     const handleExport = async () => {
         if (isExporting) return;
+
         setIsExporting(true);
+
         try {
-            await exportChatMessages(chatId);
+            await exportChatMessages(chatId, exportFormat);
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to export chat.");
         } finally {
             setIsExporting(false);
+        }
+    };
+
+    const handleDownloadAllSources = async () => {
+        if (isExportingSources || currentLinks.length === 0) return;
+        setIsExportingSources(true);
+        try {
+            for (const link of currentLinks) {
+                if (link.id) {
+                    await exportRawSource(chatId, link.id);
+                    await new Promise(res => setTimeout(res, 500));
+                }
+            }
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to download raw sources.");
+        } finally {
+            setIsExportingSources(false);
         }
     };
 
@@ -164,11 +227,11 @@ export const ChatPage = () => {
         setIsMessagesLoading(true);
         setError("");
         try {
-            const [chatDetails, indexedPageData, apiKeyData, messageData] = await Promise.all([
+            const [chatDetails, indexedPageData, availableModelsData, messageData] = await Promise.all([
                 getChatDetails(chatId),
                 getPagesIndexed(chatId),
-                getApiKeys(),
-                getChatMessages(chatId),
+                getAvailableModels(),
+                getChatMessages(chatId, 50),
             ]);
 
             const chat = chatDetails.chat;
@@ -190,6 +253,7 @@ export const ChatPage = () => {
             setCurrentLinks(
                 (chat?.chatSources || [])
                     .map((source) => ({
+                        id: source.id,
                         title: source.documentationUrl,
                         url: source.documentationUrl,
                         isHighlight: false,
@@ -211,46 +275,79 @@ export const ChatPage = () => {
                 },
             ];
 
-            const dynamicModels = (apiKeyData.apiKeys || []).flatMap((key) =>
-                (key.models || []).map((model) => ({
-                    provider: key.provider,
+            const rawModels = availableModelsData?.models || [];
+            const uniqueModels = Array.from(new Set(rawModels)).sort();
+            setHasApiKeys(uniqueModels.length > 0);
+
+            const inferProvider = (m: string) => {
+                if (m.includes("/")) return "OPENROUTER";
+                if (m.includes("gpt")) return "OPENAI";
+                if (m.includes("claude")) return "ANTHROPIC";
+                if (m.includes("gemini")) return "GOOGLE";
+                if (m.includes("grok")) return "XAI";
+                return "OPENROUTER";
+            };
+
+            const dynamicModels = uniqueModels.map((model) => {
+                const provider = inferProvider(model);
+                return {
+                    provider,
                     model,
-                    label: `${model} (${key.provider})`,
-                })),
-            );
+                    label: `${model} (${provider})`,
+                };
+            });
 
             const options = [...defaultOptions, ...dynamicModels];
             setModelOptions(options);
             setSelectedModel((prev) => prev || options[0]?.model || "default-1");
 
-            const messageList = messageData.messages || [];
-            const messagePairs: Message[] = [];
-            for (const msg of messageList) {
-                messagePairs.push({
-                    id: `${msg.id}-user`,
-                    role: "user",
-                    content: msg.userPrompt,
-                    timestamp: new Date(msg.createdAt),
-                });
-
-                messagePairs.push({
-                    id: `${msg.id}-ai`,
-                    messageId: msg.id,
-                    role: "ai",
-                    content: msg.llmResponse,
-                    model: toModelDisplayName(msg.llmModel),
-                    sources: [],
-                    sourcesLoaded: false,
-                    timestamp: new Date(msg.createdAt),
-                });
-            }
-            setMessages(messagePairs);
+            setMessages(mapApiMessagesToUiMessages(messageData.messages || []));
+            setNextCursor(messageData.nextCursor || null);
+            setHasMore(Boolean(messageData.hasMore));
             setIsMessagesLoading(false);
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to load chat data.");
             setIsMessagesLoading(false);
         } finally {
             setIsPageLoading(false);
+        }
+    };
+
+    const handleAddSource = async () => {
+        const value = newSourceUrl.trim();
+        if (!value) return;
+        try {
+            await addChatSource(chatId, { docsUrl: value });
+            setNewSourceUrl("");
+            await loadChatPage();
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to add source.");
+        }
+    };
+
+    const handleRemoveSource = async (docsUrl: string) => {
+        try {
+            await removeChatSource(chatId, { docsUrl });
+            await loadChatPage();
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to remove source.");
+        }
+    };
+
+    const loadOlderMessages = async () => {
+        if (!chatId || !nextCursor || isLoadingOlder) return;
+        setIsLoadingOlder(true);
+        try {
+            skipNextAutoScrollRef.current = true;
+            const olderData = await getChatMessages(chatId, 50, nextCursor);
+            const olderMessages = mapApiMessagesToUiMessages(olderData.messages || []);
+            setMessages((prev) => [...olderMessages, ...prev]);
+            setNextCursor(olderData.nextCursor || null);
+            setHasMore(Boolean(olderData.hasMore));
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to load older messages.");
+        } finally {
+            setIsLoadingOlder(false);
         }
     };
 
@@ -289,9 +386,14 @@ export const ChatPage = () => {
     const pendingChunkRef = useRef("");
     const chunkRafRef = useRef<number | null>(null);
     const firstChunkReceivedRef = useRef(false);
+    const abortControllerRef = useRef<AbortController | null>(null);
+    const skipNextAutoScrollRef = useRef(false);
 
     useEffect(() => {
         return () => {
+            abortControllerRef.current?.abort();
+            abortControllerRef.current = null;
+
             if (chunkRafRef.current !== null) {
                 window.cancelAnimationFrame(chunkRafRef.current);
                 chunkRafRef.current = null;
@@ -349,6 +451,10 @@ export const ChatPage = () => {
 
     // Scroll to bottom on new message
     useEffect(() => {
+        if (skipNextAutoScrollRef.current) {
+            skipNextAutoScrollRef.current = false;
+            return;
+        }
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages, isTyping]);
 
@@ -358,10 +464,10 @@ export const ChatPage = () => {
 
         const selectedOption = modelOptions.find((opt) => opt.model === selectedModel) ||
             modelOptions[0] || {
-                provider: "DEFAULT",
-                model: "default-1",
-                label: `Default (Fast) - GPT - OSS`,
-            };
+            provider: "DEFAULT",
+            model: "default-1",
+            label: `Default (Fast) - GPT - OSS`,
+        };
 
         const newUserMessage: Message = {
             id: Date.now().toString(),
@@ -398,6 +504,7 @@ export const ChatPage = () => {
         ]);
 
         try {
+            abortControllerRef.current = new AbortController();
             const flushPendingChunks = () => {
                 const buffered = pendingChunkRef.current;
                 if (!buffered) return;
@@ -423,6 +530,7 @@ export const ChatPage = () => {
                 model: selectedOption.model,
                 provider: selectedOption.provider,
                 chatId,
+                signal: abortControllerRef.current.signal, 
                 onChunk: (chunk) => {
                     if (!firstChunkReceivedRef.current) {
                         firstChunkReceivedRef.current = true;
@@ -444,44 +552,44 @@ export const ChatPage = () => {
 
             setMessages((prev) => prev.map((m) => (m.id === aiId ? { ...m, isStreaming: false } : m)));
 
-            const latestMessages = await getChatMessages(chatId);
+            const latestMessages = await getChatMessages(chatId, 50);
             const latestAi = (latestMessages.messages || []).at(-1);
             if (latestAi) {
                 setMessages((prev) =>
                     prev.map((m) =>
                         m.id === aiId
                             ? {
-                                  ...m,
-                                  messageId: latestAi.id,
-                                  // Keep the exact model selected in UI for message badge text.
-                                  model: selectedOption.label,
-                                  sources: [],
-                                  sourcesLoaded: false,
-                              }
+                                ...m,
+                                messageId: latestAi.id,
+                                // Keep the exact model selected in UI for message badge text.
+                                model: selectedOption.label,
+                                sources: [],
+                                sourcesLoaded: false,
+                            }
                             : m,
                     ),
                 );
             }
         } catch (err) {
-    if (chunkRafRef.current !== null) {
-        window.cancelAnimationFrame(chunkRafRef.current);
-        chunkRafRef.current = null;
-    }
-    pendingChunkRef.current = "";
-    setIsAwaitingFirstChunk(false);
+            if (chunkRafRef.current !== null) {
+                window.cancelAnimationFrame(chunkRafRef.current);
+                chunkRafRef.current = null;
+            }
+            pendingChunkRef.current = "";
+            setIsAwaitingFirstChunk(false);
 
-    const errMsg = err instanceof Error ? err.message : "Failed to send message.";
+            const errMsg = err instanceof Error ? err.message : "Failed to send message.";
 
-    // 409 = chat not ready or failed — show inline banner, restore input
-    if (err instanceof Error && (err.message.includes("indexing") || err.message.includes("ingestion"))) {
-        setError(errMsg);
-        setInput(newUserMessage.content);           // restore so user can retry
-        setMessages((prev) => prev.filter((m) => m.id !== aiId || m.id !== newUserMessage.id));
-    } else {
-        setError(errMsg);
-        setMessages((prev) => prev.filter((m) => m.id !== aiId));
-    }
-}
+            // 409 = chat not ready or failed — show inline banner, restore input
+            if (err instanceof Error && (err.message.includes("indexing") || err.message.includes("ingestion"))) {
+                setError(errMsg);
+                setInput(newUserMessage.content);           // restore so user can retry
+                setMessages((prev) => prev.filter((m) => m.id !== aiId || m.id !== newUserMessage.id));
+            } else {
+                setError(errMsg);
+                setMessages((prev) => prev.filter((m) => m.id !== aiId));
+            }
+        }
         finally {
             setIsTyping(false);
         }
@@ -579,13 +687,46 @@ export const ChatPage = () => {
                                     <FileText className="w-4 h-4 text-accent-blue" />
                                     Show all pages
                                 </button>
+                                <div className="mt-4 space-y-2">
+                                    <label className="text-xs uppercase tracking-wider text-gray-500 font-semibold">
+                                        Add Source
+                                    </label>
+                                    <input
+                                        type="url"
+                                        value={newSourceUrl}
+                                        onChange={(e) => setNewSourceUrl(e.target.value)}
+                                        placeholder="https://docs.example.com"
+                                        className="w-full bg-[#111] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-blue/50 focus:ring-1 focus:ring-accent-blue/50 transition-all font-mono"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={handleAddSource}
+                                        className="w-full px-3 py-2 rounded-lg bg-accent-blue hover:bg-accent-blue/90 text-white text-sm font-medium transition-colors"
+                                    >
+                                        Add to Chat
+                                    </button>
+                                </div>
                             </div>
 
                             {/* Scraped Pages List */}
                             <div className="flex-1 overflow-y-auto p-4 w-70">
-                                <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">
-                                    Current Links
-                                </h4>
+                                <div className="flex items-center justify-between mb-3">
+                                    <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider">
+                                        Current Links
+                                    </h4>
+                                    {currentLinks.length > 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={handleDownloadAllSources}
+                                            disabled={isExportingSources}
+                                            className="text-[10px] uppercase tracking-wide bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white px-2 py-1 rounded border border-white/10 font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                                            title="Download all raw sources"
+                                        >
+                                            <Download className="w-3 h-3 text-accent-blue" />
+                                            {isExportingSources ? "Wait..." : "Raw Data"}
+                                        </button>
+                                    )}
+                                </div>
                                 <div className="space-y-1 mb-4">
                                     {currentLinks.length > 0 ? (
                                         currentLinks.map((page, i) => (
@@ -593,16 +734,24 @@ export const ChatPage = () => {
                                                 key={i}
                                                 className="px-3 py-2 rounded-lg text-sm transition-colors border border-transparent text-gray-400"
                                             >
-                                                <div className="flex items-center justify-between">
-                                                    <span className="truncate pr-2 text-gray-300">
+                                                <div className="flex items-center justify-between gap-2 min-w-0">
+                                                    <span className="truncate pr-2 text-gray-300" title={page.title}>
                                                         {page.title}
                                                     </span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleRemoveSource(page.url)}
+                                                        className="text-[11px] text-red-400 hover:text-red-300 shrink-0"
+                                                    >
+                                                        Remove
+                                                    </button>
                                                 </div>
                                                 <a
                                                     href={page.url}
                                                     target="_blank"
                                                     rel="noreferrer"
                                                     className="text-sm opacity-60 truncate mt-0.5 font-mono hover:text-accent-blue hover:underline block"
+                                                    title={page.url}
                                                 >
                                                     {page.url}
                                                 </a>
@@ -659,6 +808,14 @@ export const ChatPage = () => {
                             </div>
                         </div>
                         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                            {!hasApiKeys && (
+                                <button
+                                    onClick={() => navigate("/dashboard?tab=api-keys")}
+                                    className="hidden sm:inline-flex text-xs font-semibold text-accent-blue hover:text-accent-blue/80 hover:underline px-2 transition-colors"
+                                >
+                                    + Add API Key
+                                </button>
+                            )}
                             <div className="hidden sm:flex items-center mr-2">
                                 <div className="relative inline-flex items-center gap-2 rounded-xl border border-white/15 bg-linear-to-r from-white/5 to-white/2 px-2.5 py-1.5 shadow-inner shadow-black/30">
                                     <span className="text-[11px] tracking-wide uppercase text-gray-500 font-semibold">
@@ -678,6 +835,17 @@ export const ChatPage = () => {
                                     <ChevronRight className="w-3.5 h-3.5 text-gray-500 absolute right-3 pointer-events-none rotate-90" />
                                 </div>
                             </div>
+                            <select
+                                value={exportFormat}
+                                onChange={(e) =>
+                                    setExportFormat(e.target.value as "txt" | "md" | "pdf")
+                                }
+                                className="px-2 py-1.5 rounded-lg border border-white/10 bg-white/5 text-gray-300 text-sm"
+                            >
+                                <option value="txt">TXT</option>
+                                <option value="md">Markdown</option>
+                                <option value="pdf">PDF</option>
+                            </select>
                             <button
                                 aria-label="Export chat"
                                 onClick={handleExport}
@@ -687,13 +855,9 @@ export const ChatPage = () => {
                                 <Download className="w-4 h-4" />
                                 <span className="hidden sm:inline">{isExporting ? "Exporting..." : "Export"}</span>
                             </button>
+
                             <button
-                                onClick={() => {
-                                    if (isMobile) {
-                                        setLeftPanelOpen(false);
-                                    }
-                                    setRightPanelOpen(!rightPanelOpen);
-                                }}
+                                onClick={handleShare}
                                 aria-label="Toggle right panel"
                                 disabled={isSharing}
                                 className="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border border-white/10 bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 flex items-center gap-2 disabled:opacity-50"
@@ -732,9 +896,18 @@ export const ChatPage = () => {
                     <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-3 py-4 sm:px-6 sm:py-6 lg:px-8 custom-scrollbar scroll-smooth">
                         <div className="max-w-3xl mx-auto space-y-8 pb-10">
                             {isMessagesLoading ? (
-                                <div className="flex flex-col items-center justify-center h-full min-h-[50vh] text-center space-y-3 text-gray-400">
-                                    <Loader2 className="w-6 h-6 animate-spin text-accent-blue" />
-                                    <p className="text-sm">Fetching messages...</p>
+                                <div className="space-y-8">
+                                    {[1, 2, 3, 4].map((i) => (
+                                        <div key={i} className="flex gap-4">
+                                            <Skeleton className="w-8 h-8 rounded-lg shrink-0" />
+
+                                            <div className="flex-1">
+                                                <Skeleton className="h-4 w-3/4 mb-2" />
+                                                <Skeleton className="h-4 w-full mb-2" />
+                                                <Skeleton className="h-4 w-5/6" />
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             ) : messages.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center h-full min-h-[50vh] text-center space-y-6">
@@ -770,13 +943,34 @@ export const ChatPage = () => {
                                     </div>
                                 </div>
                             ) : (
-                                messages.map((msg) => (
-                                    <ChatMessage
-                                        key={msg.id}
-                                        message={msg}
-                                        onViewSources={handleViewSources}
-                                    />
-                                ))
+                                <>
+                                    {hasMore && (
+                                        <div className="flex justify-center">
+                                            <button
+                                                type="button"
+                                                onClick={loadOlderMessages}
+                                                disabled={isLoadingOlder}
+                                                className="px-4 py-2 rounded-full border border-white/10 bg-white/5 text-sm text-gray-300 hover:bg-white/10 hover:border-white/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                            >
+                                                {isLoadingOlder ? (
+                                                    <>
+                                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                                        Loading older...
+                                                    </>
+                                                ) : (
+                                                    "Load older messages"
+                                                )}
+                                            </button>
+                                        </div>
+                                    )}
+                                    {messages.map((msg) => (
+                                        <ChatMessage
+                                            key={msg.id}
+                                            message={msg}
+                                            onViewSources={handleViewSources}
+                                        />
+                                    ))}
+                                </>
                             )}
 
                             {isTyping && isAwaitingFirstChunk && (
@@ -800,7 +994,12 @@ export const ChatPage = () => {
                         <div className="max-w-3xl mx-auto relative">
                             <form
                                 onSubmit={handleSend}
-                                className="relative bg-[#1a1a24] border border-white/10 rounded-2xl shadow-2xl overflow-hidden focus-within:border-accent-blue/50 focus-within:ring-1 focus-within:ring-accent-blue/50 transition-all"
+                                className={clsx(
+                                    "relative bg-[#1a1a24] border rounded-2xl shadow-2xl overflow-hidden focus-within:ring-1 transition-all",
+                                    input.length > WARNING_LENGTH_THRESHOLD
+                                        ? "border-amber-500/50 focus-within:border-amber-500/70 focus-within:ring-amber-500/30"
+                                        : "border-white/10 focus-within:border-accent-blue/50 focus-within:ring-accent-blue/50"
+                                )}
                             >
                                 <textarea
                                     ref={textareaRef}
@@ -815,7 +1014,15 @@ export const ChatPage = () => {
                                         maxHeight: "200px",
                                     }}
                                 />
-                                <div className="absolute right-3 bottom-3 flex items-center gap-2">
+                                <div className="absolute right-3 bottom-3 flex items-center gap-3">
+                                    {input.length > WARNING_LENGTH_THRESHOLD && (
+                                        <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 bg-amber-500/10 border border-amber-500/20 rounded-md">
+                                            <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
+                                            <span className="text-xs font-medium text-amber-500">
+                                                {input.length} chars (Approaching limit)
+                                            </span>
+                                        </div>
+                                    )}
                                     <button
                                         aria-label="Send message"
                                         type="submit"
@@ -994,9 +1201,18 @@ export const ChatPage = () => {
 
                             <div className="flex-1 overflow-y-auto p-4 w-[320px] space-y-4">
                                 {isSourcesLoading ? (
-                                    <div className="flex flex-col items-center justify-center h-40 text-gray-400 gap-3">
-                                        <Loader2 className="w-6 h-6 animate-spin text-accent-blue" />
-                                        <span className="text-sm">Fetching source chunks...</span>
+                                    <div className="space-y-4">
+                                        {[1, 2, 3].map((i) => (
+                                            <div
+                                                key={i}
+                                                className="bg-white/3 border border-white/10 rounded-xl p-4"
+                                            >
+                                                <Skeleton className="h-4 w-2/3 mb-3" />
+                                                <Skeleton className="h-3 w-full mb-2" />
+                                                <Skeleton className="h-3 w-full mb-2" />
+                                                <Skeleton className="h-3 w-3/4" />
+                                            </div>
+                                        ))}
                                     </div>
                                 ) : selectedSources.length === 0 ? (
                                     <div className="text-center text-gray-500 text-sm py-10">
@@ -1155,6 +1371,25 @@ export const ChatPage = () => {
                                         <FileText className="w-4 h-4 text-accent-blue" />
                                         Show all pages
                                     </button>
+                                    <div className="mt-4 space-y-2">
+                                        <label className="text-xs uppercase tracking-wider text-gray-500 font-semibold">
+                                            Add Source
+                                        </label>
+                                        <input
+                                            type="url"
+                                            value={newSourceUrl}
+                                            onChange={(e) => setNewSourceUrl(e.target.value)}
+                                            placeholder="https://docs.example.com"
+                                            className="w-full bg-[#111] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-blue/50 focus:ring-1 focus:ring-accent-blue/50 transition-all font-mono"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={handleAddSource}
+                                            className="w-full px-3 py-2 rounded-lg bg-accent-blue hover:bg-accent-blue/90 text-white text-sm font-medium transition-colors"
+                                        >
+                                            Add to Chat
+                                        </button>
+                                    </div>
                                 </div>
                                 <div className="flex-1 overflow-y-auto p-4">
                                     <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">
@@ -1167,9 +1402,18 @@ export const ChatPage = () => {
                                                     key={i}
                                                     className="px-3 py-2 rounded-lg text-sm border border-white/10 bg-white/5"
                                                 >
-                                                    <span className="block text-gray-300 wrap-break-word">
-                                                        {page.title}
-                                                    </span>
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <span className="block text-gray-300 wrap-break-word">
+                                                            {page.title}
+                                                        </span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleRemoveSource(page.url)}
+                                                            className="text-[11px] text-red-400 hover:text-red-300 shrink-0"
+                                                        >
+                                                            Remove
+                                                        </button>
+                                                    </div>
                                                     <a
                                                         href={page.url}
                                                         target="_blank"
@@ -1383,19 +1627,6 @@ export const ChatPage = () => {
     );
 };
 
-// Helper Components
-
-const highlightCode = (language: string, code: string) => {
-    try {
-        if (language && hljs.getLanguage(language)) {
-            return hljs.highlight(code, { language }).value;
-        }
-        return hljs.highlightAuto(code).value;
-    } catch {
-        return code.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    }
-};
-
 const ChatMessage = ({
     message,
     onViewSources,
@@ -1514,33 +1745,7 @@ const ChatMessage = ({
                                             );
                                         }
 
-                                        return (
-                                            <div className="my-4 rounded-xl overflow-hidden bg-[#0a0a0e] border border-white/10 shadow-xl">
-                                                <div className="flex items-center justify-between px-4 py-2 bg-white/5 border-b border-white/5">
-                                                    <div className="flex items-center gap-2 text-sm font-medium text-gray-400">
-                                                        <Code className="w-3.5 h-3.5" />
-                                                        {language || "code"}
-                                                    </div>
-                                                    <button
-                                                        onClick={() =>
-                                                            navigator.clipboard.writeText(code)
-                                                        }
-                                                        className="text-sm uppercase font-bold tracking-wider text-gray-500 hover:text-white transition-colors cursor-pointer"
-                                                    >
-                                                        Copy
-                                                    </button>
-                                                </div>
-                                                <div className="p-4 overflow-x-auto text-sm font-mono leading-relaxed text-gray-300 custom-scrollbar w-full max-w-full">
-                                                    <pre>
-                                                        <code
-                                                            dangerouslySetInnerHTML={{
-                                                                __html: highlightCode(language, code),
-                                                            }}
-                                                        />
-                                                    </pre>
-                                                </div>
-                                            </div>
-                                        );
+                                        return <CodeBlock language={language} code={code} />;
                                     },
                                 }}
                             >
@@ -1556,7 +1761,7 @@ const ChatMessage = ({
                 {isAi && !message.isStreaming && (
                     <div className="flex items-center gap-2 opacity-100 transition-opacity mt-1">
                         <button
-                            
+
                             onClick={handleCopy}
                             className="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-1.5 text-sm font-medium"
                         >
@@ -1571,7 +1776,7 @@ const ChatMessage = ({
                         <>
                             <div className="w-px h-3 bg-white/10" />
                             <button
-                                
+
                                 onClick={() => onViewSources(message)}
                                 className="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-1.5 text-sm font-medium"
                             >

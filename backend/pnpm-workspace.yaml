@@ -1,0 +1,7 @@
+ignoredBuiltDependencies:
+  - '@prisma/engines'
+  - bcrypt
+  - better-sqlite3
+  - msgpackr-extract
+  - prisma
+  - protobufjs

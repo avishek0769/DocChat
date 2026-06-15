@@ -20,6 +20,7 @@ import {
     currentUserProfile,
     resetPassword,
     sendResetCode,
+    deleteMyData,
 } from "../controllers/user.controller.js";
 
 
@@ -32,7 +33,8 @@ userRouter.route("/login").post(authLimiter, validate(userLogInSchema), userLogI
 userRouter.route("/logout").get(verifyStrictJWT, userLogOut);
 userRouter.route("/refresh-tokens").patch(verifyJWT, refreshTokens);
 userRouter.route("/profile").get(verifyStrictJWT, currentUserProfile);
-userRouter.route("/send-reset-code").post(otpLimiter, validate(sendResetCodeSchema), sendResetCode);
-userRouter.route("/reset-password").patch(authLimiter, validate(resetPasswordSchema), resetPassword);
+userRouter.route("/send-reset-code").post(validate(sendResetCodeSchema), sendResetCode);
+userRouter.route("/reset-password").patch(validate(resetPasswordSchema), resetPassword);
+userRouter.route("/delete-my-data").delete(verifyStrictJWT, deleteMyData);
 
 export default userRouter;
