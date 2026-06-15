@@ -1,5 +1,11 @@
 import { Router } from "express";
 import { verifyJWT, verifyStrictJWT } from "../middlewares/auth.middleware.js";
+import {
+    loginLimiter,
+    registerLimiter,
+    verificationCodeLimiter,
+    resetPasswordLimiter,
+} from "../middlewares/rateLimit.middleware.js";
 import validate from "../middlewares/validate.middleware.js";
 import {
     sendVerificationCodeSchema,
@@ -24,15 +30,31 @@ import {
 
 const userRouter = Router();
 
-userRouter.route("/send-verification-code").post(validate(sendVerificationCodeSchema), sendVerificationCode);
+userRouter.route("/send-verification-code").post(
+    verificationCodeLimiter,
+    validate(sendVerificationCodeSchema),
+    sendVerificationCode,
+);
 userRouter.route("/verify-email").post(validate(verifyEmailSchema), verifyEmail);
-userRouter.route("/register").post(validate(userRegisterSchema), userRegister);
-userRouter.route("/login").post(validate(userLogInSchema), userLogIn);
+userRouter.route("/register").post(
+    registerLimiter,
+    validate(userRegisterSchema),
+    userRegister,
+);
+userRouter.route("/login").post(
+    loginLimiter,
+    validate(userLogInSchema),
+    userLogIn,
+);
 userRouter.route("/logout").get(verifyStrictJWT, userLogOut);
 userRouter.route("/refresh-tokens").patch(verifyJWT, refreshTokens);
 userRouter.route("/profile").get(verifyStrictJWT, currentUserProfile);
 userRouter.route("/send-reset-code").post(validate(sendResetCodeSchema), sendResetCode);
-userRouter.route("/reset-password").patch(validate(resetPasswordSchema), resetPassword);
+userRouter.route("/reset-password").patch(
+    resetPasswordLimiter,
+    validate(resetPasswordSchema),
+    resetPassword,
+);
 userRouter.route("/delete-my-data").delete(verifyStrictJWT, deleteMyData);
 
 export default userRouter;
