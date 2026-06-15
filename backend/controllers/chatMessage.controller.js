@@ -252,9 +252,7 @@ if (!chat.chatSources[0].isVectorLess) {
         score: fusedScores[id],
     }));
 
-    relevantSources = {
-        points: topFusedPoints,
-    };
+    relevantSources = topFusedPoints;
 } else {
         const docTree = await prisma.documentTree.findUnique({
             where: { id: chat.collectionName },
