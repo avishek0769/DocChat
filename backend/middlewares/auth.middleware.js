@@ -18,6 +18,7 @@ const verifyStrictJWT = async (req, res, next) => {
                 fullname: true,
                 username: true,
                 email: true,
+                isAdmin: true,
                 apikeys: true,
                 refreshToken: true,
             },

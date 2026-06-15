@@ -13,6 +13,7 @@ import { Usage } from "./pages/Usage";
 import Sandbox from "./pages/Sandbox";
 import { ProtectedRoute, PublicOnlyRoute } from "./components/ProtectedRoute";
 import { isAuthenticated } from "./lib/auth";
+import ImpersonationBanner from "./components/ImpersonationBanner";
 
 // Lazy load route pages
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -48,6 +49,7 @@ function App() {
                     </div>
                 }
             >
+                <ImpersonationBanner />
                 <Routes>
             <Route
                 path="/"

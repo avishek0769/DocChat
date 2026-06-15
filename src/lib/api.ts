@@ -745,3 +745,17 @@ export const forkSharedChat = (shareToken: string) =>
 
 export const deleteMyData = () =>
     apiRequest<{ message: string }>("/user/delete-my-data?confirm=true", { method: "DELETE" });
+
+export const adminImpersonate = (userId: string) =>
+    apiRequest<{
+        accessToken: string;
+        user: {
+            id: string;
+            fullname?: string | null;
+            username?: string | null;
+            email?: string | null;
+        };
+    }>(`/admin/impersonate/${userId}`, { method: "POST" });
+
+export const adminStopImpersonation = () =>
+    apiRequest<void>("/admin/stop-impersonation", { method: "POST" });

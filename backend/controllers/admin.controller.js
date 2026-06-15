@@ -2,6 +2,8 @@ import prisma from "../utils/prismaClient.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
+import jwt from "jsonwebtoken";
+import { createAuditEvent } from "../utils/audit.js";
 
 const clampPagination = (req) => {
     const page = Math.max(Number(req.query.page || 1), 1);
@@ -339,4 +341,76 @@ const ingestion = asyncHandler(async (req, res) => {
     );
 });
 
-export { overview, users, userDetails, usage, ingestion };
+const impersonate = asyncHandler(async (req, res) => {
+    const { userId } = req.params;
+    const adminUser = req.user;
+
+    const targetUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+            id: true,
+            fullname: true,
+            username: true,
+            email: true,
+            isVerified: true,
+        },
+    });
+
+    if (!targetUser) {
+        throw new ApiError(404, "User not found");
+    }
+
+    const impersonationToken = jwt.sign(
+        {
+            id: targetUser.id,
+            username: targetUser.username,
+            fullname: targetUser.fullname,
+            adminOriginal: adminUser.id,
+        },
+        process.env.ACCESS_TOKEN_SECRET,
+        { expiresIn: "15m" },
+    );
+
+    try {
+        await createAuditEvent("admin.impersonate.start", adminUser.id, null, {
+            targetUserId: targetUser.id,
+            targetUsername: targetUser.username,
+        });
+    } catch (error) {
+        console.error("Failed to write impersonation audit event:", error.message);
+    }
+
+    return res.status(200).json(
+        new ApiResponse(
+            200,
+            {
+                accessToken: impersonationToken,
+                user: {
+                    id: targetUser.id,
+                    fullname: targetUser.fullname,
+                    username: targetUser.username,
+                    email: targetUser.email,
+                },
+            },
+            "Impersonation token generated successfully",
+        ),
+    );
+});
+
+const stopImpersonation = asyncHandler(async (req, res) => {
+    const adminUser = req.user;
+
+    try {
+        await createAuditEvent("admin.impersonate.stop", adminUser.id, null, {
+            adminOriginal: adminUser.id,
+        });
+    } catch (error) {
+        console.error("Failed to write stop impersonation audit event:", error.message);
+    }
+
+    return res.status(200).json(
+        new ApiResponse(200, {}, "Impersonation stopped successfully"),
+    );
+});
+
+export { overview, users, userDetails, usage, ingestion, impersonate, stopImpersonation };

@@ -12,6 +12,8 @@ import {
     userDetails,
     usage,
     ingestion,
+    impersonate,
+    stopImpersonation,
 } from "../controllers/admin.controller.js";
 
 const adminRouter = Router();
@@ -23,5 +25,7 @@ adminRouter.route("/users").get(validate(paginationSchema), users);
 adminRouter.route("/users/:userId").get(validate(userIdParamSchema), userDetails);
 adminRouter.route("/usage").get(validate(rangeSchema), validate(paginationSchema), usage);
 adminRouter.route("/ingestion").get(validate(rangeSchema), validate(paginationSchema), ingestion);
+adminRouter.route("/impersonate/:userId").post(validate(userIdParamSchema), impersonate);
+adminRouter.route("/stop-impersonation").post(stopImpersonation);
 
 export default adminRouter;

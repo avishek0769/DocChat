@@ -3,6 +3,7 @@ import { clearCache } from "./cache";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api/v1";
 
 const AUTH_STORAGE_KEY = "docchat_auth";
+const IMPERSONATION_STORAGE_KEY = "docchat_impersonation";
 
 type AuthUser = {
     id: string;
@@ -16,6 +17,16 @@ type AuthSession = {
     accessToken: string;
     refreshToken?: string;
     user: AuthUser;
+};
+
+type ImpersonationInfo = {
+    originalSession: AuthSession;
+    targetUser: {
+        id: string;
+        fullname?: string | null;
+        username?: string | null;
+        email?: string | null;
+    };
 };
 
 type LoginResponse = {
@@ -106,6 +117,7 @@ export const clearAuthSession = () => {
 
 export const forceSignOut = (redirectTo = "/signin") => {
     clearAuthSession();
+    clearImpersonation();
     clearCache();
 
     if (window.location.pathname !== redirectTo) {
@@ -240,6 +252,73 @@ export const logoutUser = async () => {
     try {
         await request("/user/logout", { method: "GET" });
     } finally {
+        clearImpersonation();
         forceSignOut();
     }
+};
+
+const getStoredImpersonation = (): ImpersonationInfo | null => {
+    try {
+        const raw = localStorage.getItem(IMPERSONATION_STORAGE_KEY);
+        if (!raw) return null;
+        return JSON.parse(raw) as ImpersonationInfo;
+    } catch {
+        return null;
+    }
+};
+
+const setStoredImpersonation = (info: ImpersonationInfo) => {
+    try {
+        localStorage.setItem(IMPERSONATION_STORAGE_KEY, JSON.stringify(info));
+    } catch {
+        // ignore quota errors
+    }
+};
+
+const clearImpersonation = () => {
+    try {
+        localStorage.removeItem(IMPERSONATION_STORAGE_KEY);
+    } catch {
+        // ignore
+    }
+};
+
+export const startImpersonation = (impersonationToken: string, targetUser: ImpersonationInfo["targetUser"]) => {
+    const originalSession = getStoredSession();
+    if (!originalSession) return;
+
+    setStoredImpersonation({
+        originalSession,
+        targetUser,
+    });
+
+    const impersonationSession: AuthSession = {
+        accessToken: impersonationToken,
+        user: {
+            id: targetUser.id,
+            fullname: targetUser.fullname,
+            username: targetUser.username,
+            email: targetUser.email,
+            isAdmin: false,
+        },
+    };
+
+    setAuthSession(impersonationSession);
+};
+
+export const stopImpersonation = (): AuthSession | null => {
+    const info = getStoredImpersonation();
+    if (!info) return null;
+
+    clearImpersonation();
+    setAuthSession(info.originalSession);
+    return info.originalSession;
+};
+
+export const isImpersonating = (): boolean => {
+    return getStoredImpersonation() !== null;
+};
+
+export const getImpersonationInfo = (): ImpersonationInfo | null => {
+    return getStoredImpersonation();
 };
