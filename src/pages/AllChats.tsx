@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import Skeleton from "../components/Skeleton";
 import {
     Search,
     Filter,
@@ -7,13 +8,16 @@ import {
     Database,
     Clock,
     Trash2,
+    Pencil,
     AlertCircle,
     Loader2,
     CheckCircle2,
     ExternalLink,
+    MessageSquarePlus,
 } from "lucide-react";
 import { Sidebar } from "../components/Sidebar";
-import { deleteChat, getChats, type ChatItem } from "../lib/api";
+import EmptyState from "../components/EmptyState";
+import { deleteChat, getChats, getChatStatus, renameChat, subscribeToChatStatus, type ChatItem } from "../lib/api";
 import { formatTokens } from "../lib/format";
 
 type ChatRow = {
@@ -68,6 +72,10 @@ const AllChats = () => {
     const [deleteTarget, setDeleteTarget] = useState<ChatRow | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
     const [deleteError, setDeleteError] = useState("");
+    const [renameTarget, setRenameTarget] = useState<ChatRow | null>(null);
+    const [renameName, setRenameName] = useState("");
+    const [isRenaming, setIsRenaming] = useState(false);
+    const [renameError, setRenameError] = useState("");
 
     const loadChats = async () => {
         setIsLoading(true);
@@ -104,6 +112,90 @@ const AllChats = () => {
         loadChats();
     }, []);
 
+    const [usePollingFallback, setUsePollingFallback] = useState(false);
+    const sseCleanupsRef = useRef<Record<string, () => void>>({});
+    const pollIntervalRef = useRef<number | null>(null);
+
+    const handleProgressUpdate = useCallback((chatId: string, statusData: { status: string }) => {
+        const status = String(statusData.status || "QUEUED").toLowerCase();
+        setChats((prev) =>
+            prev.map((chat) => (chat.id === chatId ? { ...chat, status } : chat))
+        );
+    }, []);
+
+    const pollStatuses = useCallback(async () => {
+        const inFlightChats = chats.filter((c) => c.status === "processing" || c.status === "queued");
+        if (!inFlightChats.length) {
+            if (pollIntervalRef.current !== null) {
+                clearInterval(pollIntervalRef.current);
+                pollIntervalRef.current = null;
+            }
+            return;
+        }
+
+        const updates = await Promise.all(
+            inFlightChats.map(async (chat) => {
+                try {
+                    const statusData = await getChatStatus(chat.id);
+                    return { id: chat.id, status: String(statusData.progress?.status || "QUEUED").toLowerCase() };
+                } catch {
+                    return null;
+                }
+            })
+        );
+
+        setChats((prev) =>
+            prev.map((chat) => {
+                const update = updates.find((u) => u?.id === chat.id);
+                if (!update) return chat;
+                return { ...chat, status: update.status };
+            })
+        );
+    }, [chats]);
+
+    useEffect(() => {
+        const inFlightChats = chats.filter((c) => c.status === "processing" || c.status === "queued");
+
+        if (usePollingFallback) {
+            if (inFlightChats.length > 0 && pollIntervalRef.current === null) {
+                pollStatuses();
+                pollIntervalRef.current = window.setInterval(pollStatuses, 3000);
+            } else if (inFlightChats.length === 0 && pollIntervalRef.current !== null) {
+                clearInterval(pollIntervalRef.current);
+                pollIntervalRef.current = null;
+            }
+        } else {
+            const currentInFlightIds = new Set(inFlightChats.map((c) => c.id));
+
+            Object.keys(sseCleanupsRef.current).forEach((chatId) => {
+                if (!currentInFlightIds.has(chatId)) {
+                    sseCleanupsRef.current[chatId]();
+                    delete sseCleanupsRef.current[chatId];
+                }
+            });
+
+            inFlightChats.forEach((chat) => {
+                if (!sseCleanupsRef.current[chat.id]) {
+                    sseCleanupsRef.current[chat.id] = subscribeToChatStatus(
+                        chat.id,
+                        (progress) => handleProgressUpdate(chat.id, progress),
+                        () => setUsePollingFallback(true)
+                    );
+                }
+            });
+        }
+    }, [chats, usePollingFallback, handleProgressUpdate, pollStatuses]);
+
+    useEffect(() => {
+        return () => {
+            if (pollIntervalRef.current !== null) {
+                clearInterval(pollIntervalRef.current);
+            }
+            const cleanups = sseCleanupsRef.current;
+            Object.values(cleanups).forEach(cleanup => cleanup());
+        };
+    }, []);
+
     const handleDelete = async () => {
         if (!deleteTarget) return;
         setIsDeleting(true);
@@ -117,6 +209,50 @@ const AllChats = () => {
             setDeleteError(err instanceof Error ? err.message : "Failed to delete chat.");
         } finally {
             setIsDeleting(false);
+        }
+    };
+
+    const openRenameModal = (chat: ChatRow) => {
+        setRenameError("");
+        setRenameTarget(chat);
+        setRenameName(chat.title);
+    };
+
+    const closeRenameModal = () => {
+        if (isRenaming) return;
+        setRenameError("");
+        setRenameTarget(null);
+        setRenameName("");
+    };
+
+    const handleRename = async () => {
+        if (!renameTarget) return;
+
+        const nextName = renameName.trim();
+        if (!nextName) {
+            setRenameError("Chat name is required.");
+            return;
+        }
+        if (nextName.length > 100) {
+            setRenameError("Chat name must be 100 characters or fewer.");
+            return;
+        }
+
+        setIsRenaming(true);
+        setRenameError("");
+        setError("");
+        try {
+            const response = await renameChat(renameTarget.id, nextName);
+            const updatedName = response?.chat?.name || nextName;
+            setChats((prev) =>
+                prev.map((chat) => (chat.id === renameTarget.id ? { ...chat, title: updatedName } : chat)),
+            );
+            setRenameTarget(null);
+            setRenameName("");
+        } catch (err) {
+            setRenameError(err instanceof Error ? err.message : "Failed to rename chat.");
+        } finally {
+            setIsRenaming(false);
         }
     };
 
@@ -221,9 +357,33 @@ const AllChats = () => {
 
                     <div className="space-y-3">
                         {isLoading ? (
-                            <div className="text-center py-20 bg-white/1 rounded-xl border border-white/5 border-dashed">
-                                <p className="text-gray-400">Loading chats...</p>
-                            </div>
+                            <div className="space-y-3">
+  {[1,2,3,4,5,6].map((i) => (
+    <div
+      key={i}
+      className="flex items-center justify-between bg-white/2 border border-white/5 p-4 rounded-xl"
+    >
+      <div className="flex items-center gap-4 flex-1">
+        <Skeleton className="w-6 h-6 rounded-full" />
+
+        <div className="flex-1">
+          <Skeleton className="h-4 w-48 mb-2" />
+
+          <div className="flex gap-2">
+            <Skeleton className="h-5 w-20" />
+            <Skeleton className="h-5 w-24" />
+          </div>
+        </div>
+      </div>
+
+      <div className="flex gap-4">
+        <Skeleton className="h-4 w-12" />
+        <Skeleton className="h-4 w-16" />
+        <Skeleton className="h-8 w-20" />
+      </div>
+    </div>
+  ))}
+</div>
                         ) : filteredChats.length > 0 ? (
                             filteredChats.map((chat) => (
                                 <div
@@ -297,18 +457,27 @@ const AllChats = () => {
                                                 onClick={() => openDeleteModal(chat)}
                                                 className="p-1.5 rounded-md text-gray-500 hover:text-red-400 hover:bg-red-400/10 transition-colors"
                                             >
-
                                                 <Trash2 className="w-4 h-4" />
+                                            </button>
+                                            <button
+                                                title="Rename Chat"
+                                                onClick={() => openRenameModal(chat)}
+                                                className="p-1.5 rounded-md text-gray-500 hover:text-accent-blue hover:bg-accent-blue/10 transition-colors"
+                                            >
+                                                <Pencil className="w-4 h-4" />
                                             </button>
                                         </div>
                                     </div>
                                 </div>
                             ))
                         ) : (
-                            <div className="text-center py-20 bg-white/1 rounded-xl border border-white/5 border-dashed">
-                                <Database className="w-8 h-8 text-gray-600 mx-auto mb-3" />
-                                <p className="text-gray-400">No chats found.</p>
-                            </div>
+                            <EmptyState
+                                icon={<MessageSquarePlus className="w-12 h-12" />}
+                                title="No chats yet"
+                                description="Create your first documentation chat from the dashboard and start exploring your indexed content."
+                                actionLabel="Go to Dashboard"
+                                onAction={() => navigate("/")}
+                            />
                         )}
                     </div>
                 </div>
@@ -382,6 +551,78 @@ const AllChats = () => {
                                 </button>
                             </div>
                         </div>
+                    </div>
+                )}
+
+                {/* Rename Chat Modal */}
+                {renameTarget && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                        <div
+                            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                            onClick={closeRenameModal}
+                        />
+                        <form
+                            onSubmit={(e) => {
+                                e.preventDefault();
+                                handleRename();
+                            }}
+                            className="relative w-full max-w-sm bg-[#0b0b0f] border border-white/10 rounded-2xl shadow-2xl p-6 text-left"
+                        >
+                            <div className="w-14 h-14 rounded-full bg-accent-blue/10 border border-accent-blue/20 flex items-center justify-center mx-auto mb-4">
+                                <Pencil className="w-6 h-6 text-accent-blue" />
+                            </div>
+                            <h3 className="text-lg font-semibold mb-2 text-center">Rename Chat</h3>
+                            <p className="text-sm text-gray-400 mb-4 text-center">
+                                Give <strong className="text-gray-200">"{renameTarget.title}"</strong> a clearer name.
+                            </p>
+                            <label htmlFor="allchats-rename-chat" className="block text-sm text-gray-300 mb-2">
+                                Chat name
+                            </label>
+                            <input
+                                id="allchats-rename-chat"
+                                type="text"
+                                value={renameName}
+                                onChange={(e) => {
+                                    setRenameName(e.target.value);
+                                    if (renameError) setRenameError("");
+                                }}
+                                maxLength={100}
+                                autoFocus
+                                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-gray-500 focus:border-accent-blue/50 focus:outline-none focus:ring-1 focus:ring-accent-blue/50"
+                                placeholder="Enter chat name"
+                            />
+                            <p className="mt-2 text-xs text-gray-500">Up to 100 characters.</p>
+                            {renameError && (
+                                <div className="mt-4 flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-left text-sm text-red-400">
+                                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                                    <span>{renameError}</span>
+                                </div>
+                            )}
+                            <div className="mt-6 flex gap-3">
+                                <button
+                                    type="button"
+                                    onClick={closeRenameModal}
+                                    disabled={isRenaming}
+                                    className="flex-1 px-4 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 transition-colors disabled:opacity-60"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isRenaming || !renameName.trim() || renameName.trim().length > 100}
+                                    className="flex-1 px-4 py-2 rounded-lg text-sm font-medium text-white bg-accent-blue hover:bg-accent-blue/90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors inline-flex items-center justify-center gap-2"
+                                >
+                                    {isRenaming ? (
+                                        <>
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                            Saving...
+                                        </>
+                                    ) : (
+                                        "Save"
+                                    )}
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 )}
             </main>

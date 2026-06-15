@@ -100,8 +100,10 @@ const SignIn = () => {
                 <div className="flex items-center justify-center gap-2 mb-10">
                     <Link to="/" className="flex items-center gap-2 group">
                         <img
-                            src="/docchat-logo.png"
+                            src="/docchat-logo.webp"
                             alt="DocChat"
+                            width={1101}
+                            height={395}
                             className="h-16 w-auto transition-opacity group-hover:opacity-90"
                         />
                     </Link>

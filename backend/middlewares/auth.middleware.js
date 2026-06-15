@@ -4,10 +4,10 @@ import { ApiError } from "../utils/ApiError.js";
 
 const verifyStrictJWT = async (req, res, next) => {
     try {
-        const token = req.cookies?.accessToken || req.header("Authorization")?.replace("Bearer ", "");
+        const token = req.cookies?.accessToken || req.header("Authorization")?.replace("Bearer ", "") || req.query?.token;
 
         if (!token) {
-            throw new ApiError(452, "Unauthorised request");
+            throw new ApiError(401, "Unauthorised request");
         }
 
         const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
@@ -23,18 +23,18 @@ const verifyStrictJWT = async (req, res, next) => {
             },
         });
 
-        if (!user) throw new ApiError(452, "Invalid Access Token");
+        if (!user) throw new ApiError(401, "Invalid Access Token");
 
         req.user = user;
         next();
     } catch (error) {
-        if (error instanceof ApiError) next(error);
-        else next(new ApiError(452, "Your Access Token expired !"));
-    }
+    console.error("VERIFY JWT ERROR:", error);
+    next(error);
+}
 };
 
 const verifyJWT = async (req, res, next) => {
-    const token = req.cookies?.accessToken || req.header("Authorization")?.replace("Bearer ", "");
+    const token = req.cookies?.accessToken || req.header("Authorization")?.replace("Bearer ", "") || req.query?.token;
 
     if (token) {
         try {
@@ -56,4 +56,16 @@ const verifyJWT = async (req, res, next) => {
     next();
 };
 
-export { verifyStrictJWT, verifyJWT };
+const verifyAdmin = async (req, res, next) => {
+    try {
+        if (req.user?.isAdmin !== true) {
+            throw new ApiError(403, "Admin privileges required");
+        }
+
+        next();
+    } catch (error) {
+        next(error instanceof ApiError ? error : new ApiError(403, "Admin privileges required"));
+    }
+};
+
+export { verifyStrictJWT, verifyJWT, verifyAdmin };
