@@ -9,6 +9,7 @@ import Profile from "./pages/Profile";
 import { ChatPage } from "./pages/ChatPage";
 import { SharedChatPage } from "./pages/SharedChatPage";
 import { Usage } from "./pages/Usage";
+import Sandbox from "./pages/Sandbox";
 import { ProtectedRoute, PublicOnlyRoute } from "./components/ProtectedRoute";
 
 function App() {
@@ -64,6 +65,15 @@ function App() {
                     element={
                         <ProtectedRoute>
                             <Settings />
+                        </ProtectedRoute>
+                    }
+                />
+                {/* Chunking Sandbox — Issue #164 */}
+                <Route
+                    path="/sandbox"
+                    element={
+                        <ProtectedRoute>
+                            <Sandbox />
                         </ProtectedRoute>
                     }
                 />
