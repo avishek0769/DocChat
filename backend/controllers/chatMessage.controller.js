@@ -18,7 +18,14 @@ import { buildMessagesForLLM } from "../utils/contextBuilder.js";
 import { MemoryClient } from "mem0ai";
 import { createAuditEvent } from "../utils/audit.js";
 
-const memory = MEM0_ENABLED ? new MemoryClient({ apiKey: process.env.MEM0_API_KEY }) : null;
+let memory = null;
+if (MEM0_ENABLED) {
+    if (process.env.MEM0_API_KEY) {
+        memory = new MemoryClient({ apiKey: process.env.MEM0_API_KEY });
+    } else {
+        console.warn("WARNING: MEM0_ENABLED is true, but MEM0_API_KEY is not set in environment variables. Mem0 integration is disabled.");
+    }
+}
 
 // Daily token budget tracked per user per UTC day.
 const dailyBudgetKey = (userId) => `tokenBudget:${userId}:${new Date().toISOString().slice(0, 10)}`;
