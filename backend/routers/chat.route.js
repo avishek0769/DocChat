@@ -36,10 +36,12 @@ import {
     downloadRawSource,
 } from "../controllers/chat.controller.js";
 
+import { apiRateLimiter } from "../middlewares/rateLimit.middleware.js";
+
 const chatRouter = Router();
 
 chatRouter.route("/expectation").get(verifyStrictJWT, validate(expectationQuerySchema), expectation);
-chatRouter.route("/create").post(verifyStrictJWT, validate(createChatSchema), createChat);
+chatRouter.route("/create").post(verifyStrictJWT, apiRateLimiter, validate(createChatSchema), createChat);
 chatRouter
     .route("/:chatId/sources")
     .post(verifyStrictJWT, validate(chatIdParamSchema), validate(addChatSourceSchema), verifyChatOwnership, addChatSource)

@@ -1,9 +1,11 @@
 import "dotenv/config";
 import { app } from "./app.js";
 import connectDB from "./utils/connectDB.js";
+import validateEnv from "./utils/validateEnv.js";
 import logger from "./utils/logger.js";
 import { closeChatCreationQueue } from "./utils/queue.js";
 
+validateEnv();
 connectDB()
   .then(async () => {
     app.on("error", (error) => {

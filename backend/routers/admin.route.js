@@ -14,6 +14,9 @@ import {
     ingestion,
     impersonate,
     stopImpersonation,
+    getSettings,
+    updateSettings,
+    testWebhook,
 } from "../controllers/admin.controller.js";
 
 const adminRouter = Router();
@@ -27,5 +30,7 @@ adminRouter.route("/usage").get(validate(rangeSchema), validate(paginationSchema
 adminRouter.route("/ingestion").get(validate(rangeSchema), validate(paginationSchema), ingestion);
 adminRouter.route("/impersonate/:userId").post(validate(userIdParamSchema), impersonate);
 adminRouter.route("/stop-impersonation").post(stopImpersonation);
+adminRouter.route("/settings").get(getSettings).put(updateSettings);
+adminRouter.route("/settings/test-webhook").post(testWebhook);
 
 export default adminRouter;

@@ -18,12 +18,14 @@ import {
     getSharedChatMessageSources,
 } from "../controllers/chatMessage.controller.js";
 
+import { llmRateLimiter } from "../middlewares/rateLimit.middleware.js";
+
 const chatMessageRouter = Router();
 
 chatMessageRouter.route("/models").get(verifyStrictJWT, getAvailableModels);
 chatMessageRouter
     .route("/send")
-    .post(verifyStrictJWT, validate(sendMessageSchema), verifyChatOwnership, sendMessage);
+    .post(verifyStrictJWT, llmRateLimiter, validate(sendMessageSchema), verifyChatOwnership, sendMessage);
 chatMessageRouter
     .route("/all/:chatId")
     .get(verifyStrictJWT, validate(chatIdParamSchema, chatMessagesQuerySchema), verifyChatOwnership, getChatMessages);

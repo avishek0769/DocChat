@@ -319,7 +319,7 @@ if (!chat.chatSources[0].isVectorLess) {
             }
         }
     } catch (error) {
-        res.end("Stream ended with error.", error.message);
+        res.write(`\n\ndata: {"error": "Stream ended with error: ${error.message.replace(/\n/g, ' ')}"}\n\n`);
     } finally {
         res.end();
     }

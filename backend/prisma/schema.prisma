@@ -198,3 +198,10 @@ model AuditEvent {
     @@index([createdAt])
     @@index([type, createdAt])
 }
+
+model SystemSetting {
+    id        String   @id @default(uuid())
+    key       String   @unique
+    value     String
+    updatedAt DateTime @updatedAt @map("updated_at")
+}
