@@ -51,6 +51,7 @@ export type ChatItem = {
         id: string;
         documentationUrl: string;
         totalPages: number;
+        lastIndexedAt?: string | null;
         isVectorLess?: boolean;
         _count?: { pagesIndexed: number };
         pagesIndexed?: Array<{ pageUrl: string; title?: string | null }>;
@@ -262,6 +263,25 @@ export const removeChatSource = async (chatId: string, payload: { docsUrl: strin
 
 export const deleteChat = async (chatId: string) => {
     const result = await apiRequest(`/chat/${chatId}`, { method: "DELETE" });
+    invalidateChatCaches();
+    return result;
+};
+
+export const bulkDeleteChats = async (chatIds: string[]) => {
+    const result = await apiRequest("/chat/bulk-delete", {
+        method: "POST",
+        body: JSON.stringify({ chatIds }),
+    });
+
+    invalidateChatCaches();
+    return result;
+};
+
+export const renameChat = async (chatId: string, name: string) => {
+    const result = await apiRequest<{ chat: ChatItem }>(`/chat/${chatId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ name }),
+    });
     invalidateChatCaches();
     return result;
 };

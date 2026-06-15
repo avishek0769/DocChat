@@ -20,8 +20,8 @@ import {
     isValidDocUrl,
     scrapeWebpage,
     generateVectorEmbeddings,
+    splitDocumentationContent,
 } from "./utils/ragUtilities.js";
-import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { treeindex, qdrant } from "./utils/ragClients.js";
 import { v4 as uuidv4 } from "uuid";
 import prisma from "./utils/prismaClient.js";
@@ -118,6 +118,47 @@ function getWorkerConfig() {
     };
 }
 
+class ChatCancelledError extends Error {
+    constructor(message = "Chat ingestion cancelled") {
+        super(message);
+        this.name = "ChatCancelledError";
+    }
+}
+
+async function ensureChatActive(chatId) {
+    const chat = await prisma.chat.findUnique({
+        where: { id: chatId },
+        select: {
+            id: true,
+            status: true,
+            deletedAt: true,
+        },
+    });
+
+    if (!chat) {
+        throw new ChatCancelledError("Chat no longer exists");
+    }
+
+    if (chat.deletedAt) {
+        throw new ChatCancelledError("Chat was deleted");
+    }
+
+    if (!["QUEUED", "PROCESSING"].includes(chat.status)) {
+        throw new ChatCancelledError(`Chat status changed to ${chat.status}`);
+    }
+
+    return chat;
+}
+
+async function cleanupPartialIngestion(chatSourceId) {
+    await prisma.documentPage.deleteMany({
+        where: { chatSourceId },
+    });
+
+    await prisma.documentTree.deleteMany({
+        where: { chatSourceId },
+    });
+}
 function computeContentHash(body) {
     return crypto.createHash("sha256").update(body).digest("hex");
 }
@@ -153,7 +194,10 @@ async function removeOldQdrantPoints(collectionName, pageUrl) {
         });
         if (scroll.points.length > 0) {
             const pointIds = scroll.points.map((p) => p.id);
-            await qdrant.delete(collectionName, { wait: true, points: pointIds });
+            await qdrant.delete(collectionName, {
+                wait: true,
+                points: pointIds,
+            });
         }
     } catch (err) {
         console.error(`Failed to remove old Qdrant points for ${pageUrl}:`, err.message);
@@ -176,6 +220,8 @@ async function markPagesRemoved(chatSourceId, currentUrls) {
         },
     });
     if (stale.length === 0) return stale;
+
+
     await prisma.documentPage.updateMany({
         where: { id: { in: stale.map((p) => p.id) } },
         data: { isActive: false },
@@ -225,6 +271,7 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId, 
     let pagesCrawled = 0;
     let pagesFailed = 0;
     try {
+        await ensureChatActive(chatId);
         const { maxPagesPerJob } = getWorkerConfig();
         const rootUrl = normalizeUrl(docsRootUrl);
         console.log("Scraping root:", rootUrl);
@@ -268,6 +315,7 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId, 
         if (linksToProcess.length > 0) {
             await Promise.all(linksToProcess.map((link) => limiter.schedule(async () => {
                 try {
+                    await ensureChatActive(chatId);
                     const { body, title } = await scrapeWebpage(link, rootUrl);
                     const contentHash = computeContentHash(body);
 
@@ -286,11 +334,11 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId, 
                         return;
                     }
 
-                    const splitter = new RecursiveCharacterTextSplitter({
+                    const chunkObjects = splitDocumentationContent(body, {
                         chunkSize: 1000,
                         chunkOverlap: 150,
                     });
-                    const chunks = await splitter.splitText(body);
+                    const chunks = chunkObjects.map((chunk) => chunk.content);
 
                     console.log(`${existing ? "Updating" : "Processing"}: ${link} (${chunks.length} chunks)`);
 
@@ -298,6 +346,7 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId, 
                         let allEmbeddings = [];
                         const batchSize = 100;
                         for (let i = 0; i < chunks.length; i += batchSize) {
+                            await ensureChatActive(chatId);
                             const chunkBatch = chunks.slice(i, i + batchSize);
                             const embeddingsBatch = await generateVectorEmbeddings(chunkBatch);
                             const batchArray = Array.isArray(embeddingsBatch) ? embeddingsBatch : [embeddingsBatch];
@@ -317,6 +366,9 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId, 
                                 chatId,
                                 title,
                                 chatSourceId,
+                                heading: chunkObjects[i]?.heading ?? null,
+                                hasCodeBlock: Boolean(chunkObjects[i]?.hasCodeBlock),
+                                chunkType: chunkObjects[i]?.chunkType ?? "content",
                             },
                         }));
 
@@ -397,7 +449,11 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId, 
     } catch (err) {
         err.pagesCrawled = pagesCrawled;
         err.pagesFailed = pagesFailed;
-        await markChatFailed(chatId, err);
+        if (err instanceof ChatCancelledError) {
+            await cleanupPartialIngestion(chatSourceId);
+        } else {
+            await markChatFailed(chatId, err);
+        }
         throw err;
     }
 }
@@ -406,6 +462,7 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId, scrapeLimit)
     let pagesCrawled = 0;
     let pagesFailed = 0;
     try {
+        await ensureChatActive(chatId);
         const { maxPagesPerJob, vectorlessBatchSize } = getWorkerConfig();
 
         const rootUrl = normalizeUrl(docsRootUrl);
@@ -422,6 +479,8 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId, scrapeLimit)
         const pages = [];
 
         for (let i = 0; i < totalLinks; i += vectorlessBatchSize) {
+            await ensureChatActive(chatId);
+
             const batchLinks = allLinks.slice(i, i + vectorlessBatchSize);
             if (batchLinks.length === 0) break;
             const results = await Promise.all(
@@ -551,8 +610,12 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId, scrapeLimit)
         error.pagesCrawled = pagesCrawled;
         error.pagesFailed = pagesFailed;
         console.error("Error VectorLess:", error);
-        await updateChatProgress(chatId, { status: "FAILED" });
-        await markChatFailed(chatId, error);
+        if (error instanceof ChatCancelledError) {
+            await cleanupPartialIngestion(chatSourceId);
+        } else {
+            await updateChatProgress(chatId, { status: "FAILED" });
+            await markChatFailed(chatId, error);
+        }
         throw error;
     }
 }
@@ -584,6 +647,13 @@ const worker = new Worker(
                 stats = await processVectorLess(docsUrl, chatId, chatSourceId, scrapeLimit);
             }
 
+            await prisma.chatSource.update({
+                where: { id: chatSourceId },
+                data: {
+                    lastIndexedAt: new Date(),
+                },
+            });
+
             await prisma.ingestionRun.update({
                 where: { id: run.id },
                 data: {
@@ -601,7 +671,9 @@ const worker = new Worker(
                 status: "SUCCESS",
             });
         } catch (err) {
-            await markChatFailed(chatId, err);
+            if (!(err instanceof ChatCancelledError)) {
+                await markChatFailed(chatId, err);
+            }
             await prisma.ingestionRun.update({
                 where: { id: run.id },
                 data: {
@@ -679,7 +751,7 @@ worker.on("completed", async (job) => {
 worker.on("failed", async (job, err) => {
     console.error(`Job ${job?.id} failed: ${err.message}`);
 
-    if (job?.data?.chatId) {
+    if (job?.data?.chatId && !(err instanceof ChatCancelledError)) {
         await markChatFailed(job.data.chatId, err);
     }
 
