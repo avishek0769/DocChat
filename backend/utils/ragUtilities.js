@@ -6,6 +6,12 @@ import robotsParser from "robots-parser";
 
 const robotsCache = new Map();
 const domainLimiters = new Map();
+const MAX_FETCH_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
+const ALLOWED_CONTENT_TYPES = [
+    "text/html",
+    "application/xhtml+xml",
+    "text/plain",
+];
 
 let openai;
 
@@ -184,6 +190,53 @@ async function fetchTextWithTimeout(url, config) {
     }
 }
 
+async function safeFetchText(response) {
+    const contentType = response.headers.get("content-type") || "";
+
+    const allowed = ALLOWED_CONTENT_TYPES.some((type) =>
+        contentType.toLowerCase().includes(type),
+    );
+
+    if (!allowed) {
+        throw new Error(`Unsupported content type: ${contentType}`);
+    }
+
+    const contentLength = Number(response.headers.get("content-length"));
+
+    if (
+        Number.isFinite(contentLength)
+        && contentLength > MAX_FETCH_SIZE_BYTES
+    ) {
+        throw new Error("Payload too large");
+    }
+
+    const reader = response.body?.getReader();
+
+    if (!reader) {
+        throw new Error("Unable to read response body");
+    }
+
+    const chunks = [];
+    let totalBytes = 0;
+
+    while (true) {
+        const { done, value } = await reader.read();
+
+        if (done) break;
+
+        totalBytes += value.length;
+
+        if (totalBytes > MAX_FETCH_SIZE_BYTES) {
+            await reader.cancel();
+            throw new Error("Payload too large");
+        }
+
+        chunks.push(Buffer.from(value));
+    }
+
+    return Buffer.concat(chunks).toString("utf8");
+}
+
 async function fetchRobotsPolicy(origin, config) {
     if (!config.respectRobotsTxt) {
         return {
@@ -211,7 +264,10 @@ async function fetchRobotsPolicy(origin, config) {
             return { parser: parseRobotsTxt("", robotsUrl), crawlDelayMs: null, failureReason: null };
         }
 
-        const parser = parseRobotsTxt(await response.text(), robotsUrl);
+        const parser = parseRobotsTxt(
+            await safeFetchText(response),
+            robotsUrl,
+        );
         return {
             parser,
             crawlDelayMs: getRobotsCrawlDelayMs(parser, config.userAgent),
@@ -298,7 +354,7 @@ async function fetchCrawlText(urlString) {
             throw new Error(`Failed to fetch ${urlString}: HTTP ${response.status}`);
         }
 
-        return response.text();
+        return safeFetchText(response);
     });
 }
 
@@ -556,6 +612,7 @@ export {
     isValidDocUrl,
     scrapeWebpage,
     scrapeTitle,
+    safeFetchText,
     generateVectorEmbeddings,
     getCrawlConfig,
     parseRobotsTxt,
