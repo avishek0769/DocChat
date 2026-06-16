@@ -5,6 +5,8 @@ import Sandbox from "./pages/Sandbox";
 import { ProtectedRoute, PublicOnlyRoute } from "./components/ProtectedRoute";
 import { isAuthenticated } from "./lib/auth";
 import ImpersonationBanner from "./components/ImpersonationBanner";
+import ScrollToTop from "./components/ScrollToTop";
+
 
 // Lazy load route pages
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -41,6 +43,7 @@ function App() {
                 }
             >
                 <ImpersonationBanner />
+                 <ScrollToTop />
                 <Routes>
             <Route
                 path="/"
