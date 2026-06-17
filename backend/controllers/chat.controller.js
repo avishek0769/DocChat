@@ -407,6 +407,9 @@ const listAllPagesIndexed = asyncHandler(async (req, res) => {
     );
 });
 
+// REPLACEMENT for cancelProcessing in chat.controller.js
+// Replace the existing cancelProcessing function with this one.
+
 const cancelProcessing = asyncHandler(async (req, res) => {
     const { chatId } = req.params;
 
@@ -414,25 +417,29 @@ const cancelProcessing = asyncHandler(async (req, res) => {
         where: { id: chatId },
     });
 
-    if (!chat) {
+    if (!chat || chat.deletedAt) {
         throw new ApiError(404, "Chat not found");
     }
 
-    if (chat.status === "CANCELLED" || chat.status === "READY" || chat.status === "FAILED") {
+    if (["CANCELLED", "READY", "FAILED"].includes(chat.status)) {
         throw new ApiError(400, `Chat is already in ${chat.status} state, cannot cancel`);
     }
 
-    // Look up the job — jobId is set to chatId in createChat
-    const job = await chatCreationQueue.getJob(chatId);
+    // Use getJob(chatId) directly — jobId === chatId as set in createChat
+    const job = await getChatCreationQueue().getJob(chatId);
 
     if (job) {
         const state = await job.getState();
 
         if (state === "waiting" || state === "delayed") {
-            // Queued job: remove it directly, no worker involved
+            // Queued job: remove immediately, controller handles DB update
             await job.remove();
 
-            await redis.setex(chatId, 3600, JSON.stringify({ status: "CANCELLED", progress: 0 }));
+            await redis.setex(
+                getChatProgressKey(chatId),
+                3600,
+                JSON.stringify({ status: "CANCELLED", progress: 0 }),
+            );
 
             await prisma.chat.update({
                 where: { id: chatId },
@@ -445,11 +452,10 @@ const cancelProcessing = asyncHandler(async (req, res) => {
         }
 
         if (state === "active") {
-            // Active job: publish to the cancel channel.
-            // The worker's pub/sub subscriber receives this and calls worker.cancelJob(jobId),
-            // which triggers BullMQ's native AbortSignal inside the processor.
-            // The worker then handles all DB + Redis status updates itself — we don't touch
-            // them here to avoid a race condition between controller and worker both writing status.
+            // Active job: publish to pub/sub channel.
+            // The worker's subscriber receives this, calls controller.abort(),
+            // and handles all DB + Redis status updates itself.
+            // We do NOT update DB here to avoid race conditions.
             await redis.publish(`cancel:${chatId}`, "cancel");
 
             return res.status(200).json(
@@ -458,9 +464,12 @@ const cancelProcessing = asyncHandler(async (req, res) => {
         }
     }
 
-    // Job not found in queue (already completed/failed or never queued)
-    // Still mark as cancelled in case it's stuck in PROCESSING state in DB
-    await redis.setex(chatId, 3600, JSON.stringify({ status: "CANCELLED", progress: 0 }));
+    // Job not found in queue (already done or never queued) — still mark cancelled
+    await redis.setex(
+        getChatProgressKey(chatId),
+        3600,
+        JSON.stringify({ status: "CANCELLED", progress: 0 }),
+    );
 
     await prisma.chat.update({
         where: { id: chatId },

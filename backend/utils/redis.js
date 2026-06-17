@@ -1,11 +1,14 @@
 import Redis from "ioredis";
+import { EventEmitter } from "events";
 
-// Primary connection — used for all regular commands (get, set, setex, publish, BullMQ)
 const redis = new Redis({ maxRetriesPerRequest: null });
 
-// Subscriber connection — ioredis connections in subscribe mode can ONLY receive messages,
-// they can no longer issue regular commands. A dedicated connection avoids that conflict.
-export const redisSub = new Redis({ maxRetriesPerRequest: null });
+// Dedicated subscriber connection for Redis Pub/Sub.
+// ioredis connections in subscribe mode cannot issue regular commands,
+// so this must be a separate connection from the primary redis instance.
+const redisSubscriber = new Redis({ maxRetriesPerRequest: null });
+
+export const progressEmitter = new EventEmitter();
 
 redis.on("connect", () => {
     console.log("Redis connected");
@@ -15,12 +18,29 @@ redis.on("error", (err) => {
     console.error("Redis error:", err);
 });
 
-redisSub.on("connect", () => {
-    console.log("Redis subscriber connected");
+redisSubscriber.on("connect", () => {
+    console.log("Redis Subscriber connected");
 });
 
-redisSub.on("error", (err) => {
-    console.error("Redis subscriber error:", err);
+redisSubscriber.on("error", (err) => {
+    console.error("Redis Subscriber error:", err);
 });
+
+redisSubscriber.on("message", (channel, message) => {
+    progressEmitter.emit(channel, message);
+});
+
+export const getChatProgressKey = (chatId) => `chat-progress:${chatId}`;
+export const getChatProgressChannel = (chatId) => `chat-progress-channel:${chatId}`;
+
+export const updateChatProgress = async (chatId, payload) => {
+    const data = JSON.stringify(payload);
+    await redis.setex(getChatProgressKey(chatId), 3600, data);
+    await redis.publish(getChatProgressChannel(chatId), data);
+};
+
+// Also export as redisSub for the cancellation pub/sub subscriber in chatWorker
+export { redisSubscriber };
+export { redisSubscriber as redisSub };
 
 export default redis;
