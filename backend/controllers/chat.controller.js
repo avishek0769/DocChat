@@ -124,7 +124,7 @@ const createChat = asyncHandler(async (req, res) => {
                 ),
             );
     } else {
-        const collectionName = !isVectorLessChat ? `${name.replace(/\s+/g, "-")}-${Date.now()}` : null;
+        const collectionName = !isVectorLessChat ? `${name.replace(/[^a-zA-Z0-9-_]/g, "-")}-${Date.now()}` : null;
         const chat = await prisma.chat.create({
             data: {
                 name,
@@ -189,7 +189,7 @@ const progressStatus = asyncHandler(async (req, res) => {
             errorMessage: true,
         },
     });
-    
+
     const redisData = await redis.get(chat.id.toString());
     const progress = redisData ? JSON.parse(redisData) : { status: "QUEUED", progress: 0 };
 
@@ -418,26 +418,58 @@ const cancelProcessing = asyncHandler(async (req, res) => {
         throw new ApiError(404, "Chat not found");
     }
 
-    const jobs = await chatCreationQueue.getJobs(["active", "waiting", "delayed"], 0, -1, false);
-    const job = jobs.find((j) => j.id === chatId);
+    if (chat.status === "CANCELLED" || chat.status === "READY" || chat.status === "FAILED") {
+        throw new ApiError(400, `Chat is already in ${chat.status} state, cannot cancel`);
+    }
+
+    // Look up the job — jobId is set to chatId in createChat
+    const job = await chatCreationQueue.getJob(chatId);
 
     if (job) {
-        await job.remove();
-        await redis.setex(chat.collectionName, 3600, JSON.stringify({ status: "READY", progress: 100 }));
+        const state = await job.getState();
 
-        await prisma.chat
-            .update({
+        if (state === "waiting" || state === "delayed") {
+            // Queued job: remove it directly, no worker involved
+            await job.remove();
+
+            await redis.setex(chatId, 3600, JSON.stringify({ status: "CANCELLED", progress: 0 }));
+
+            await prisma.chat.update({
                 where: { id: chatId },
-                data: { status: "READY" },
-            })
-            .catch((err) => {
-                throw new ApiError(500, `Failed Update: ${err.message}`, err);
+                data: { status: "CANCELLED" },
             });
 
-        res.status(200).json(new ApiResponse(200, null, "Chat processing cancelled successfully"));
-    } else {
-        throw new ApiError(404, "Job not found or already completed");
+            return res.status(200).json(
+                new ApiResponse(200, { cancelled: true }, "Queued job cancelled successfully"),
+            );
+        }
+
+        if (state === "active") {
+            // Active job: publish to the cancel channel.
+            // The worker's pub/sub subscriber receives this and calls worker.cancelJob(jobId),
+            // which triggers BullMQ's native AbortSignal inside the processor.
+            // The worker then handles all DB + Redis status updates itself — we don't touch
+            // them here to avoid a race condition between controller and worker both writing status.
+            await redis.publish(`cancel:${chatId}`, "cancel");
+
+            return res.status(200).json(
+                new ApiResponse(200, { cancelled: true }, "Cancellation signal sent to active job"),
+            );
+        }
     }
+
+    // Job not found in queue (already completed/failed or never queued)
+    // Still mark as cancelled in case it's stuck in PROCESSING state in DB
+    await redis.setex(chatId, 3600, JSON.stringify({ status: "CANCELLED", progress: 0 }));
+
+    await prisma.chat.update({
+        where: { id: chatId },
+        data: { status: "CANCELLED" },
+    });
+
+    return res.status(200).json(
+        new ApiResponse(200, { cancelled: true }, "Cancellation requested successfully"),
+    );
 });
 
 const deleteChat = asyncHandler(async (req, res) => {
@@ -477,14 +509,12 @@ const toggleShare = asyncHandler(async (req, res) => {
     }
 
     if (chat.shareToken) {
-        // Revoke share
         const updatedChat = await prisma.chat.update({
             where: { id: chatId },
             data: { shareToken: null },
         });
         res.status(200).json(new ApiResponse(200, updatedChat, "Chat share revoked successfully"));
     } else {
-        // Generate share token
         const shareToken = crypto.randomUUID();
         const updatedChat = await prisma.chat.update({
             where: { id: chatId },
@@ -526,8 +556,8 @@ const forkSharedChat = asyncHandler(async (req, res) => {
             messages: {
                 include: {
                     sourceChunks: true,
-                }
-            }
+                },
+            },
         },
     });
 
@@ -535,7 +565,6 @@ const forkSharedChat = asyncHandler(async (req, res) => {
         throw new ApiError(404, "Shared chat not found or link has expired");
     }
 
-    // Create a new chat for the current user
     const newChat = await prisma.chat.create({
         data: {
             name: `${originalChat.name} (Fork)`,
@@ -543,12 +572,11 @@ const forkSharedChat = asyncHandler(async (req, res) => {
             status: "READY",
             userId: req.user.id,
             chatSources: {
-                connect: originalChat.chatSources.map(source => ({ id: source.id }))
-            }
-        }
+                connect: originalChat.chatSources.map((source) => ({ id: source.id })),
+            },
+        },
     });
 
-    // Copy messages so the new user has the history
     for (const msg of originalChat.messages) {
         const newMessage = await prisma.chatMessage.create({
             data: {
@@ -557,7 +585,7 @@ const forkSharedChat = asyncHandler(async (req, res) => {
                 llmResponse: msg.llmResponse,
                 llmModel: msg.llmModel,
                 createdAt: msg.createdAt,
-            }
+            },
         });
 
         if (msg.sourceChunks && msg.sourceChunks.length > 0) {
@@ -568,12 +596,14 @@ const forkSharedChat = asyncHandler(async (req, res) => {
                     pageUrl: chunk.pageUrl,
                     score: chunk.score,
                     chatMessageId: newMessage.id,
-                }))
+                })),
             });
         }
     }
 
-    res.status(200).json(new ApiResponse(200, { chatId: newChat.id }, "Chat successfully forked to your account"));
+    res.status(200).json(
+        new ApiResponse(200, { chatId: newChat.id }, "Chat successfully forked to your account"),
+    );
 });
 
 export {

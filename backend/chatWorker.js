@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { Worker } from "bullmq";
-import redis from "./utils/redis.js";
+import redis, { redisSub } from "./utils/redis.js";
 import {
     normalizeUrl,
     isValidDocUrl,
@@ -30,27 +30,23 @@ function getErrorCode(err) {
     return "UNKNOWN_ERROR";
 }
 
-async function processVector(docsRootUrl, chatId, collectionName, chatSourceId) {
+// Uses BullMQ's native AbortSignal instead of manual Redis polling.
+// signal.aborted is set to true the moment worker.cancelJob(jobId) is called,
+// which we trigger from the pub/sub subscriber below.
+async function processVector(docsRootUrl, chatId, collectionName, chatSourceId, signal) {
     try {
         const rootUrl = normalizeUrl(docsRootUrl);
         console.log("Scraping root:", rootUrl);
 
-        const { internalLinks } = await scrapeWebpage(rootUrl, rootUrl);
-        let allLinks = internalLinks.slice(0, 300); // slice 5 - Just for development, slice 300 for production
+        const { internalLinks } = await scrapeWebpage(rootUrl, rootUrl, { signal });
+        let allLinks = internalLinks.slice(0, 300);
         const totalLinks = allLinks.length;
 
         console.log("Total unique links found:", totalLinks);
 
-        await redis.setex(
-            chatId,
-            3600,
-            JSON.stringify({
-                status: "PROCESSING",
-                current: 0,
-                total: totalLinks,
-                progress: 0,
-            }),
-        );
+        await redis.setex(chatId, 3600, JSON.stringify({
+            status: "PROCESSING", current: 0, total: totalLinks, progress: 0,
+        }));
 
         const collections = await qdrant.getCollections();
         if (!collections.collections.some((c) => c.name === collectionName)) {
@@ -64,36 +60,26 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId) 
         let pageCount = 0;
 
         for (const [index, link] of allLinks.entries()) {
+            // Check BullMQ's native signal between every link
+            if (signal?.aborted) throw Object.assign(new Error("INGESTION_CANCELLED"), { code: "INGESTION_CANCELLED" });
             if (!isValidDocUrl(link, rootUrl)) continue;
 
             try {
-                const { body, title } = await scrapeWebpage(link, rootUrl);
-                const splitter = new RecursiveCharacterTextSplitter({
-                    chunkSize: 1000,
-                    chunkOverlap: 150,
-                });
+                const { body, title } = await scrapeWebpage(link, rootUrl, { signal });
+                const splitter = new RecursiveCharacterTextSplitter({ chunkSize: 1000, chunkOverlap: 150 });
                 const chunks = await splitter.splitText(body);
 
-                batchPage.push({
-                    pageUrl: link,
-                    heading: title,
-                });
-
+                batchPage.push({ pageUrl: link, heading: title });
                 console.log(`Processing: ${link} (${chunks.length} chunks)`);
 
                 for (const chunk of chunks) {
-                    const emb = await generateVectorEmbeddings(chunk);
-
+                    // Check between every embedding call too
+                    if (signal?.aborted) throw Object.assign(new Error("INGESTION_CANCELLED"), { code: "INGESTION_CANCELLED" });
+                    const emb = await generateVectorEmbeddings(chunk, signal);
                     batchPoints.push({
                         id: uuidv4(),
                         vector: emb,
-                        payload: {
-                            url: link,
-                            body: chunk,
-                            chatId,
-                            title,
-                            chatSourceId,
-                        },
+                        payload: { url: link, body: chunk, chatId, title, chatSourceId },
                     });
                 }
 
@@ -102,77 +88,73 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId) 
                 if (pageCount >= 3 || index === totalLinks - 1) {
                     if (batchPoints.length > 0) {
                         console.log(`Upserting batch of ${batchPoints.length} points...`);
-                        await qdrant.upsert(collectionName, {
-                            wait: true,
-                            points: batchPoints,
-                        });
+                        await qdrant.upsert(collectionName, { wait: true, points: batchPoints });
 
-                        await prisma.documentPage
-                            .createMany({
-                                data: batchPage.map((point) => ({
-                                    pageUrl: point.pageUrl,
-                                    heading: point.heading,
-                                    chatSourceId,
-                                })),
-                            })
-                            .catch((err) => {
-                                console.error("Failed to update indexed pages:", err.message);
-                            });
+                        await prisma.documentPage.createMany({
+                            data: batchPage.map((point) => ({
+                                pageUrl: point.pageUrl,
+                                heading: point.heading,
+                                chatSourceId,
+                            })),
+                        }).catch((err) => {
+                            console.error("Failed to update indexed pages:", err.message);
+                        });
 
                         batchPoints = [];
                         batchPage = [];
                         pageCount = 0;
                     }
 
-                    await redis.setex(
-                        chatId,
-                        3600,
-                        JSON.stringify({
-                            status: "PROCESSING",
-                            current: index + 1,
-                            total: totalLinks,
-                            progress: Math.round(((index + 1) / totalLinks) * 100),
-                        }),
-                    );
+                    await redis.setex(chatId, 3600, JSON.stringify({
+                        status: "PROCESSING",
+                        current: index + 1,
+                        total: totalLinks,
+                        progress: Math.round(((index + 1) / totalLinks) * 100),
+                    }));
                 }
             } catch (err) {
+                // Re-throw cancellation so the outer catch handles it properly
+                if (err.code === "INGESTION_CANCELLED" || signal?.aborted) throw err;
                 console.error(`Failed link ${link}:`, err.message);
-                await redis.setex(chatId, 3600, JSON.stringify({ status: "FAILED" }));
                 continue;
             }
         }
     } catch (err) {
-        await redis.setex(chatId, 3600, JSON.stringify({ status: "FAILED" }));
+        if (err.code !== "INGESTION_CANCELLED") {
+            await redis.setex(chatId, 3600, JSON.stringify({ status: "FAILED" }));
+        }
         throw err;
     }
 }
 
-async function processVectorLess(docsRootUrl, chatId, chatSourceId) {
+async function processVectorLess(docsRootUrl, chatId, chatSourceId, signal) {
     try {
         await redis.setex(chatId, 3600, JSON.stringify({ status: "PROCESSING", progress: 0 }));
 
         const rootUrl = normalizeUrl(docsRootUrl);
         console.log("Scraping root:", rootUrl);
 
-        const { internalLinks } = await scrapeWebpage(rootUrl, rootUrl);
-        let allLinks = internalLinks.slice(0, 300); // slice 3 - Just for development, slice 300 for production
+        const { internalLinks } = await scrapeWebpage(rootUrl, rootUrl, { signal });
+        let allLinks = internalLinks.slice(0, 300);
         const totalLinks = allLinks.length;
 
         console.log("Total unique links found:", totalLinks);
 
-        let batchLinks = allLinks.slice(0, 5);
         let allData = "";
         let i = 0;
 
-        while (batchLinks.length > 0) {
-            batchLinks = allLinks.slice(i, i + 5);
+        while (i < totalLinks) {
+            if (signal?.aborted) throw Object.assign(new Error("INGESTION_CANCELLED"), { code: "INGESTION_CANCELLED" });
+
+            const batchLinks = allLinks.slice(i, i + 5);
             const results = await Promise.all(
                 batchLinks.map(async (link) => {
                     if (!isValidDocUrl(link, rootUrl)) return "";
                     try {
-                        const { title, body } = await scrapeWebpage(link, rootUrl);
+                        const { title, body } = await scrapeWebpage(link, rootUrl, { signal });
                         return `Title: ${title}\n ${body}\n\n`;
                     } catch (error) {
+                        if (signal?.aborted) return "";
                         console.error(`Failed: ${link}`, error.message);
                         return "";
                     }
@@ -183,20 +165,17 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId) {
             i += 5;
         }
 
-        if (!allData.trim()) {
-            throw new Error("No data scraped.");
-        }
+        if (!allData.trim()) throw new Error("No data scraped.");
 
         treeindex.loadData(allData);
         const tree = await treeindex.generateTree();
         console.log("Generated Tree Length:", tree.length);
 
+        // Final check before writing to DB
+        if (signal?.aborted) throw Object.assign(new Error("INGESTION_CANCELLED"), { code: "INGESTION_CANCELLED" });
+
         const docTree = await prisma.documentTree.create({
-            data: {
-                chatSourceId,
-                treeData: tree,
-                sourceData: allData,
-            },
+            data: { chatSourceId, treeData: tree, sourceData: allData },
         });
 
         await redis.setex(chatId, 3600, JSON.stringify({ status: "READY", progress: 100 }));
@@ -217,51 +196,78 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId) {
 
         return;
     } catch (error) {
-        console.error("Error VectorLess:", error);
-        await redis.setex(chatId, 3600, JSON.stringify({ status: "FAILED" }));
+        if (error.code !== "INGESTION_CANCELLED") {
+            await redis.setex(chatId, 3600, JSON.stringify({ status: "FAILED" }));
+        }
         throw error;
     }
 }
 
 const worker = new Worker(
     "chatCreation",
+    // BullMQ passes the native AbortSignal as the third argument.
+    // Calling worker.cancelJob(jobId) sets signal.aborted = true immediately,
+    // which propagates into scrapeWebpage and generateVectorEmbeddings via fetch({ signal }).
     async (job) => {
-        const { chatId, docsUrl, collectionName, chatSourceId, isVectorLess } = job.data;
+    const { chatId, docsUrl, collectionName, chatSourceId, isVectorLess } = job.data;
+
+    // Own AbortController — BullMQ's native signal isn't a real AbortSignal
+    const controller = new AbortController();
+
+    const cancelChannel = `cancel:${chatId}`;
+    await redisSub.subscribe(cancelChannel);
+
+    const cancelHandler = (channel) => {
+        if (channel === cancelChannel) {
+            console.log(`Cancel signal received for job ${job.id}`);
+            controller.abort();
+        }
+    };
+    redisSub.on("message", cancelHandler);
+
         const run = await prisma.ingestionRun.create({
-            data: {
-                chatId,
-                chatSourceId,
-                status: "STARTED",
-            },
+            data: { chatId, chatSourceId, status: "STARTED" },
         });
 
         try {
             if (!isVectorLess) {
-                await processVector(docsUrl, chatId, collectionName, chatSourceId);
+                await processVector(docsUrl, chatId, collectionName, chatSourceId, controller.signal);
             } else {
-                await processVectorLess(docsUrl, chatId, chatSourceId);
+                await processVectorLess(docsUrl, chatId, chatSourceId, controller.signal);
             }
 
             await prisma.ingestionRun.update({
                 where: { id: run.id },
-                data: {
-                    status: "SUCCESS",
-                    finishedAt: new Date(),
-                    errorCode: null,
-                    errorMessage: null,
-                },
+                data: { status: "SUCCESS", finishedAt: new Date(), errorCode: null, errorMessage: null },
             });
         } catch (err) {
+            const cancelled = err.code === "INGESTION_CANCELLED" || controller.signal.aborted;
+
+            // IngestionRunStatus has no CANCELLED value — always use FAILED
             await prisma.ingestionRun.update({
                 where: { id: run.id },
                 data: {
                     status: "FAILED",
                     finishedAt: new Date(),
                     errorCode: getErrorCode(err),
-                    errorMessage: sanitizeErrorMessage(err?.message),
+                    errorMessage: sanitizeErrorMessage(err.message),
                 },
             });
+
+            if (cancelled) {
+                await prisma.chat.update({
+                    where: { id: chatId },
+                    data: { status: "CANCELLED" },
+                });
+
+                await redis.setex(chatId, 3600, JSON.stringify({ status: "CANCELLED" }));
+            }
+
             throw err;
+        } finally {
+            // Always clean up: unsubscribe and remove the message listener
+            redisSub.off("message", cancelHandler);
+            await redisSub.unsubscribe(cancelChannel);
         }
     },
     {
@@ -274,21 +280,15 @@ const worker = new Worker(
 worker.on("completed", async (job) => {
     console.log(`Job ${job.id} completed!`);
     if (!job.data.isVectorLess) {
-        await redis.setex(
-            job.data.collectionName,
-            3600,
-            JSON.stringify({ status: "READY", progress: 100 }),
-        );
+        await redis.setex(job.data.collectionName, 3600, JSON.stringify({ status: "READY", progress: 100 }));
     }
 
-    await prisma.chat
-        .update({
-            where: { id: job.data.chatId },
-            data: { status: "READY" },
-        })
-        .catch((err) => {
-            console.error("Update status Failed:", err.message);
-        });
+    await prisma.chat.update({
+        where: { id: job.data.chatId },
+        data: { status: "READY" },
+    }).catch((err) => {
+        console.error("Update status Failed:", err.message);
+    });
 });
 
 worker.on("failed", (job, err) => {
