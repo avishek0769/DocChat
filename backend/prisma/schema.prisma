@@ -12,6 +12,7 @@ enum ChatStatus {
     PROCESSING
     READY
     FAILED
+    CANCELLED
 }
 
 enum IngestionRunStatus {
