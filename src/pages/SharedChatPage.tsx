@@ -41,6 +41,7 @@ import clsx from "clsx";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import CodeBlock from "../components/CodeBlock";
+import { ThemeToggle } from "../components/ThemeToggle";
 import {
     getSharedChatDetails,
     getSharedChatMessages,
@@ -184,7 +185,9 @@ export const SharedChatPage = () => {
     };
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         loadChatPage();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [shareToken]);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -376,6 +379,7 @@ export const SharedChatPage = () => {
                                 <Search className="w-4 h-4" />
                                 <span className="hidden sm:inline">Sources</span>
                             </button>
+                            <ThemeToggle />
                         </div>
                     </header>
 

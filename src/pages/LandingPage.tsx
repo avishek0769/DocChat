@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback, type ReactNode } from "react";
 import { Link as RouterLink } from "react-router-dom";
 import { motion } from "framer-motion";
-import demoImage from "../components/image.png";
+import demoImage from "../components/image.webp";
+import ScrollToTop from "../components/ScrollToTop";
+import { ThemeToggle } from "../components/ThemeToggle";
 import {
     MessageSquare,
     Zap,
@@ -32,7 +34,7 @@ const Section = ({ id, children, className = "" }: { id?: string; children: Reac
 );
 
 const GlassCard = ({ children, className = "" }: { children: ReactNode; className?: string }) => (
-    <div className={`glass rounded-xl border border-white/10 ${className}`}>
+    <div className={`glass rounded-xl ${className}`}>
         {children}
     </div>
 );
@@ -71,19 +73,20 @@ const LandingPage = () => {
     }, [closeMobileMenu]);
 
     return (
-        <div className="min-h-screen bg-[#0b0b0f] text-gray-50 overflow-hidden selection:bg-accent-purple/30 font-sans">
+        <div className="min-h-screen bg-bg-page text-text-primary overflow-hidden selection:bg-accent-purple/30 font-sans">
             {/* Background Effects */}
             <div className="fixed inset-0 z-0 pointer-events-none">
                 <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-accent-blue/10 rounded-full blur-[120px]" />
                 <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-accent-purple/10 rounded-full blur-[120px]" />
-                <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-size-[64px_64px] mask-[radial-gradient(ellipse_60%_60%_at_50%_50%,#000_10%,transparent_100%)]" />
+                <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-size-[64px_64px] mask-[radial-gradient(ellipse_60%_60%_at_50%_50%,#000_10%,transparent_100%)] dark:opacity-100 opacity-20" />
             </div>
 
             {/* Navigation — Premium Glassmorphism */}
             <nav
                 className="sticky top-0 z-50 w-full
-                bg-[rgba(11,11,15,0.55)] backdrop-blur-2xl
-                shadow-[0_8px_40px_rgba(0,0,0,0.6),0_1px_0_rgba(255,255,255,0.04)]
+                bg-glass-bg backdrop-blur-2xl
+                shadow-[0_8px_40px_rgba(0,0,0,0.05),0_1px_0_var(--border-secondary)]
+                dark:shadow-[0_8px_40px_rgba(0,0,0,0.6),0_1px_0_rgba(255,255,255,0.04)]
                 [border-bottom:1px_solid_transparent]
                 [background-clip:padding-box]
                 after:absolute after:bottom-0 after:left-0 after:w-full after:h-px
@@ -94,9 +97,12 @@ const LandingPage = () => {
                     {/* Logo */}
                     <div className="flex items-center gap-2">
                         <img
-                            src="/docchat-logo.png"
+                            src="/docchat-logo.webp"
                             alt="DocChat"
-                            className="h-14 w-auto drop-shadow-[0_0_8px_rgba(99,102,241,0.4)]"
+                            width={1101}
+                            height={395}
+                            fetchPriority="high"
+                            className="h-14 w-auto drop-shadow-[0_0_8px_rgba(99,102,241,0.4)] dark:invert-0 html:not(.dark):invert-[0.1]"
                         />
                     </div>
 
@@ -106,8 +112,8 @@ const LandingPage = () => {
                             <a
                                 key={href}
                                 href={href}
-                                className={`relative text-[13.5px] font-medium text-white/50 px-3 py-1.5 rounded-lg
-                                    hover:text-white hover:bg-white/[0.06] transition-all duration-200
+                                className={`relative text-[13.5px] font-medium text-text-secondary px-3 py-1.5 rounded-lg
+                                    hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/[0.06] transition-all duration-200
                                     after:absolute after:bottom-0 after:left-1/2 after:-translate-x-1/2
                                     after:w-0 after:h-px after:bg-gradient-to-r after:from-indigo-400 after:to-purple-400
                                     hover:after:w-4/5 after:transition-all after:duration-300`}
@@ -119,6 +125,9 @@ const LandingPage = () => {
 
                     {/* Actions */}
                     <div className="flex items-center gap-3">
+                        {/* Theme Toggle */}
+                        <ThemeToggle />
+
                         {/* GitHub */}
                         <a
                             href="https://github.com/avishek0769/DocChat"
@@ -126,8 +135,8 @@ const LandingPage = () => {
                             rel="noreferrer"
                             aria-label="DocChat GitHub Repository"
                             className={`w-9 h-9 flex items-center justify-center rounded-lg
-                                text-white/40 bg-white/[0.04] border border-white/[0.08]
-                                hover:text-white hover:bg-white/[0.08] hover:border-white/[0.15]
+                                text-text-secondary bg-black/5 dark:bg-white/[0.04] border border-border-primary
+                                hover:text-text-primary hover:bg-black/10 dark:hover:bg-white/[0.08]
                                 transition-all duration-200 hidden sm:flex`}
                         >
                             <svg
@@ -142,9 +151,9 @@ const LandingPage = () => {
                         {/* Sign In */}
                         <RouterLink
                             to="/signin"
-                            className={`text-[13.5px] font-medium text-white/60 px-3.5 py-1.5 rounded-lg
-                                border border-white/[0.08] bg-white/[0.04]
-                                hover:text-white hover:bg-white/[0.08] hover:border-white/[0.18]
+                            className={`text-[13.5px] font-medium text-text-secondary px-3.5 py-1.5 rounded-lg
+                                border border-border-primary bg-black/5 dark:bg-white/[0.04]
+                                hover:text-text-primary hover:bg-black/10 dark:hover:bg-white/[0.08]
                                 transition-all duration-200 hidden sm:block`}
                         >
                             Sign In
@@ -167,8 +176,8 @@ const LandingPage = () => {
                         {/* Mobile Hamburger */}
                         <button
                             className={`md:hidden w-9 h-9 flex items-center justify-center rounded-lg
-                                text-white/40 bg-white/[0.04] border border-white/[0.08]
-                                hover:text-white hover:bg-white/[0.08] hover:border-white/[0.15]
+                                text-text-secondary bg-black/5 dark:bg-white/[0.04] border border-border-primary
+                                hover:text-text-primary hover:bg-black/10 dark:hover:bg-white/[0.08]
                                 transition-all duration-200`}
                             onClick={() => setMobileMenuOpen((prev) => !prev)}
                             aria-expanded={mobileMenuOpen}
@@ -190,22 +199,22 @@ const LandingPage = () => {
                         id="mobile-menu"
                         className="absolute top-full left-4 right-4 z-50 md:hidden"
                     >
-                        <div className="bg-[rgba(11,11,15,0.95)] backdrop-blur-2xl rounded-xl border border-white/[0.1] shadow-2xl p-4 flex flex-col gap-1">
+                        <div className="bg-bg-popover backdrop-blur-2xl rounded-xl border border-border-primary shadow-2xl p-4 flex flex-col gap-1">
                             {NAV_ITEMS.map(({ href, label }) => (
                                 <a
                                     key={href}
                                     href={href}
                                     onClick={() => setMobileMenuOpen(false)}
-                                    className={`px-4 py-2.5 text-sm font-medium text-white/60 hover:text-white hover:bg-white/[0.06] rounded-lg transition-all duration-200`}
+                                    className={`px-4 py-2.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/[0.06] rounded-lg transition-all duration-200`}
                                 >
                                     {label}
                                 </a>
                             ))}
-                            <hr className="border-white/[0.08] my-2" />
+                            <hr className="border-border-secondary my-2" />
                             <RouterLink
                                 to="/signin"
                                 onClick={() => setMobileMenuOpen(false)}
-                                className={`px-4 py-2.5 text-sm font-medium text-white/60 hover:text-white hover:bg-white/[0.06] rounded-lg transition-all duration-200`}
+                                className={`px-4 py-2.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/[0.06] rounded-lg transition-all duration-200`}
                             >
                                 Sign In
                             </RouterLink>
@@ -291,7 +300,7 @@ const LandingPage = () => {
                                 <span>Context switching kills productivity</span>
                             </li>
                         </ul>
-                        <p className="text-lg font-medium text-white border-l-2 border-red-500/50 pl-4 py-1">
+                        <p className="text-lg font-medium text-text-primary border-l-2 border-red-500/50 pl-4 py-1">
                             &ldquo;You waste more time searching docs than actually building.&rdquo;
                         </p>
                     </GlassCard>
@@ -364,7 +373,10 @@ const LandingPage = () => {
                         <img
                             src={demoImage}
                             alt="DocChat interface preview"
-                            className="w-full h-full object-cover rounded-lg border border-white/10"
+                            width={1412}
+                            height={927}
+                            loading="lazy"
+                            className="w-full h-auto rounded-lg border border-white/10"
                         />
                     </div>
                     <div className="order-1 md:order-2 w-full max-w-xl md:justify-self-center text-left">
@@ -383,7 +395,7 @@ const LandingPage = () => {
                                 the answer came from
                             </li>
                         </ul>
-                        <p className="inline-block px-4 py-2 glass rounded-lg border-white/10 font-medium text-white">
+                        <p className="inline-block px-4 py-2 glass rounded-lg font-medium text-text-primary">
                             No hallucinations. Every answer is backed by sources.
                         </p>
                     </div>
@@ -528,21 +540,21 @@ const LandingPage = () => {
                                 <p className="text-xs uppercase tracking-[0.22em] text-accent-blue/80 mb-3">
                                     Community Driven
                                 </p>
-                                <h3 className="text-3xl md:text-4xl font-bold mb-4">
+                                <h3 className="text-3xl md:text-4xl font-bold mb-4 text-white">
                                     Open source and built in public
                                 </h3>
-                                <p className="text-gray-300 mb-6 max-w-2xl">
+                                <p className="text-slate-300 mb-6 max-w-2xl">
                                     DocChat is fully open source. If you want to fix bugs, improve
                                     crawling quality, or ship new ideas, contributions are welcome.
                                 </p>
                                 <div className="flex flex-wrap gap-3 text-sm">
-                                    <span className="px-3 py-1.5 rounded-full border border-white/15 bg-white/5 text-gray-300">
+                                    <span className="px-3 py-1.5 rounded-full border border-white/15 bg-white/5 text-slate-300">
                                         Issues welcome
                                     </span>
-                                    <span className="px-3 py-1.5 rounded-full border border-white/15 bg-white/5 text-gray-300">
+                                    <span className="px-3 py-1.5 rounded-full border border-white/15 bg-white/5 text-slate-300">
                                         PRs welcome
                                     </span>
-                                    <span className="px-3 py-1.5 rounded-full border border-white/15 bg-white/5 text-gray-300">
+                                    <span className="px-3 py-1.5 rounded-full border border-white/15 bg-white/5 text-slate-300">
                                         MIT Licensed
                                     </span>
                                 </div>
@@ -569,13 +581,13 @@ const LandingPage = () => {
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                     <RouterLink
                         to="/signup"
-                        className={`px-8 py-3 rounded-lg bg-white text-black font-semibold hover:bg-gray-200 transition-colors`}
+                        className={`px-8 py-3 rounded-lg bg-text-primary text-bg-page font-semibold hover:opacity-90 transition-all`}
                     >
                         Create your first chat
                     </RouterLink>
                     <RouterLink
                         to="/dashboard"
-                        className={`px-8 py-3 rounded-lg glass border border-white/10 font-medium text-white hover:bg-white/10 transition-colors`}
+                        className={`px-8 py-3 rounded-lg glass font-medium text-text-primary hover:bg-black/5 dark:hover:bg-white/10 transition-colors`}
                     >
                         Start with your docs URL
                     </RouterLink>
@@ -586,7 +598,14 @@ const LandingPage = () => {
             <footer className="relative z-10 border-t border-white/10 bg-[#0a0a0c] py-8 px-6">
                 <div className="max-w-4xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
                     <div className="flex items-center gap-2">
-                        <img src="/docchat-logo.png" alt="DocChat" className="h-16 w-auto" />
+                        <img
+                            src="/docchat-logo.webp"
+                            alt="DocChat"
+                            width={1101}
+                            height={395}
+                            loading="lazy"
+                            className="h-16 w-auto"
+                        />
                     </div>
                     <div className="flex gap-6 text-sm text-gray-500">
                         <a
@@ -614,6 +633,7 @@ const LandingPage = () => {
                     </div>
                 </div>
             </footer>
+            <ScrollToTop />
         </div>
     );
 };

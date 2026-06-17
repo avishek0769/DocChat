@@ -1,22 +1,101 @@
 @import "tailwindcss";
 
+:root {
+    --bg-page: #f8fafc;
+    --bg-page-rgb: 248, 250, 252;
+    --bg-card: #ffffff;
+    --bg-panel: #f1f5f9;
+    --bg-popover: #ffffff;
+    --bg-footer: #f8fafc;
+    
+    --border-primary: rgba(15, 23, 42, 0.08);
+    --border-secondary: rgba(15, 23, 42, 0.04);
+    
+    --text-primary: #0f172a;
+    --text-primary-lighter: #1e293b;
+    --text-secondary: #334155;
+    --text-muted: #475569;
+    --text-muted-lighter: #64748b;
+    
+    --glass-bg: rgba(255, 255, 255, 0.75);
+    --glass-border: rgba(15, 23, 42, 0.06);
+
+    --bg-hover-light: rgba(15, 23, 42, 0.02);
+    --bg-hover: rgba(15, 23, 42, 0.05);
+    --bg-hover-stronger: rgba(15, 23, 42, 0.1);
+}
+
+.dark {
+    --bg-page: #0b0b0f;
+    --bg-page-rgb: 11, 11, 15;
+    --bg-card: #0d0d12;
+    --bg-panel: #111111;
+    --bg-popover: #1a1a24;
+    --bg-footer: #0a0a0c;
+    
+    --border-primary: rgba(255, 255, 255, 0.1);
+    --border-secondary: rgba(255, 255, 255, 0.05);
+    
+    --text-primary: #f9fafb;
+    --text-primary-lighter: #f3f4f6;
+    --text-secondary: #e5e7eb;
+    --text-muted: #d1d5db;
+    --text-muted-lighter: #9ca3af;
+    
+    --glass-bg: rgba(11, 11, 15, 0.55);
+    --glass-border: rgba(255, 255, 255, 0.08);
+
+    --bg-hover-light: rgba(255, 255, 255, 0.02);
+    --bg-hover: rgba(255, 255, 255, 0.05);
+    --bg-hover-stronger: rgba(255, 255, 255, 0.1);
+}
+
 @theme {
     --color-accent-blue: #3b82f6;
     --color-accent-purple: #8b5cf6;
+    
+    --color-bg-page: var(--bg-page);
+    --color-bg-card: var(--bg-card);
+    --color-bg-panel: var(--bg-panel);
+    --color-bg-popover: var(--bg-popover);
+    --color-border-primary: var(--border-primary);
+    --color-border-secondary: var(--border-secondary);
+    --color-text-primary: var(--text-primary);
+    --color-text-secondary: var(--text-secondary);
+    --color-text-muted: var(--text-muted);
+
+    /* Override tailwind default grays for automatic text contrast adjustment */
+    --color-gray-50: var(--text-primary);
+    --color-gray-100: var(--text-primary-lighter);
+    --color-gray-200: var(--text-secondary);
+    --color-gray-300: var(--text-muted);
+    --color-gray-400: var(--text-muted);
+    --color-gray-500: var(--text-muted-lighter);
 }
 
 @layer base {
     *:focus-visible {
-        @apply outline-2 outline-offset-2 outline-accent-blue/70;
+        outline: 2px solid rgba(59, 130, 246, 0.7);
+        outline-offset: 2px;
     }
 
     body {
-        @apply bg-[#0b0b0f] text-gray-50 antialiased;
+        background-color: var(--bg-page);
+        color: var(--text-primary);
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+
+    body, aside, main, header, nav, .glass, button, input, select, textarea, a {
+        transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
     }
 }
 
 .glass {
-    @apply bg-white/5 border border-white/10 backdrop-blur-md;
+    background-color: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
 }
 
 .glow-blue {
@@ -34,23 +113,23 @@
 }
 
 ::-webkit-scrollbar-track {
-    background: #0b0b0f;
+    background: var(--bg-page);
 }
 
 ::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--border-primary);
     border-radius: 9999px;
-    border: 2px solid #0b0b0f;
+    border: 2px solid var(--bg-page);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: rgba(59, 130, 246, 0.4); /* accent-blue glow */
+    background: rgba(59, 130, 246, 0.4);
 }
 
 /* For Firefox */
 * {
     scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.1) #0b0b0f;
+    scrollbar-color: var(--border-primary) var(--bg-page);
 }
 
 @keyframes skeleton-shimmer {
@@ -73,3 +152,62 @@
     background-size: 200% 100%;
     animation: skeleton-shimmer 1.35s linear infinite;
 }
+
+/* Legacy utility overrides for instant compatibility with hardcoded classes */
+.bg-\[\#0b0b0f\] {
+    background-color: var(--bg-page) !important;
+}
+.bg-\[\#0d0d12\] {
+    background-color: var(--bg-card) !important;
+}
+.bg-\[\#111\] {
+    background-color: var(--bg-panel) !important;
+}
+.bg-\[\#1a1a24\] {
+    background-color: var(--bg-popover) !important;
+}
+.bg-\[\#0a0a0c\] {
+    background-color: var(--bg-footer) !important;
+}
+.border-white\/5 {
+    border-color: var(--border-secondary) !important;
+}
+.border-white\/10 {
+    border-color: var(--border-primary) !important;
+}
+
+/* Translucent bg utility overrides for theme compatibility */
+.bg-\[\#0b0b0f\]\/80 {
+    background-color: rgba(var(--bg-page-rgb), 0.8) !important;
+}
+.bg-\[\#0b0b0f\]\/90 {
+    background-color: rgba(var(--bg-page-rgb), 0.9) !important;
+}
+.bg-\[\#0b0b0f\]\/95 {
+    background-color: rgba(var(--bg-page-rgb), 0.95) !important;
+}
+.bg-white\/2 {
+    background-color: var(--bg-hover-light) !important;
+}
+.bg-white\/5 {
+    background-color: var(--bg-hover) !important;
+}
+.bg-white\/10 {
+    background-color: var(--bg-hover-stronger) !important;
+}
+
+/* Specific component overrides for light/dark mode */
+html:not(.dark) .selection\:bg-accent-purple\/30::selection {
+    background-color: rgba(139, 92, 246, 0.15);
+}
+
+html:not(.dark) input::placeholder,
+html:not(.dark) textarea::placeholder {
+    color: var(--text-muted-lighter);
+}
+
+/* Logo visibility in light theme */
+html:not(.dark) img[src*="logo"] {
+    filter: invert(1) hue-rotate(180deg) brightness(0.2) drop-shadow(0 0 8px rgba(99, 102, 241, 0.2));
+}
+

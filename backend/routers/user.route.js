@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { verifyJWT, verifyStrictJWT } from "../middlewares/auth.middleware.js";
 import validate from "../middlewares/validate.middleware.js";
+import { authLimiter, otpLimiter } from "../middlewares/rateLimiter.middleware.js";
 import {
     sendVerificationCodeSchema,
     verifyEmailSchema,
@@ -22,12 +23,13 @@ import {
     deleteMyData,
 } from "../controllers/user.controller.js";
 
+
 const userRouter = Router();
 
-userRouter.route("/send-verification-code").post(validate(sendVerificationCodeSchema), sendVerificationCode);
+userRouter.route("/send-verification-code").post(otpLimiter, validate(sendVerificationCodeSchema), sendVerificationCode);
 userRouter.route("/verify-email").post(validate(verifyEmailSchema), verifyEmail);
-userRouter.route("/register").post(validate(userRegisterSchema), userRegister);
-userRouter.route("/login").post(validate(userLogInSchema), userLogIn);
+userRouter.route("/register").post(authLimiter, validate(userRegisterSchema), userRegister);
+userRouter.route("/login").post(authLimiter, validate(userLogInSchema), userLogIn);
 userRouter.route("/logout").get(verifyStrictJWT, userLogOut);
 userRouter.route("/refresh-tokens").patch(verifyJWT, refreshTokens);
 userRouter.route("/profile").get(verifyStrictJWT, currentUserProfile);

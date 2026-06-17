@@ -8,8 +8,9 @@ import redis from "../utils/redis.js";
 import { Resend } from "resend";
 import { createAuditEvent } from "../utils/audit.js";
 
-
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = process.env.RESEND_API_KEY
+    ? new Resend(process.env.RESEND_API_KEY)
+    : null;
 
 const AccessOptions = {
     httpOnly: true,
@@ -93,6 +94,13 @@ const sendVerificationCode = asyncHandler(async (req, res) => {
     const code = generateVerificationCode();
     await redis.set(email, code, "EX", 3 * 60);
 
+    if (!resend) {
+        throw new ApiError(
+            503,
+            "Email service is not configured. Please set RESEND_API_KEY.",
+        );
+    }
+
     await resend.emails.send({
         from: "DocChat <onboarding@avishekadhikary.tech>",
         to: email,
@@ -134,9 +142,19 @@ const userRegister = asyncHandler(async (req, res) => {
     if (!existingUser) {
         throw new ApiError(400, "Email not verified. Request a verification code first.");
     }
-    
+
     if (!existingUser.isVerified) {
         throw new ApiError(400, "User not verified");
+    }
+
+    // Check if the username is already taken by a different account
+    const takenUsername = await prisma.user.findUnique({
+        where: { username },
+    });
+
+    // If a user with this username exists and it's not the current registering user, reject
+    if (takenUsername && takenUsername.email !== email) {
+        throw new ApiError(409, "Username is already taken");
     }
 
     const hashedPassword = await hashPassword(password);
@@ -182,7 +200,7 @@ const userLogIn = asyncHandler(async (req, res) => {
     const loggedInUser = await prisma.user.update({
         where: { id: user.id },
         data: { refreshToken },
-        select: { id: true, fullname: true, username: true, email: true, isAdmin: true },
+        select: { id: true, fullname: true, username: true, email: true },
     });
 
     try {
@@ -276,11 +294,11 @@ const refreshTokens = asyncHandler(async (req, res) => {
 
 const currentUserProfile = asyncHandler(async (req, res) => {
     const user = {
-        id:req.user.id,
-        fullname:req.user.fullname,
-        username:req.user.username,
-        email:req.user.email,
-    }
+        id: req.user.id,
+        fullname: req.user.fullname,
+        username: req.user.username,
+        email: req.user.email,
+    };
     res.status(200).json(new ApiResponse(200, user, "Current user profile fetched successfully !"));
 });
 
@@ -297,6 +315,13 @@ const sendResetCode = asyncHandler(async (req, res) => {
 
     const code = generateVerificationCode();
     await redis.set(email, code, "EX", 3 * 60);
+
+    if (!resend) {
+        throw new ApiError(
+            503,
+            "Email service is not configured. Please set RESEND_API_KEY.",
+        );
+    }
 
     await resend.emails.send({
         from: "DocChat <onboarding@avishekadhikary.tech>",

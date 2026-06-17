@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Sidebar } from "../components/Sidebar";
-import { User, Mail, LogOut, Save, Key, CheckCircle2, Trash2 } from "lucide-react";
+
+
+
+import { User, Mail, LogOut, Save, Key, CheckCircle2, Trash2, Pencil, X } from "lucide-react";
 import { logoutUser, forceSignOut } from "../lib/auth";
 import { getUserProfile, deleteMyData } from "../lib/api";
-
 const Profile = () => {
     const navigate = useNavigate();
     const [name, setName] = useState("");

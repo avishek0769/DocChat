@@ -2,6 +2,8 @@ import prisma from "../utils/prismaClient.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
+import jwt from "jsonwebtoken";
+import { createAuditEvent } from "../utils/audit.js";
 
 const clampPagination = (req) => {
     const page = Math.max(Number(req.query.page || 1), 1);
@@ -144,7 +146,85 @@ const userDetails = asyncHandler(async (req, res) => {
         throw new ApiError(404, "User not found");
     }
 
-    return res.status(200).json(new ApiResponse(200, { user }, "Admin user details retrieved successfully"));
+    const [usageAggregate, recentChats, auditEvents, rawBreakdown] = await Promise.all([
+        prisma.usageEvents.aggregate({
+            where: { userId },
+            _sum: {
+                inputTokens: true,
+                outputTokens: true,
+            },
+        }),
+        prisma.chat.findMany({
+            where: { userId },
+            orderBy: { createdAt: "desc" },
+            take: 5,
+            select: {
+                id: true,
+                name: true,
+                status: true,
+                createdAt: true,
+            },
+        }),
+        prisma.auditEvent.findMany({
+            where: { userId },
+            orderBy: { createdAt: "desc" },
+            take: 10,
+            select: {
+                id: true,
+                type: true,
+                metadata: true,
+                createdAt: true,
+            },
+        }),
+        prisma.$queryRaw`
+            SELECT
+                m."llm_model" AS "model",
+                SUM(u."input_tokens")::int AS "totalInputTokens",
+                SUM(u."output_tokens")::int AS "totalOutputTokens"
+            FROM "UsageEvents" u
+            JOIN "ChatMessage" m ON u."message_id" = m."id"
+            WHERE u."user_id" = ${userId}
+            GROUP BY m."llm_model"
+            ORDER BY (SUM(u."input_tokens") + SUM(u."output_tokens")) DESC
+        `,
+    ]);
+
+    const totalTokens = (usageAggregate._sum.inputTokens || 0) + (usageAggregate._sum.outputTokens || 0);
+
+    const recentActivity = auditEvents.map((event) => {
+        const meta = event.metadata || {};
+
+        return {
+            id: event.id,
+            type: event.type,
+            title: meta.title || null,
+            detail: meta.detail || null,
+            createdAt: event.createdAt,
+        };
+    });
+
+    const usageBreakdown = rawBreakdown.map((row) => ({
+        model: row.model,
+        totalInputTokens: Number(row.totalInputTokens || 0),
+        totalOutputTokens: Number(row.totalOutputTokens || 0),
+        totalTokens: Number(row.totalInputTokens || 0) + Number(row.totalOutputTokens || 0),
+    }));
+
+    return res.status(200).json(
+        new ApiResponse(
+            200,
+            {
+                user: {
+                    ...user,
+                    totalTokens,
+                },
+                recentChats,
+                recentActivity,
+                usageBreakdown,
+            },
+            "Admin user details retrieved successfully",
+        ),
+    );
 });
 
 const usage = asyncHandler(async (req, res) => {
@@ -261,4 +341,123 @@ const ingestion = asyncHandler(async (req, res) => {
     );
 });
 
-export { overview, users, userDetails, usage, ingestion };
+const impersonate = asyncHandler(async (req, res) => {
+    const { userId } = req.params;
+    const adminUser = req.user;
+
+    const targetUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+            id: true,
+            fullname: true,
+            username: true,
+            email: true,
+            isVerified: true,
+        },
+    });
+
+    if (!targetUser) {
+        throw new ApiError(404, "User not found");
+    }
+
+    const impersonationToken = jwt.sign(
+        {
+            id: targetUser.id,
+            username: targetUser.username,
+            fullname: targetUser.fullname,
+            adminOriginal: adminUser.id,
+        },
+        process.env.ACCESS_TOKEN_SECRET,
+        { expiresIn: "15m" },
+    );
+
+    try {
+        await createAuditEvent("admin.impersonate.start", adminUser.id, null, {
+            targetUserId: targetUser.id,
+            targetUsername: targetUser.username,
+        });
+    } catch (error) {
+        console.error("Failed to write impersonation audit event:", error.message);
+    }
+
+    return res.status(200).json(
+        new ApiResponse(
+            200,
+            {
+                accessToken: impersonationToken,
+                user: {
+                    id: targetUser.id,
+                    fullname: targetUser.fullname,
+                    username: targetUser.username,
+                    email: targetUser.email,
+                },
+            },
+            "Impersonation token generated successfully",
+        ),
+    );
+});
+
+const stopImpersonation = asyncHandler(async (req, res) => {
+    const adminUser = req.user;
+
+    try {
+        await createAuditEvent("admin.impersonate.stop", adminUser.id, null, {
+            adminOriginal: adminUser.id,
+        });
+    } catch (error) {
+        console.error("Failed to write stop impersonation audit event:", error.message);
+    }
+
+    return res.status(200).json(
+        new ApiResponse(200, {}, "Impersonation stopped successfully"),
+    );
+});
+
+export { overview, users, userDetails, usage, ingestion, impersonate, stopImpersonation };
+const getSettings = asyncHandler(async (req, res) => {
+    const { getWebhookConfig } = await import("../utils/notificationDispatcher.js");
+    const config = await getWebhookConfig();
+    return res.status(200).json(
+        new ApiResponse(200, { webhook: config || {} }, "Settings retrieved successfully"),
+    );
+});
+
+const updateSettings = asyncHandler(async (req, res) => {
+    const { saveWebhookConfig } = await import("../utils/notificationDispatcher.js");
+    const { webhook } = req.body;
+
+    if (!webhook || typeof webhook !== "object") {
+        throw new ApiError(400, "Invalid settings payload");
+    }
+
+    const sanitized = {
+        slackUrl: typeof webhook.slackUrl === "string" ? webhook.slackUrl.trim() || null : null,
+        discordUrl: typeof webhook.discordUrl === "string" ? webhook.discordUrl.trim() || null : null,
+        customUrl: typeof webhook.customUrl === "string" ? webhook.customUrl.trim() || null : null,
+        enabledAlerts: Array.isArray(webhook.enabledAlerts) ? webhook.enabledAlerts : ["queue_depth", "ingestion_failure", "api_error"],
+    };
+
+    await saveWebhookConfig(sanitized);
+
+    return res.status(200).json(
+        new ApiResponse(200, { webhook: sanitized }, "Settings updated successfully"),
+    );
+});
+
+const testWebhook = asyncHandler(async (req, res) => {
+    const { dispatchAlert } = await import("../utils/notificationDispatcher.js");
+
+    await dispatchAlert({
+        type: "test",
+        title: "Test Alert from DocChat",
+        message: "This is a test webhook notification. If you received this, your webhook configuration is working correctly.",
+        severity: "info",
+        source: "admin",
+    });
+
+    return res.status(200).json(
+        new ApiResponse(200, null, "Test webhook sent successfully"),
+    );
+});
+
+export { overview, users, userDetails, usage, ingestion, getSettings, updateSettings, testWebhook };

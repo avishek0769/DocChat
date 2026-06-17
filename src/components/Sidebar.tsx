@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import { getApiKeyCount, getUserProfile } from "../lib/api";
+import { ThemeToggle } from "./ThemeToggle";
 
 interface SidebarProps {
     isCollapsed?: boolean;
@@ -88,8 +89,10 @@ export const Sidebar = ({ isCollapsed = false }: SidebarProps) => {
         >
             <div className={clsx("p-6 flex items-center gap-2", isCollapsed && "justify-center px-0")}>
                 <img
-                    src="/docchat-logo.png"
+                    src="/docchat-logo.webp"
                     alt="DocChat"
+                    width={1101}
+                    height={395}
                     className={clsx("w-auto shrink-0", isCollapsed ? "h-16" : "h-10")}
                 />
             </div>
@@ -156,8 +159,17 @@ export const Sidebar = ({ isCollapsed = false }: SidebarProps) => {
                 )}
             </nav>
 
-            {/* Profile Bottom */}
-            <div className="p-4 border-t border-white/5">
+            {/* Profile Bottom & Theme Toggle */}
+            <div className="p-4 border-t border-white/5 flex flex-col gap-4">
+                <div className={clsx("flex items-center justify-between", isCollapsed ? "justify-center" : "px-2")}>
+                    {!isCollapsed && (
+                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-[0.2em]">
+                            Theme
+                        </span>
+                    )}
+                    <ThemeToggle />
+                </div>
+
                 <button
                     onClick={() => navigate("/profile")}
                     title={isCollapsed ? "Profile" : undefined}

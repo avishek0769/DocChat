@@ -51,6 +51,7 @@ export type ChatItem = {
         id: string;
         documentationUrl: string;
         totalPages: number;
+        lastIndexedAt?: string | null;
         isVectorLess?: boolean;
         _count?: { pagesIndexed: number };
         pagesIndexed?: Array<{ pageUrl: string; title?: string | null }>;
@@ -77,6 +78,25 @@ export type ChatMessageSourceItem = {
     pageUrl: string;
     chunkText: string;
     score: number;
+};
+
+export type FailedIngestionRunItem = {
+    id: string;
+    chatId: string;
+    chatSourceId?: string | null;
+    status: string;
+    startedAt: string;
+    finishedAt?: string | null;
+    errorCode?: string | null;
+    errorMessage?: string | null;
+    chat?: {
+        name?: string | null;
+        userId?: string | null;
+    };
+    chatSource?: {
+        heading?: string | null;
+        documentationUrl?: string | null;
+    };
 };
 
 const apiRequest = async <T>(path: string, init?: RequestInit): Promise<T> => {
@@ -152,7 +172,7 @@ export const invalidateChatCaches = () => {
 };
 
 export const invalidateChatMessages = (chatId: string) => {
-    removeFromCache(cacheKey(`/message/all/${chatId}`));
+    removeMatchingFromCache(`${cacheKey("")}/message/all/${chatId}`);
 };
 
 export const invalidatePagesIndexed = (chatId: string) => {
@@ -203,14 +223,31 @@ export const updateApiKey = async (id: string, payload: { key?: string; name?: s
 
 export const getApiKeyCount = () => apiRequest<{ count: number }>("/apikey/count", { method: "GET" });
 
-export const getChats = () =>
-    withCache(cacheKey("/chat/list"), 5 * 60 * 1000, () =>
-        apiRequest<ChatItem[]>("/chat/list", { method: "GET" }),
+export type PaginatedChats = {
+    chats: ChatItem[];
+    hasMore: boolean;
+    nextCursor: string | null;
+};
+
+export const getChats = (params?: { limit?: number; cursor?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.limit) query.set("limit", String(params.limit));
+    if (params?.cursor) query.set("cursor", params.cursor);
+    const qs = query.toString();
+    const path = `/chat/list${qs ? `?${qs}` : ""}`;
+    return apiRequest<PaginatedChats>(path, { method: "GET" });
+};
+
+export const getRecentFailedIngestionRuns = (limit = 5) =>
+    apiRequest<{ runs: FailedIngestionRunItem[] }>(
+        `/chat/ingestion-runs/failed?limit=${limit}`,
+        { method: "GET" },
     );
 
 export const createChat = async (payload: {
     name?: string;
-    docsUrl: string;
+    docsUrl?: string;
+    docsUrls?: string[];
     isVectorLess?: boolean;
     scrapeLimit?: number;
 }) => {
@@ -222,8 +259,39 @@ export const createChat = async (payload: {
     return result;
 };
 
+export const addChatSource = async (chatId: string, payload: { docsUrl: string; isVectorLess?: boolean }) =>
+    apiRequest<{ chatId: string; chatSourceId: string; attached: boolean; status: string }>(`/chat/${chatId}/sources`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+    });
+
+export const removeChatSource = async (chatId: string, payload: { docsUrl: string; isVectorLess?: boolean }) =>
+    apiRequest<{ chatId: string; chatSourceId: string; detached: boolean }>(`/chat/${chatId}/sources`, {
+        method: "DELETE",
+        body: JSON.stringify(payload),
+    });
+
 export const deleteChat = async (chatId: string) => {
     const result = await apiRequest(`/chat/${chatId}`, { method: "DELETE" });
+    invalidateChatCaches();
+    return result;
+};
+
+export const bulkDeleteChats = async (chatIds: string[]) => {
+    const result = await apiRequest("/chat/bulk-delete", {
+        method: "POST",
+        body: JSON.stringify({ chatIds }),
+    });
+
+    invalidateChatCaches();
+    return result;
+};
+
+export const renameChat = async (chatId: string, name: string) => {
+    const result = await apiRequest<{ chat: ChatItem }>(`/chat/${chatId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ name }),
+    });
     invalidateChatCaches();
     return result;
 };
@@ -299,12 +367,19 @@ export const getAvailableModels = () =>
         apiRequest<{ models: string[] }>("/message/models", { method: "GET" }),
     );
 
-export const getChatMessages = (chatId: string) =>
-    withCache(cacheKey(`/message/all/${chatId}`), 5 * 60 * 1000, () =>
-        apiRequest<{ messages: ChatMessageItem[] }>(`/message/all/${chatId}`, {
+export const getChatMessages = (chatId: string, limit = 50, cursor?: string) => {
+    const query = new URLSearchParams();
+    query.set("limit", String(limit));
+    if (cursor) query.set("cursor", cursor);
+
+    const path = `/message/all/${chatId}${query.toString() ? `?${query.toString()}` : ""}`;
+
+    return withCache(cacheKey(path), 5 * 60 * 1000, () =>
+        apiRequest<{ messages: ChatMessageItem[]; nextCursor: string | null; hasMore: boolean }>(path, {
             method: "GET",
         }),
     );
+};
 
 export const getMessageSources = (messageId: string) =>
     withCache(cacheKey(`/message/sources/${messageId}`), 5 * 60 * 1000, () =>
@@ -402,18 +477,24 @@ export const sendMessageStream = async (payload: {
     return text;
 };
 
-export const exportChatMessages = async (chatId: string): Promise<void> => {
+export const exportChatMessages = async (
+  chatId: string,
+  format: "txt" | "md" | "pdf"
+): Promise<void> => {
     const token = getAccessToken();
     const headers = new Headers();
     if (token) {
         headers.set("Authorization", `Bearer ${token}`);
     }
 
-    const response = await fetch(`${API_BASE_URL}/message/export/${chatId}`, {
-        method: "GET",
-        headers,
-        credentials: "include",
-    });
+    const response = await fetch(
+  `${API_BASE_URL}/message/export/${chatId}?format=${format}`,
+  {
+    method: "GET",
+    headers,
+    credentials: "include",
+  }
+);
 
     if (!response.ok) {
         throw new Error("Failed to export chat");
@@ -423,7 +504,45 @@ export const exportChatMessages = async (chatId: string): Promise<void> => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `chat-export-${chatId}.txt`;
+    a.download = `chat-export-${chatId}.${format}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+};
+
+export const exportRawSource = async (chatId: string, sourceId: string): Promise<void> => {
+    const token = getAccessToken();
+    const headers = new Headers();
+    if (token) {
+        headers.set("Authorization", `Bearer ${token}`);
+    }
+
+    const response = await fetch(`${API_BASE_URL}/chat/${chatId}/sources/${sourceId}/raw`, {
+        method: "GET",
+        headers,
+        credentials: "include",
+    });
+
+    if (!response.ok) {
+        throw new Error("Failed to export raw source");
+    }
+
+    // Try to get filename from Content-Disposition if present
+    let filename = `source-${sourceId}-raw.txt`;
+    const disposition = response.headers.get('Content-Disposition');
+    if (disposition && disposition.includes('filename=')) {
+        const match = disposition.match(/filename="?([^"]+)"?/);
+        if (match && match[1]) {
+            filename = match[1];
+        }
+    }
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

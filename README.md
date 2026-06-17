@@ -6,217 +6,144 @@ Check out the live website here: [DocChat](https://avishek.short.gy/docchat)
 
 ---
 
-> ### 🌟 Support the Project
-> If **DocChat** makes your life easier, please consider giving this repository a star.
+## 📚 Developer Guide Directory
+
+For detailed documentation, please refer to the files in the `docs/` folder:
+
+| Guide | Description |
+| :--- | :--- |
+| 🏗️ [Architecture Guide](file:///c:/Users/Rushabh%20Mahajan/Documents/GitHub/DocChat/docs/architecture.md) | In-depth pipeline sequences, database details, and Mermaid workflows. |
+| ⚙️ [Backend Guide](file:///c:/Users/Rushabh%20Mahajan/Documents/GitHub/DocChat/docs/backend-guide.md) | Folder layout, database schemas, BullMQ queuing, and encryption details. |
+| 🎨 [Frontend Guide](file:///c:/Users/Rushabh%20Mahajan/Documents/GitHub/DocChat/docs/frontend-guide.md) | Vite/Tailwind v4 layouts, routing, caching layers, and styling principles. |
+| 🔌 [API Reference](file:///c:/Users/Rushabh%20Mahajan/Documents/GitHub/DocChat/docs/api-guide.md) | Complete endpoints map, parameters, JSON shapes, and auth requirements. |
+| 🛠️ [Setup & Troubleshooting](file:///c:/Users/Rushabh%20Mahajan/Documents/GitHub/DocChat/docs/troubleshooting.md) | Detailed listing of 25+ env variables, local Redis/pg configurations, and debug steps. |
 
 ---
 
-## Overview
+## Architecture Flow
 
-This project implements a Retrieval-Augmented Generation (RAG) system designed for documentation. It allows users to convert any documentation website into an interactive chat interface powered by large language models.
+DocChat consists of a React UI communicating with an Express server, orchestrating background indexers via BullMQ (Redis) and persisting embeddings in Qdrant and metadata in PostgreSQL.
 
-The system handles crawling, chunking, embedding, indexing, and querying in a structured pipeline.
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant F as Frontend (Vite + React)
+    participant B as Backend (Express API)
+    participant R as Redis (BullMQ)
+    participant W as Worker (chatWorker)
+    participant Q as Qdrant Vector DB
+    participant DB as PostgreSQL (Prisma)
+
+    User->>F: Enter Docs URL & Choose Mode
+    F->>B: POST /api/v1/chat/create
+    B->>DB: Check reuse (existing source URL)
+    alt URL is already indexed
+        DB-->>B: Return existing source collection
+        B-->>F: Chat session ready (Instant)
+    else URL is new
+        B->>DB: Save Chat (status: QUEUED)
+        B->>R: Queue Ingestion Job (chatCreation)
+        B-->>F: Return Chat ID (asynchronous processing)
+        F->>B: Poll progress status via /api/v1/chat/status/:id
+        R->>W: Process job
+        W->>W: Crawl, split text, generate embeddings
+        W->>Q: Upsert vector chunks
+        W->>DB: Mark Chat status: READY
+    end
+    User->>F: Submit Prompt
+    F->>B: POST /api/v1/message/send (SSE Stream)
+    B->>Q: Similarity Search (Score >= 0.35)
+    Q-->>B: Top 5 Text Chunks
+    B->>B: Assemble prompt with context & chat history
+    B->>F: Stream chunks back to client
+```
 
 ---
 
 ## Features
 
 ### Documentation Ingestion
+* Accepts a documentation URL as input.
+* Recursively crawls internal pages up to config limits.
+* Automatically respects `robots.txt` instructions.
 
-- Accepts a documentation URL as input
-- Recursively crawls internal links
-- Applies limits to avoid excessive crawling
+### Retrieval Strategies (RAG Modes)
+* **Vector Mode**: Generates vector embeddings for extracted text chunks using OpenRouter, and stores them in Qdrant for semantic search.
+* **Vectorless Mode (TreeIndex)**: Builds a documentation structural tree (no vector embeddings required) and retrieves nodes directly from the generated tree. Useful for resource-constrained or offline-friendly index pipelines.
 
-### Data Processing Pipeline
+### Knowledge Base Reuse (Instant Chat)
+* Reuses existing Qdrant collections or TreeIndex trees when URLs match, facilitating instant chat creation for both the original user and other users.
 
-- Cleans and extracts meaningful content from HTML
-- Splits content into manageable chunks
-- Generates vector embeddings for each chunk
-- Supports a vectorless indexing mode using TreeIndex for structure-based retrieval
-
-### Vector Search
-
-- Stores embeddings in Qdrant
-- Performs similarity search to retrieve relevant context
-
-### Vectorless Search (TreeIndex)
-
-- Builds a documentation tree from scraped content (no embeddings)
-- Retrieves relevant nodes directly from the generated tree
-- Useful as an alternative ingestion/retrieval strategy per chat
-
-### Knowledge Base Reuse (Instant Chat Creation)
-
-- If a documentation URL has already been ingested, the system reuses the existing knowledge base
-- Works for the same user and for different users
-- New chat creation for the same docs URL becomes instant (no re-ingestion wait)
-- Reuse is mode-aware: vector and vectorless sources are reused independently
-
-### Chat Interface
-
-- Users can ask questions about the ingested documentation
-- Responses are generated using retrieved context
-- Each response includes source references
-
-### Usage Tracking
-
-- Tracks token usage per request
-- Stores model usage details
-- Enables usage monitoring for users
-
-### API Key Support
-
-- Users can provide their own API keys
-- Supports multiple providers
-- Keys are encrypted before storage
-
-### Background Processing
-
-- Ingestion runs asynchronously
-- Tracks progress with status updates (processing, ready, failed)
+### Advanced Capabilities
+* **Long-Term Memory**: Optional connection with `Mem0` key captures and injects user profile context over multiple sessions.
+* **Token Budget limits**: Tracks and restricts daily user token counts in Redis.
+* **Audit Event Logs**: Automatically audits administrative actions, model usages, and ingestions.
+* **Admin Control Center**: Built-in visual panel to inspect user token consumptions, audit events, and sweep orphaned collections in Qdrant.
 
 ---
 
-## Supported LLM Providers
+## Quickstart Installation & Setup
 
-- OpenAI
-- Anthropic
-- Google (Gemini)
-- xAI (Grok)
-- OpenRouter
+Before running, make sure you have **Node.js** (v20+ recommended), **Docker**, and **pnpm** installed.
 
----
-
-## Architecture
-
-### High-Level Flow
-
-1. User submits a documentation URL
-2. System crawls and collects internal pages
-3. User chooses retrieval mode: **Vector** or **Vectorless**
-4. Content is cleaned and processed
-5. In **Vector** mode: chunks are embedded and stored in Qdrant collections
-6. In **Vectorless** mode: a TreeIndex is generated and stored as a document tree
-7. User query retrieves context from the selected mode
-8. Retrieved context is passed to the LLM
-9. LLM generates response with references
-
----
-
-## Database Design
-
-### Users
-
-Stores user account details.
-
-### Chats
-
-Represents a documentation session created by a user.
-
-### Chat Sources
-
-Stores root documentation links associated with a chat.
-
-Includes a mode flag (`isVectorLess`) so the same URL can exist in vector and vectorless forms.
-
-### Document Trees
-
-Stores vectorless source data and generated tree structure used for TreeIndex retrieval.
-
-### Chat Messages
-
-Stores conversation messages including prompts and responses along with token usage.
-
-### Chat Message Sources
-
-Stores the source chunks used to generate each response.
-
-### Usage Events
-
-Tracks token usage across different operations (chat, embedding, system).
-
-### API Keys
-
-Stores encrypted API keys provided by users.
-
----
-
-## Vector Storage (Qdrant)
-
-- Each unique docs URL has a collection that can be reused by multiple chats
-- Collections store:
-    - Embedding vectors
-    - Payload (text, source URL, metadata)
-
-- Enables isolated and efficient similarity search per chat
-
-## Vectorless Storage (TreeIndex)
-
-- Stores raw source data and generated tree output in the database
-- Retrieval uses relevant tree nodes instead of vector similarity
-- Supports chat creation and reuse without embedding generation
-
----
-
-## Installation and Setup
-
-```
+### 1. Clone the repository
+```bash
 git clone https://github.com/avishek0769/DocChat.git
 cd DocChat
-pnpm install
-pnpm run dev # Start the frontend development server
-
-cd backend
-pnpm install
-cp .env.example .env
-pnpm dlx prisma migrate dev --name init
-pnpm dlx prisma generate
-docker compose up -d # Optional: Start Qdrant vector DB / Redis / Ollama - locally using Docker  
-pnpm run dev # Start the backend server
-
-node chatWorker.js # Optional: Start the background worker for processing chat creation and ingestion tasks
 ```
 
----
+### 2. Configure Environment Variables
+Copy the backend example file to `.env` and fill in the required variables (see [Setup & Troubleshooting Guide](file:///c:/Users/Rushabh%20Mahajan/Documents/GitHub/DocChat/docs/troubleshooting.md) for full descriptions):
+```bash
+cp backend/.env.example backend/.env
+```
 
-## API Key Handling
+### 3. Spin up Docker Services
+Start the local Redis Stack (required for workers and token limits):
+```bash
+docker compose up -d
+```
 
-- API keys are encrypted using a server-side encryption key
-- Keys are never stored in plaintext
-- Decryption happens only when making requests to providers
+### 4. Install Dependencies & Build
+Install frontend and backend packages:
+```bash
+# Root (Frontend)
+pnpm install
 
----
+# Backend
+cd backend
+pnpm install
+```
 
-## Optional Features
+### 5. Initialize Database Migrations
+Run Prisma migration commands inside the `backend/` directory:
+```bash
+pnpm dlx prisma migrate dev --name init
+pnpm dlx prisma generate
+```
 
-- **Long-term Memory (Mem0):** DocChat supports storing long-term interaction history. This feature is automatically enabled if you configure the `MEM0_API_KEY` in your `.env` file. If omitted or if Mem0 calls fail, the chat will continue to function normally without long-term context tracking.
+### 6. Run the Application
+Start the application components:
+```bash
+# 1. Start Frontend (run from repository root)
+pnpm run dev
 
----
+# 2. Start Backend API Server (run from backend/ directory)
+pnpm run dev
 
-## Limitations
-
-- Works best with static documentation websites
-- JavaScript-heavy sites may not be fully supported
-- Large documentation sets may take time to process
-- Vectorless indexing quality depends on tree generation and node retrieval quality
-
----
-
-## Future Improvements
-
-- Improved code-aware chunking
-- Better support for dynamic websites
-- Enhanced ranking and reranking strategies
-- Advanced analytics for usage
+# 3. Start Background Ingestion Worker (run from backend/ directory)
+node chatWorker.js
+```
 
 ---
 
 ## Contributing
 
-Contributions are welcome. Please open an issue or submit a pull request.
+Contributions are welcome! If you would like to help improve DocChat, please review our [Contributing Guide](file:///c:/Users/Rushabh%20Mahajan/Documents/GitHub/DocChat/CONTRIBUTING.md) to understand branch naming, PR checklist procedures, and codebase guidelines.
 
 ---
 
 ## License
 
-MIT License
+This project is licensed under the MIT License.

@@ -1,14 +1,31 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Sidebar } from "../components/Sidebar";
-import { getAdminUsers, type AdminUserItem } from "../lib/api";
+import { getAdminUsers, adminImpersonate, type AdminUserItem } from "../lib/api";
+import { startImpersonation } from "../lib/auth";
 
 const AdminUsers = () => {
+    const navigate = useNavigate();
     const [page, setPage] = useState(1);
     const limit = 10;
     const [users, setUsers] = useState<AdminUserItem[]>([]);
     const [totalPages, setTotalPages] = useState(1);
     const [error, setError] = useState("");
+    const [impersonatingId, setImpersonatingId] = useState<string | null>(null);
+
+    const handleImpersonate = async (user: AdminUserItem) => {
+        setImpersonatingId(user.id);
+        setError("");
+        try {
+            const res = await adminImpersonate(user.id);
+            startImpersonation(res.accessToken, res.user);
+            navigate("/dashboard");
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to start impersonation.");
+        } finally {
+            setImpersonatingId(null);
+        }
+    };
 
     useEffect(() => {
         const load = async () => {
@@ -50,10 +67,17 @@ const AdminUsers = () => {
                                         <td className="py-3 text-white">{user.fullname || user.username || user.id}</td>
                                         <td className="py-3 text-gray-400">{user.email || "—"}</td>
                                         <td className="py-3 text-gray-400">{user.isAdmin ? "Admin" : "User"}</td>
-                                        <td className="py-3 text-right">
+                                        <td className="py-3 text-right space-x-3">
                                             <Link className="text-accent-blue hover:underline" to={`/admin/users/${user.id}`}>
                                                 View user
                                             </Link>
+                                            <button
+                                                onClick={() => handleImpersonate(user)}
+                                                disabled={impersonatingId === user.id}
+                                                className="text-amber-400 hover:text-amber-300 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                {impersonatingId === user.id ? "..." : "Impersonate"}
+                                            </button>
                                         </td>
                                     </tr>
                                 ))}
