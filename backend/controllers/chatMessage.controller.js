@@ -28,16 +28,10 @@ if (MEM0_ENABLED) {
     }
 }
 
-// Daily token budget tracked per user per UTC day.
-const dailyBudgetKey = (userId) => `tokenBudget:${userId}:${new Date().toISOString().slice(0, 10)}`;
-
-const startOfUtcDay = () => {
-    const now = new Date();
-    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-};
-
-const secondsUntilUtcMidnight = () =>
-    Math.ceil((startOfUtcDay().getTime() + 86400000 - Date.now()) / 1000);
+// SSE helper — writes a properly-framed SSE event
+function writeSSE(res, event, data) {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+}
 
 const getAvailableModels = asyncHandler(async (req, res) => {
     const apikeys = await prisma.apiKey.findMany({
@@ -210,11 +204,18 @@ if (!chat.chatSources[0].isVectorLess) {
             limit: 20,
             with_payload: true,
         });
+        treeindex.loadData(docTree.sourceData);
+        treeindex.loadTree(docTree.treeData);
 
-        const [denseResults, keywordResults] = await Promise.all([denseTask, keywordTask]);
-
-        if (denseResults?.points?.length) {
-            allDensePoints.push(...denseResults.points);
+        relevantNodeIds = await treeindex.retrieveRelevantNodes(userPrompt);
+        if(relevantNodeIds.length == 0) {
+            res.setHeader("Content-Type", "text/event-stream");
+            res.setHeader("Cache-Control", "no-cache, no-transform");
+            res.setHeader("Connection", "keep-alive");
+            res.setHeader("X-Accel-Buffering", "no");
+            writeSSE(res, "error", { message: "No relevant sources found for this query" });
+            res.end();
+            return;
         }
 
         if (keywordResults?.points?.length) {
@@ -305,7 +306,7 @@ if (!chat.chatSources[0].isVectorLess) {
     res.setHeader("Cache-Control", "no-cache, no-transform");
     res.setHeader("Connection", "keep-alive");
     res.setHeader("X-Accel-Buffering", "no");
-
+    
     let llmResponse = "";
     let inputTokens = 0;
     let outputTokens = 0;
@@ -317,17 +318,19 @@ if (!chat.chatSources[0].isVectorLess) {
             if (chunk.usage) {
                 inputTokens = chunk.usage.prompt_tokens;
                 outputTokens = chunk.usage.completion_tokens;
+                writeSSE(res, "usage", { inputTokens, outputTokens });
             }
             if (content) {
                 llmResponse += content;
-                res.write(content);
+                writeSSE(res, "chunk", { content });
             }
         }
-    } catch (error) {
-        res.write(`\n\ndata: {"error": "Stream ended with error: ${error.message.replace(/\n/g, ' ')}"}\n\n`);
-    } finally {
-        res.end();
-    }
+        writeSSE(res, "done", {});
+        } catch (error) {
+            writeSSE(res, "error", { message: error.message || "Stream ended with error" });
+        } finally {
+            res.end();
+        }
 
     if (llmResponse.trim()) {
         if (MEM0_ENABLED && memory) {

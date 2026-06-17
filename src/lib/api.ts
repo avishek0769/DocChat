@@ -388,13 +388,15 @@ export const getMessageSources = (messageId: string) =>
         }),
     );
 
+
 export const sendMessageStream = async (payload: {
     userPrompt: string;
     model: string;
     provider: string;
     chatId: string;
     onChunk?: (chunk: string) => void;
-    signal?: AbortSignal; 
+    onError?: (message: string) => void;
+    signal?: AbortSignal;
 }) => {
     const token = getAccessToken();
     const headers = new Headers({ "Content-Type": "application/json" });
@@ -406,8 +408,13 @@ export const sendMessageStream = async (payload: {
         method: "POST",
         headers,
         credentials: "include",
-        body: JSON.stringify(payload),
-        signal: payload.signal, 
+        body: JSON.stringify({
+            userPrompt: payload.userPrompt,
+            model: payload.model,
+            provider: payload.provider,
+            chatId: payload.chatId,
+        }),
+        signal: payload.signal,
     });
 
     if (!response.ok || !response.body) {
@@ -418,25 +425,54 @@ export const sendMessageStream = async (payload: {
         throw new Error(payload?.message || "Unable to send message");
     }
 
+    // AFTER:
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let text = "";
-
+    let buffer = "";
+    
     while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        if (!chunk) continue;
-        text += chunk;
-        payload.onChunk?.(chunk);
+        buffer += decoder.decode(value, { stream: true });
+        
+        // SSE frames are separated by double newlines
+        const frames = buffer.split("\n\n");
+        buffer = frames.pop() ?? ""; // last partial frame stays in buffer
+        
+        for (const frame of frames) {
+            if (!frame.trim()) continue;
+            
+            let eventName = "message";
+            let dataLine = "";
+            
+            for (const line of frame.split("\n")) {
+                if (line.startsWith("event: ")) eventName = line.slice(7).trim();
+                else if (line.startsWith("data: ")) dataLine = line.slice(6).trim();
+            }
+            
+            if (!dataLine) continue;
+            
+            let parsed: Record<string, unknown>;
+            try {
+                parsed = JSON.parse(dataLine);
+            } catch {
+                continue;
+            }
+            
+            if (eventName === "chunk" && typeof parsed.content === "string") {
+                text += parsed.content;
+                payload.onChunk?.(parsed.content);
+            } else if (eventName === "error") {
+                const msg = typeof parsed.message === "string" ? parsed.message : "Stream error";
+                payload.onError?.(msg);
+                payload.onChunk?.(msg); // surface it in the UI
+            
+            }
+            // "usage" and "done" events — no UI action needed, silently consumed
+        }
     }
-
-    const tail = decoder.decode();
-    if (tail) {
-        text += tail;
-        payload.onChunk?.(tail);
-    }
-
+    
     invalidateChatMessages(payload.chatId);
     return text;
 };
@@ -755,17 +791,3 @@ export const forkSharedChat = (shareToken: string) =>
 
 export const deleteMyData = () =>
     apiRequest<{ message: string }>("/user/delete-my-data?confirm=true", { method: "DELETE" });
-
-export const adminImpersonate = (userId: string) =>
-    apiRequest<{
-        accessToken: string;
-        user: {
-            id: string;
-            fullname?: string | null;
-            username?: string | null;
-            email?: string | null;
-        };
-    }>(`/admin/impersonate/${userId}`, { method: "POST" });
-
-export const adminStopImpersonation = () =>
-    apiRequest<void>("/admin/stop-impersonation", { method: "POST" });
