@@ -709,12 +709,6 @@ const recentChats = asyncHandler(async (req, res) => {
                     },
                 },
             },
-            usageEvents: {
-                select: {
-                    inputTokens: true,
-                    outputTokens: true,
-                },
-            },
         },
         orderBy: {
             createdAt: "desc",
@@ -722,24 +716,27 @@ const recentChats = asyncHandler(async (req, res) => {
         take: 6,
     });
 
+    const chatIds = chats.map((c) => c.id);
+    const usageAggs = await prisma.usageEvents.groupBy({
+        by: ["chatId"],
+        where: { chatId: { in: chatIds } },
+        _sum: { inputTokens: true, outputTokens: true },
+    });
+    const usageMap = new Map(
+        usageAggs.map((u) => [
+            u.chatId,
+            { input: u._sum.inputTokens || 0, output: u._sum.outputTokens || 0 },
+        ]),
+    );
+
     const chatsWithUsage = chats.map((chat) => {
-        const totals = chat.usageEvents.reduce(
-            (acc, curr) => {
-                acc.inputTokens += curr.inputTokens ?? 0;
-                acc.outputTokens += curr.outputTokens ?? 0;
-                return acc;
-            },
-            { inputTokens: 0, outputTokens: 0 },
-        );
-
-        const { usageEvents, ...chatData } = chat;
-
+        const totals = usageMap.get(chat.id) || { input: 0, output: 0 };
         return {
-            ...chatData,
+            ...chat,
             totalUsage: {
-                input: totals.inputTokens,
-                output: totals.outputTokens,
-                total: totals.inputTokens + totals.outputTokens,
+                input: totals.input,
+                output: totals.output,
+                total: totals.input + totals.output,
             },
         };
     });
