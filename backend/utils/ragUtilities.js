@@ -358,7 +358,27 @@ function normalizeUrl(url) {
     const u = new URL(url);
 
     u.hash = "";
-    u.search = "";
+
+    if (u.search) {
+        const trackingParams = new Set([
+            "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "utm_cid", "utm_reader",
+            "fbclid", "gclid", "dclid", "msclkid", "mc_eid", "yclid",
+            "__hsfp", "__hssc", "__hstc", "hsctatracking"
+        ]);
+        
+        const params = [...u.searchParams.entries()];
+        const filtered = params
+            .filter(([key]) => !trackingParams.has(key.toLowerCase()))
+            .sort(([a], [b]) => a.localeCompare(b));
+            
+        const newSearchParams = new URLSearchParams();
+        for (const [key, value] of filtered) {
+            newSearchParams.append(key, value);
+        }
+        
+        const searchStr = newSearchParams.toString();
+        u.search = searchStr ? `?${searchStr}` : "";
+    }
 
     if (u.pathname.endsWith("/index.html")) {
         u.pathname = u.pathname.replace("/index.html", "");

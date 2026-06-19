@@ -244,6 +244,46 @@ export const getRecentFailedIngestionRuns = (limit = 5) =>
         { method: "GET" },
     );
 
+export function normalizeUrl(url: string): string {
+    try {
+        const u = new URL(url);
+
+        u.hash = "";
+
+        if (u.search) {
+            const trackingParams = new Set([
+                "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "utm_cid", "utm_reader",
+                "fbclid", "gclid", "dclid", "msclkid", "mc_eid", "yclid",
+                "__hsfp", "__hssc", "__hstc", "hsctatracking"
+            ]);
+            
+            const params = [...u.searchParams.entries()];
+            const filtered = params
+                .filter(([key]) => !trackingParams.has(key.toLowerCase()))
+                .sort(([a], [b]) => a.localeCompare(b));
+                
+            const newSearchParams = new URLSearchParams();
+            for (const [key, value] of filtered) {
+                newSearchParams.append(key, value);
+            }
+            
+            const searchStr = newSearchParams.toString();
+            u.search = searchStr ? `?${searchStr}` : "";
+        }
+
+        if (u.pathname.endsWith("/index.html")) {
+            u.pathname = u.pathname.replace("/index.html", "");
+        }
+        if (u.pathname !== "/" && u.pathname.endsWith("/")) {
+            u.pathname = u.pathname.slice(0, -1);
+        }
+
+        return u.toString();
+    } catch {
+        return url;
+    }
+}
+
 export const createChat = async (payload: {
     name?: string;
     docsUrl?: string;
@@ -251,25 +291,40 @@ export const createChat = async (payload: {
     isVectorLess?: boolean;
     scrapeLimit?: number;
 }) => {
+    const normalizedPayload = {
+        ...payload,
+        docsUrl: payload.docsUrl ? normalizeUrl(payload.docsUrl) : undefined,
+        docsUrls: payload.docsUrls ? payload.docsUrls.map(url => normalizeUrl(url)) : undefined,
+    };
     const result = await apiRequest<{ chatId?: string; id?: string }>("/chat/create", {
         method: "POST",
-        body: JSON.stringify(payload),
+        body: JSON.stringify(normalizedPayload),
     });
     invalidateChatCaches();
     return result;
 };
 
-export const addChatSource = async (chatId: string, payload: { docsUrl: string; isVectorLess?: boolean }) =>
-    apiRequest<{ chatId: string; chatSourceId: string; attached: boolean; status: string }>(`/chat/${chatId}/sources`, {
+export const addChatSource = async (chatId: string, payload: { docsUrl: string; isVectorLess?: boolean }) => {
+    const normalizedPayload = {
+        ...payload,
+        docsUrl: normalizeUrl(payload.docsUrl),
+    };
+    return apiRequest<{ chatId: string; chatSourceId: string; attached: boolean; status: string }>(`/chat/${chatId}/sources`, {
         method: "POST",
-        body: JSON.stringify(payload),
+        body: JSON.stringify(normalizedPayload),
     });
+};
 
-export const removeChatSource = async (chatId: string, payload: { docsUrl: string; isVectorLess?: boolean }) =>
-    apiRequest<{ chatId: string; chatSourceId: string; detached: boolean }>(`/chat/${chatId}/sources`, {
+export const removeChatSource = async (chatId: string, payload: { docsUrl: string; isVectorLess?: boolean }) => {
+    const normalizedPayload = {
+        ...payload,
+        docsUrl: normalizeUrl(payload.docsUrl),
+    };
+    return apiRequest<{ chatId: string; chatSourceId: string; detached: boolean }>(`/chat/${chatId}/sources`, {
         method: "DELETE",
-        body: JSON.stringify(payload),
+        body: JSON.stringify(normalizedPayload),
     });
+};
 
 export const deleteChat = async (chatId: string) => {
     const result = await apiRequest(`/chat/${chatId}`, { method: "DELETE" });

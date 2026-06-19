@@ -11,8 +11,6 @@ import redis, {
     redisSubscriber,
 } from "../utils/redis.js";
 import crypto from "crypto";
-import { ApiResponse } from "../utils/ApiResponse.js";
-import { ApiError } from "../utils/ApiError.js";
 import { createAuditEvent } from "../utils/audit.js";
 import { normalizeUrl } from "../utils/ragUtilities.js";
 import { getChatCreationQueue } from "../utils/queue.js";
@@ -1218,6 +1216,7 @@ const chunkPreview = asyncHandler(async (req, res) => {
             "Chunk preview generated successfully",
         ),
     );
+});
 const downloadRawSource = asyncHandler(async (req, res) => {
     const { chatId, sourceId } = req.params;
 
@@ -1260,6 +1259,7 @@ const downloadRawSource = asyncHandler(async (req, res) => {
                 offset: nextOffset,
             });
 
+            for (const point of response.points) {
                 hasData = true;
                 res.write(`--- ${point.payload.title || 'Page'} (${point.payload.url}) ---\n`);
                 res.write(`${point.payload.body}\n\n`);
