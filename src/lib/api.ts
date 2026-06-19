@@ -101,7 +101,7 @@ export type FailedIngestionRunItem = {
 
 const apiRequest = async <T>(path: string, init?: RequestInit): Promise<T> => {
     const headers = new Headers(init?.headers || {});
-    if (!headers.has("Content-Type") && init?.body) {
+    if (!headers.has("Content-Type") && init?.body && !(init.body instanceof FormData)) {
         headers.set("Content-Type", "application/json");
     }
 
@@ -245,6 +245,9 @@ export const getRecentFailedIngestionRuns = (limit = 5) =>
     );
 
 export function normalizeUrl(url: string): string {
+    if (url.startsWith("https://upload.local/")) {
+        return url;
+    }
     try {
         const u = new URL(url);
 
@@ -290,6 +293,7 @@ export const createChat = async (payload: {
     docsUrls?: string[];
     isVectorLess?: boolean;
     scrapeLimit?: number;
+    heading?: string;
 }) => {
     const normalizedPayload = {
         ...payload,
@@ -304,7 +308,7 @@ export const createChat = async (payload: {
     return result;
 };
 
-export const addChatSource = async (chatId: string, payload: { docsUrl: string; isVectorLess?: boolean }) => {
+export const addChatSource = async (chatId: string, payload: { docsUrl: string; isVectorLess?: boolean; heading?: string }) => {
     const normalizedPayload = {
         ...payload,
         docsUrl: normalizeUrl(payload.docsUrl),
@@ -312,6 +316,15 @@ export const addChatSource = async (chatId: string, payload: { docsUrl: string; 
     return apiRequest<{ chatId: string; chatSourceId: string; attached: boolean; status: string }>(`/chat/${chatId}/sources`, {
         method: "POST",
         body: JSON.stringify(normalizedPayload),
+    });
+};
+
+export const uploadDoc = async (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return apiRequest<{ docsUrl: string; heading: string }>("/chat/upload-doc", {
+        method: "POST",
+        body: formData,
     });
 };
 

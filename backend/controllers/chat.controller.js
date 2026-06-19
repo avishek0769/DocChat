@@ -3,6 +3,9 @@ import asyncHandler from "../utils/asyncHandler.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
 import { scrapeWebpage } from "../utils/ragUtilities.js";
+import fs from "fs/promises";
+import path from "path";
+import { parseFileBuffer } from "../utils/fileParser.js";
 import { cleanupQdrantCollections } from "../utils/qdrantCleanup.js";
 import redis, {
     getChatProgressKey,
@@ -177,8 +180,12 @@ const createChat = asyncHandler(async (req, res) => {
 
     if (!resolvedName) {
         const normalizedDocsUrl = normalizeDocsUrl(urls[0]);
-        const { title } = await scrapeWebpage(normalizedDocsUrl, normalizedDocsUrl);
-        resolvedName = title || "Untitled Chat";
+        if (normalizedDocsUrl.startsWith("https://upload.local/")) {
+            resolvedName = req.body.heading || "Uploaded Document";
+        } else {
+            const { title } = await scrapeWebpage(normalizedDocsUrl, normalizedDocsUrl);
+            resolvedName = title || "Untitled Chat";
+        }
     }
 
     const attachedSources = [];
@@ -189,7 +196,16 @@ const createChat = asyncHandler(async (req, res) => {
         let chatSource = await findReusableChatSource(normalizedUrl, isVectorLessChat);
 
         if (!chatSource) {
-            const { internalLinks, title } = await scrapeWebpage(normalizedUrl, normalizedUrl);
+            let internalLinks = [];
+            let title = "";
+            if (normalizedUrl.startsWith("https://upload.local/")) {
+                internalLinks = [normalizedUrl];
+                title = req.body.heading || "Uploaded Document";
+            } else {
+                const scraped = await scrapeWebpage(normalizedUrl, normalizedUrl);
+                internalLinks = scraped.internalLinks;
+                title = scraped.title;
+            }
             resolvedName = resolvedName || title || "Untitled Chat";
             chatSource = await prisma.chatSource.create({
                 data: {
@@ -270,7 +286,16 @@ const addChatSource = asyncHandler(async (req, res) => {
 
     if (!chatSource) {
         try {
-            const { internalLinks, title } = await scrapeWebpage(normalizedUrl, normalizedUrl);
+            let internalLinks = [];
+            let title = "";
+            if (normalizedUrl.startsWith("https://upload.local/")) {
+                internalLinks = [normalizedUrl];
+                title = req.body.heading || "Uploaded Document";
+            } else {
+                const scraped = await scrapeWebpage(normalizedUrl, normalizedUrl);
+                internalLinks = scraped.internalLinks;
+                title = scraped.title;
+            }
             chatSource = await prisma.chatSource.create({
                 data: {
                     totalPages: internalLinks.length,
@@ -1272,6 +1297,42 @@ const downloadRawSource = asyncHandler(async (req, res) => {
     }
 });
 
+const uploadDocumentation = asyncHandler(async (req, res) => {
+    if (!req.file) {
+        throw new ApiError(400, "No file uploaded.");
+    }
+
+    try {
+        const fileText = await parseFileBuffer(req.file.buffer, req.file.originalname);
+        if (!fileText || !fileText.trim()) {
+            throw new ApiError(400, "Uploaded file contains no readable text.");
+        }
+
+        const hash = crypto.createHash("sha256").update(fileText).digest("hex");
+        
+        const uploadsDir = path.join(process.cwd(), "uploads");
+        await fs.mkdir(uploadsDir, { recursive: true });
+        
+        const filePath = path.join(uploadsDir, `${hash}.txt`);
+        await fs.writeFile(filePath, fileText, "utf-8");
+
+        const docsUrl = `https://upload.local/${hash}`;
+
+        return res.status(200).json(
+            new ApiResponse(
+                200,
+                {
+                    docsUrl,
+                    heading: req.file.originalname,
+                },
+                "Document uploaded and parsed successfully",
+            ),
+        );
+    } catch (error) {
+        throw new ApiError(error.statusCode || 500, error.message, error);
+    }
+});
+
 export {
     expectation,
     createChat,
@@ -1295,4 +1356,5 @@ export {
     forkSharedChat,
     chunkPreview,          // ← new
     downloadRawSource,
+    uploadDocumentation,
 };

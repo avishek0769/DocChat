@@ -18,6 +18,7 @@ import {
     CheckCircle2,
     X,
     RefreshCw,
+    Upload,
 } from "lucide-react";
 import {
     createChat,
@@ -33,6 +34,7 @@ import {
     cancelChat,
     type ChatItem,
     type FailedIngestionRunItem,
+    uploadDoc,
 } from "../lib/api";
 import { formatDistanceToNow, formatTokens } from "../lib/format";
 
@@ -133,6 +135,8 @@ const Dashboard = () => {
     const [chatUrls, setChatUrls] = useState<string[]>([]);
     const [isVectorLess, setIsVectorLess] = useState(false);
     const [scrapeLimit, setScrapeLimit] = useState<number | "">("");
+    const [activeTab, setActiveTab] = useState<"url" | "file">("url");
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
     // Delete Confirmation
     const [deleteTarget, setDeleteTarget] = useState<Chat | null>(null);
@@ -390,15 +394,27 @@ const Dashboard = () => {
     }, []);
 
     const handleCreateChat = async () => {
-        if (!chatUrls.some(url => url.trim())) return;
+        if (activeTab === "url" && !chatUrls.some(url => url.trim())) return;
+        if (activeTab === "file" && !selectedFile) return;
         setIsCreating(true);
         setError("");
         try {
+            let docsUrl = "";
+            let heading = "";
+
+            if (activeTab === "file" && selectedFile) {
+                const uploadResult = await uploadDoc(selectedFile);
+                docsUrl = uploadResult.docsUrl;
+                heading = uploadResult.heading;
+            }
+
             await createChat({
-                name: chatName || undefined,
-                docsUrls: chatUrls.filter(Boolean),
+                name: chatName || (selectedFile ? selectedFile.name.replace(/\.[^/.]+$/, "") : undefined),
+                docsUrl: activeTab === "file" ? docsUrl : undefined,
+                docsUrls: activeTab === "url" ? chatUrls.filter(Boolean) : undefined,
                 isVectorLess,
-                scrapeLimit: scrapeLimit || undefined,
+                scrapeLimit: activeTab === "url" && scrapeLimit ? Number(scrapeLimit) : undefined,
+                heading: activeTab === "file" ? heading : undefined,
             });
             setIsModalOpen(false);
             setChatName("");
@@ -406,6 +422,8 @@ const Dashboard = () => {
             setChatUrls([]);
             setIsVectorLess(false);
             setScrapeLimit("");
+            setSelectedFile(null);
+            setActiveTab("url");
             showToast("Chat created and processing started.");
             await loadDashboardData();
         } catch (err) {
@@ -542,8 +560,9 @@ const Dashboard = () => {
     };
 
     // Disabled state for the Start Processing button
-    const isStartDisabled =
-        !chatUrls.some(url => url.trim());
+    const isStartDisabled = activeTab === "url"
+        ? !chatUrls.some(url => url.trim())
+        : !selectedFile;
     const getStatusBadge = (isVectorLess: boolean, status: string) => {
         switch (status) {
             case "ready":
@@ -1100,78 +1119,213 @@ const Dashboard = () => {
                         {/* Modal Body */}
                         <div className="p-5 space-y-5">
                             {/* Chat Name Input */}
-                            {/* URL Inputs */}
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium text-gray-300">
-                                    Documentation URLs <span className="text-red-400">*</span>
-                                </label>
-
-                                {chatUrls.map((url, index) => (
-                                    <input
-                                        key={index}
-                                        type="url"
-                                        value={url}
-                                        onChange={(e) => {
-                                            const updated = [...chatUrls];
-                                            updated[index] = e.target.value;
-                                            setChatUrls(updated);
-                                        }}
-                                        placeholder="https://docs.example.com"
-                                        className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-blue/50 focus:ring-1 focus:ring-accent-blue/50 transition-all font-mono"
-                                    />
-                                ))}
-
-                                <button
-                                    type="button"
-                                    onClick={() => setChatUrls([...chatUrls, ""])}
-                                    className="text-sm text-accent-blue hover:underline"
-                                >
-                                    + Add URL
-                                </button>
-                            </div>
-
-                            {/* URL Input */}
                             <div className="space-y-1.5">
                                 <label className="text-sm font-medium text-gray-300">
-                                    Documentation URL <span className="text-red-400">*</span>
+                                    Chat Name (Optional)
                                 </label>
                                 <input
-                                    type="url"
-                                    value={chatUrl}
-                                    onChange={(e) => setChatUrl(e.target.value)}
-                                    placeholder="https://docs.example.com"
-                                    className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-blue/50 focus:ring-1 focus:ring-accent-blue/50 transition-all font-mono"
+                                    type="text"
+                                    value={chatName}
+                                    onChange={(e) => setChatName(e.target.value)}
+                                    placeholder="e.g. DocChat Project Docs"
+                                    className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-blue/50 focus:ring-1 focus:ring-accent-blue/50 transition-all"
                                 />
-                                <p className="text-xs text-gray-500">
-                                    Add one or more documentation URLs. We'll scrape each page and its sub-pages automatically.
-                                </p>
+                            </div>
+
+                            {/* Tabs */}
+                            <div className="flex border-b border-white/10">
                                 <button
                                     type="button"
-                                    onClick={handleAddChatUrl}
-                                    className="mt-2 px-3 py-1.5 rounded-md bg-white/10 hover:bg-white/15 text-xs font-medium text-white transition-colors"
+                                    onClick={() => setActiveTab("url")}
+                                    className={`flex-1 py-2.5 text-sm font-medium text-center border-b-2 transition-all ${
+                                        activeTab === "url"
+                                            ? "border-accent-blue text-accent-blue bg-accent-blue/5"
+                                            : "border-transparent text-gray-400 hover:text-white"
+                                    }`}
                                 >
-                                    Add URL
+                                    Web URL
                                 </button>
-                                {chatUrls.length > 0 && (
-                                    <div className="mt-3 space-y-2">
-                                        {chatUrls.map((url) => (
-                                            <div
-                                                key={url}
-                                                className="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-white/5 border border-white/10"
-                                            >
-                                                <span className="text-xs text-gray-300 truncate font-mono">{url}</span>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleRemoveChatUrl(url)}
-                                                    className="text-xs text-red-400 hover:text-red-300"
-                                                >
-                                                    Remove
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
+                                <button
+                                    type="button"
+                                    onClick={() => setActiveTab("file")}
+                                    className={`flex-1 py-2.5 text-sm font-medium text-center border-b-2 transition-all ${
+                                        activeTab === "file"
+                                            ? "border-accent-blue text-accent-blue bg-accent-blue/5"
+                                            : "border-transparent text-gray-400 hover:text-white"
+                                    }`}
+                                >
+                                    Local File
+                                </button>
                             </div>
+
+                            {activeTab === "url" ? (
+                                <>
+                                    {/* URL Inputs */}
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium text-gray-300">
+                                            Documentation URLs <span className="text-red-400">*</span>
+                                        </label>
+
+                                        {chatUrls.map((url, index) => (
+                                            <input
+                                                key={index}
+                                                type="url"
+                                                value={url}
+                                                onChange={(e) => {
+                                                    const updated = [...chatUrls];
+                                                    updated[index] = e.target.value;
+                                                    setChatUrls(updated);
+                                                }}
+                                                placeholder="https://docs.example.com"
+                                                className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-blue/50 focus:ring-1 focus:ring-accent-blue/50 transition-all font-mono"
+                                            />
+                                        ))}
+
+                                        <button
+                                            type="button"
+                                            onClick={() => setChatUrls([...chatUrls, ""])}
+                                            className="text-sm text-accent-blue hover:underline"
+                                        >
+                                            + Add URL
+                                        </button>
+                                    </div>
+
+                                    {/* URL Input */}
+                                    <div className="space-y-1.5">
+                                        <label className="text-sm font-medium text-gray-300">
+                                            Documentation URL <span className="text-red-400">*</span>
+                                        </label>
+                                        <input
+                                            type="url"
+                                            value={chatUrl}
+                                            onChange={(e) => setChatUrl(e.target.value)}
+                                            placeholder="https://docs.example.com"
+                                            className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-blue/50 focus:ring-1 focus:ring-accent-blue/50 transition-all font-mono"
+                                        />
+                                        <p className="text-xs text-gray-500">
+                                            Add one or more documentation URLs. We'll scrape each page and its sub-pages automatically.
+                                        </p>
+                                        <button
+                                            type="button"
+                                            onClick={handleAddChatUrl}
+                                            className="mt-2 px-3 py-1.5 rounded-md bg-white/10 hover:bg-white/15 text-xs font-medium text-white transition-colors"
+                                        >
+                                            Add URL
+                                        </button>
+                                        {chatUrls.length > 0 && (
+                                            <div className="mt-3 space-y-2">
+                                                {chatUrls.map((url) => (
+                                                    <div
+                                                        key={url}
+                                                        className="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-white/5 border border-white/10"
+                                                    >
+                                                        <span className="text-xs text-gray-300 truncate font-mono">{url}</span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleRemoveChatUrl(url)}
+                                                            className="text-xs text-red-400 hover:text-red-300"
+                                                        >
+                                                            Remove
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="space-y-3">
+                                    <label className="text-sm font-medium text-gray-300">
+                                        Upload Document <span className="text-red-400">*</span>
+                                    </label>
+                                    
+                                    <div 
+                                        className={`border border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
+                                            selectedFile 
+                                                ? "border-accent-blue/50 bg-accent-blue/5" 
+                                                : "border-white/15 hover:border-white/30 bg-white/2 hover:bg-white/4"
+                                        }`}
+                                        onClick={() => document.getElementById("file-upload")?.click()}
+                                        onDragOver={(e) => {
+                                            e.preventDefault();
+                                        }}
+                                        onDrop={(e) => {
+                                            e.preventDefault();
+                                            const file = e.dataTransfer.files?.[0];
+                                            if (file) {
+                                                const ext = file.name.split(".").pop()?.toLowerCase();
+                                                if (!["pdf", "docx", "txt", "md"].includes(ext || "")) {
+                                                    setError("Unsupported file format. Please upload PDF, DOCX, TXT, or MD.");
+                                                    return;
+                                                }
+                                                if (file.size > 10 * 1024 * 1024) {
+                                                    setError("File size exceeds 10MB limit.");
+                                                    return;
+                                                }
+                                                setSelectedFile(file);
+                                                setError("");
+                                            }
+                                        }}
+                                    >
+                                        <input 
+                                            id="file-upload"
+                                            type="file"
+                                            accept=".pdf,.docx,.txt,.md"
+                                            className="hidden"
+                                            onChange={(e) => {
+                                                const file = e.target.files?.[0];
+                                                if (file) {
+                                                    if (file.size > 10 * 1024 * 1024) {
+                                                        setError("File size exceeds 10MB limit.");
+                                                        return;
+                                                    }
+                                                    setSelectedFile(file);
+                                                    setError("");
+                                                }
+                                            }}
+                                        />
+                                        
+                                        <Upload className="w-8 h-8 text-accent-blue mx-auto mb-3" />
+                                        
+                                        {selectedFile ? (
+                                            <div className="space-y-1">
+                                                <p className="text-sm font-medium text-white truncate px-4">
+                                                    {selectedFile.name}
+                                                </p>
+                                                <p className="text-xs text-gray-400">
+                                                    {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-1">
+                                                <p className="text-sm text-gray-300 font-medium">
+                                                    Click or drag here to select a file
+                                                </p>
+                                                <p className="text-xs text-gray-500">
+                                                    Supports PDF, DOCX, TXT, or MD up to 10MB
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {selectedFile && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setSelectedFile(null)}
+                                            className="text-xs text-red-400 hover:text-red-300 font-medium transition-colors"
+                                        >
+                                            Clear File
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+
+                            {error && (
+                                <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-400 flex items-center gap-2">
+                                    <AlertCircle className="w-4 h-4 shrink-0" />
+                                    <span>{error}</span>
+                                </div>
+                            )}
 
                             {/* Ingestion Mode */}
                             <div className="space-y-2">

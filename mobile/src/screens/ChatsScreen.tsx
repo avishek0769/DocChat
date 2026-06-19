@@ -14,8 +14,9 @@ import {
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import * as DocumentPicker from "expo-document-picker";
 
-import { createChat, deleteChat, getChats } from "../api/endpoints";
+import { createChat, deleteChat, getChats, uploadDoc } from "../api/endpoints";
 import { colors } from "../theme";
 import type { RootStackParamList } from "../navigation";
 import type { ChatItem } from "../types";
@@ -33,6 +34,8 @@ export default function ChatsScreen({ navigation }: Props) {
     const [isVectorLess, setIsVectorLess] = useState(false);
     const [creating, setCreating] = useState(false);
     const [createError, setCreateError] = useState<string | null>(null);
+    const [activeTab, setActiveTab] = useState<"url" | "file">("url");
+    const [selectedFile, setSelectedFile] = useState<{ uri: string; name: string; type: string; size: number } | null>(null);
 
     const load = useCallback(async () => {
         try {
@@ -76,18 +79,77 @@ export default function ChatsScreen({ navigation }: Props) {
         void load();
     }, [load]);
 
+    const pickDocument = async () => {
+        try {
+            const result = await DocumentPicker.getDocumentAsync({
+                type: [
+                    "application/pdf", 
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
+                    "text/plain", 
+                    "text/markdown"
+                ],
+                copyToCacheDirectory: true,
+            });
+
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+                const asset = result.assets[0];
+                const extension = asset.name.split(".").pop()?.toLowerCase();
+                if (!["pdf", "docx", "txt", "md"].includes(extension || "")) {
+                    setCreateError("Unsupported file type. Please select PDF, DOCX, TXT, or MD.");
+                    return;
+                }
+                if (asset.size && asset.size > 10 * 1024 * 1024) {
+                    setCreateError("File size exceeds 10MB limit.");
+                    return;
+                }
+                setSelectedFile({
+                    uri: asset.uri,
+                    name: asset.name,
+                    type: asset.mimeType || "application/octet-stream",
+                    size: asset.size || 0,
+                });
+                setCreateError(null);
+            }
+        } catch (err) {
+            setCreateError("Failed to pick document.");
+        }
+    };
+
     const onCreate = async () => {
-        const url = docsUrl.trim();
-        if (!url) {
+        if (activeTab === "url" && !docsUrl.trim()) {
             setCreateError("Enter a documentation URL.");
             return;
         }
+        if (activeTab === "file" && !selectedFile) {
+            setCreateError("Select a document to upload.");
+            return;
+        }
+
         setCreating(true);
         setCreateError(null);
         try {
-            await createChat({ docsUrl: url, isVectorLess });
+            let finalDocsUrl = "";
+            let heading = "";
+
+            if (activeTab === "file" && selectedFile) {
+                const uploadResult = await uploadDoc(selectedFile.uri, selectedFile.name, selectedFile.type);
+                finalDocsUrl = uploadResult.docsUrl;
+                heading = uploadResult.heading;
+            } else {
+                finalDocsUrl = docsUrl.trim();
+            }
+
+            await createChat({
+                docsUrl: finalDocsUrl,
+                isVectorLess,
+                heading: activeTab === "file" ? heading : undefined,
+                name: activeTab === "file" ? selectedFile?.name.replace(/\.[^/.]+$/, "") : undefined,
+            });
+
             setModalVisible(false);
             setDocsUrl("");
+            setSelectedFile(null);
+            setActiveTab("url");
             setIsVectorLess(false);
             await load();
         } catch (e) {
@@ -164,16 +226,62 @@ export default function ChatsScreen({ navigation }: Props) {
                 <View style={styles.modalBackdrop}>
                     <View style={styles.modalCard}>
                         <Text style={styles.modalTitle}>New chat</Text>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="https://docs.example.com"
-                            placeholderTextColor={colors.muted}
-                            autoCapitalize="none"
-                            autoCorrect={false}
-                            keyboardType="url"
-                            value={docsUrl}
-                            onChangeText={setDocsUrl}
-                        />
+                        <View style={styles.tabRow}>
+                            <TouchableOpacity
+                                style={[styles.tabButton, activeTab === "url" && styles.activeTabButton]}
+                                onPress={() => {
+                                    setActiveTab("url");
+                                    setCreateError(null);
+                                }}
+                            >
+                                <Text style={[styles.tabText, activeTab === "url" && styles.activeTabText]}>URL</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.tabButton, activeTab === "file" && styles.activeTabButton]}
+                                onPress={() => {
+                                    setActiveTab("file");
+                                    setCreateError(null);
+                                }}
+                            >
+                                <Text style={[styles.tabText, activeTab === "file" && styles.activeTabText]}>File</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        {activeTab === "url" ? (
+                            <TextInput
+                                style={styles.input}
+                                placeholder="https://docs.example.com"
+                                placeholderTextColor={colors.muted}
+                                autoCapitalize="none"
+                                autoCorrect={false}
+                                keyboardType="url"
+                                value={docsUrl}
+                                onChangeText={setDocsUrl}
+                            />
+                        ) : (
+                            <View style={styles.fileSelectorContainer}>
+                                <TouchableOpacity style={styles.fileButton} onPress={pickDocument}>
+                                    <Text style={styles.fileButtonText}>
+                                        {selectedFile ? "Change File" : "Select Document"}
+                                    </Text>
+                                </TouchableOpacity>
+                                {selectedFile ? (
+                                    <View style={styles.selectedFileBadge}>
+                                        <Text style={styles.selectedFileName} numberOfLines={1}>
+                                            {selectedFile.name}
+                                        </Text>
+                                        <Text style={styles.selectedFileSize}>
+                                            {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+                                        </Text>
+                                        <TouchableOpacity onPress={() => setSelectedFile(null)} style={{ marginTop: 4 }}>
+                                            <Text style={{ color: colors.danger, fontSize: 12 }}>Remove</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                ) : (
+                                    <Text style={styles.fileInfoText}>Supports PDF, DOCX, TXT, MD up to 10MB</Text>
+                                )}
+                            </View>
+                        )}
                         <View style={styles.switchRow}>
                             <Text style={styles.switchLabel}>Vectorless (TreeIndex) mode</Text>
                             <Switch value={isVectorLess} onValueChange={setIsVectorLess} />
@@ -274,4 +382,69 @@ const styles = StyleSheet.create({
     },
     primaryText: { color: colors.primaryText, fontWeight: "600" },
     disabled: { opacity: 0.6 },
+    tabRow: {
+        flexDirection: "row",
+        borderBottomWidth: 1,
+        borderColor: colors.border,
+        marginBottom: 16,
+    },
+    tabButton: {
+        flex: 1,
+        paddingVertical: 10,
+        alignItems: "center",
+        borderBottomWidth: 2,
+        borderColor: "transparent",
+    },
+    activeTabButton: {
+        borderColor: colors.primary,
+    },
+    tabText: {
+        color: colors.muted,
+        fontSize: 14,
+        fontWeight: "600",
+    },
+    activeTabText: {
+        color: colors.primary,
+    },
+    fileSelectorContainer: {
+        alignItems: "center",
+        padding: 16,
+        borderWidth: 1,
+        borderStyle: "dashed",
+        borderColor: colors.border,
+        borderRadius: 10,
+        backgroundColor: colors.background,
+    },
+    fileButton: {
+        backgroundColor: colors.primary,
+        borderRadius: 8,
+        paddingVertical: 8,
+        paddingHorizontal: 16,
+        marginBottom: 8,
+    },
+    fileButtonText: {
+        color: colors.primaryText,
+        fontWeight: "600",
+        fontSize: 14,
+    },
+    fileInfoText: {
+        color: colors.muted,
+        fontSize: 12,
+        textAlign: "center",
+    },
+    selectedFileBadge: {
+        alignItems: "center",
+        marginTop: 4,
+    },
+    selectedFileName: {
+        color: colors.text,
+        fontSize: 14,
+        fontWeight: "600",
+        textAlign: "center",
+    },
+    selectedFileSize: {
+        color: colors.muted,
+        fontSize: 12,
+        marginTop: 2,
+    },
 });

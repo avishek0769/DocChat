@@ -97,11 +97,27 @@ export const createChat = (payload: {
     docsUrl: string;
     isVectorLess?: boolean;
     scrapeLimit?: number;
+    heading?: string;
 }) =>
     apiRequest<{ chatId?: string; id?: string }>("/chat/create", {
         method: "POST",
         body: JSON.stringify(payload),
     });
+
+/** POST /chat/upload-doc — upload a document for ingestion. */
+export const uploadDoc = async (uri: string, name: string, type: string): Promise<{ docsUrl: string; heading: string }> => {
+    const formData = new FormData();
+    formData.append("file", {
+        uri,
+        name,
+        type,
+    } as any);
+
+    return apiRequest<{ docsUrl: string; heading: string }>("/chat/upload-doc", {
+        method: "POST",
+        body: formData,
+    });
+};
 
 export const deleteChat = (chatId: string) =>
     apiRequest(`/chat/${chatId}`, { method: "DELETE" });

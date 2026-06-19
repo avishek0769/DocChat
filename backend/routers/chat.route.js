@@ -35,12 +35,22 @@ import {
     chunkPreview,
     streamChatStatus,
     downloadRawSource,
+    uploadDocumentation,
 } from "../controllers/chat.controller.js";
 
 import { apiRateLimiter } from "../middlewares/rateLimit.middleware.js";
+import multer from "multer";
+
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB limit
+    },
+});
 
 const chatRouter = Router();
 
+chatRouter.route("/upload-doc").post(verifyStrictJWT, upload.single("file"), uploadDocumentation);
 chatRouter.route("/expectation").get(verifyStrictJWT, validate(expectationQuerySchema), expectation);
 chatRouter.route("/create").post(verifyStrictJWT, apiRateLimiter, validate(createChatSchema), createChat);
 chatRouter

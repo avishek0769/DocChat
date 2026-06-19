@@ -1,7 +1,9 @@
 import "dotenv/config";
 import { Worker } from "bullmq";
 import crypto from "crypto";
-import redis, { getChatProgressKey } from "./utils/redis.js";
+import fs from "fs/promises";
+import path from "path";
+import redis, { getChatProgressKey, updateChatProgress } from "./utils/redis.js";
 import { dispatchAlert } from "./utils/notificationDispatcher.js";
 import { getChatCreationQueue } from "./utils/queue.js";
 
@@ -277,30 +279,130 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId, 
     try {
         await ensureChatActive(chatId);
         const { maxPagesPerJob, scrapeConcurrency, embeddingBatchSize, qdrantBatchSize } = getWorkerConfig();
-        const rootUrl = normalizeUrl(docsRootUrl);
-        console.log("Scraping root:", rootUrl);
-
-        const { internalLinks } = await scrapeWebpage(rootUrl, rootUrl);
-        // Combined logic: enforce effective limit, then filter valid docs
-        const effectiveLimit = Math.min(typeof scrapeLimit === 'number' && scrapeLimit > 0 ? scrapeLimit : maxPagesPerJob, maxPagesPerJob);
-        const allLinks = internalLinks.slice(0, effectiveLimit).filter(link => isValidDocUrl(link, rootUrl));
-        const totalLinks = allLinks.length;
-
-        console.log("Total unique valid links found:", totalLinks);
-
-        const resumeFrom = await getCheckpoint(chatId);
-        if (resumeFrom > 0) {
-            console.log(`Resuming from page ${resumeFrom} of ${totalLinks}`);
-        }
-
+        const isUpload = docsRootUrl.startsWith("https://upload.local/");
+        let allLinks = [];
+        let scrapedPages = [];
+        let totalLinks = 0;
         const existingPages = await getActivePages(chatSourceId);
 
-        await updateChatProgress(chatId, {
-            status: "SCRAPING",
-            current: resumeFrom,
-            total: totalLinks,
-            progress: totalLinks > 0 ? Math.round((resumeFrom / totalLinks) * 100) : 0,
-        });
+        if (isUpload) {
+            const hash = docsRootUrl.substring("https://upload.local/".length);
+            const filePath = path.join(process.cwd(), "uploads", `${hash}.txt`);
+            const body = await fs.readFile(filePath, "utf-8");
+            const chatSource = await prisma.chatSource.findUnique({ where: { id: chatSourceId } });
+            const title = chatSource?.heading || "Uploaded Document";
+            const contentHash = computeContentHash(body);
+
+            allLinks = [docsRootUrl];
+            totalLinks = 1;
+
+            const existing = existingPages.get(docsRootUrl);
+            if (existing && existing.contentHash === contentHash) {
+                console.log(`Skipping unchanged upload: ${docsRootUrl}`);
+                pagesCrawled = 1;
+                await updateChatProgress(chatId, {
+                    status: "SCRAPING",
+                    current: 1,
+                    total: 1,
+                    progress: 50,
+                });
+                scrapedPages = [null];
+            } else {
+                const chunkObjects = splitDocumentationContent(body, {
+                    chunkSize: 1000,
+                    chunkOverlap: 150,
+                });
+                const chunks = chunkObjects.map((chunk) => chunk.content);
+                pagesCrawled = 1;
+                await updateChatProgress(chatId, {
+                    status: "SCRAPING",
+                    current: 1,
+                    total: 1,
+                    progress: 50,
+                });
+                scrapedPages = [{ chunks, chunkObjects, title, link: docsRootUrl, contentHash, existing }];
+            }
+        } else {
+            const rootUrl = normalizeUrl(docsRootUrl);
+            console.log("Scraping root:", rootUrl);
+
+            const { internalLinks } = await scrapeWebpage(rootUrl, rootUrl);
+            const effectiveLimit = Math.min(typeof scrapeLimit === 'number' && scrapeLimit > 0 ? scrapeLimit : maxPagesPerJob, maxPagesPerJob);
+            allLinks = internalLinks.slice(0, effectiveLimit).filter(link => isValidDocUrl(link, rootUrl));
+            totalLinks = allLinks.length;
+
+            console.log("Total unique valid links found:", totalLinks);
+
+            const resumeFrom = await getCheckpoint(chatId);
+            if (resumeFrom > 0) {
+                console.log(`Resuming from page ${resumeFrom} of ${totalLinks}`);
+            }
+
+            await updateChatProgress(chatId, {
+                status: "SCRAPING",
+                current: resumeFrom,
+                total: totalLinks,
+                progress: totalLinks > 0 ? Math.round((resumeFrom / totalLinks) * 100) : 0,
+            });
+
+            // Phase 1: Scrape + split all pages concurrently
+            const limiter = new Bottleneck({ maxConcurrent: scrapeConcurrency });
+            let scrapedCount = resumeFrom;
+
+            scrapedPages = await Promise.all(allLinks.slice(resumeFrom).map((link) => limiter.schedule(async () => {
+                try {
+                    await ensureChatActive(chatId);
+                    const { body, title } = await scrapeWebpage(link, rootUrl);
+                    const contentHash = computeContentHash(body);
+
+                    const existing = existingPages.get(link);
+                    if (existing && existing.contentHash === contentHash) {
+                        console.log(`Skipping unchanged: ${link}`);
+                        pagesCrawled++;
+                        scrapedCount++;
+                        await saveCheckpoint(chatId, scrapedCount);
+                        await updateChatProgress(chatId, {
+                            status: "SCRAPING",
+                            current: scrapedCount,
+                            total: totalLinks,
+                            progress: Math.round((scrapedCount / totalLinks) * 50),
+                        });
+                        return null;
+                    }
+
+                    const chunkObjects = splitDocumentationContent(body, {
+                        chunkSize: 1000,
+                        chunkOverlap: 150,
+                    });
+                    const chunks = chunkObjects.map((chunk) => chunk.content);
+                    console.log(`Scraped: ${link} (${chunks.length} chunks)`);
+
+                    pagesCrawled++;
+                    scrapedCount++;
+                    await saveCheckpoint(chatId, scrapedCount);
+                    await updateChatProgress(chatId, {
+                        status: "SCRAPING",
+                        current: scrapedCount,
+                        total: totalLinks,
+                        progress: Math.round((scrapedCount / totalLinks) * 50),
+                    });
+
+                    return { chunks, chunkObjects, title, link, contentHash, existing };
+                } catch (err) {
+                    pagesFailed++;
+                    console.error(`Failed link ${link}:`, err.message);
+                    scrapedCount++;
+                    await saveCheckpoint(chatId, scrapedCount);
+                    await updateChatProgress(chatId, {
+                        status: "SCRAPING",
+                        current: scrapedCount,
+                        total: totalLinks,
+                        progress: Math.round((scrapedCount / totalLinks) * 50),
+                    });
+                    return null;
+                }
+            })));
+        }
 
         const collections = await qdrant.getCollections();
         if (!collections.collections.some((c) => c.name === collectionName)) {
@@ -313,66 +415,8 @@ async function processVector(docsRootUrl, chatId, collectionName, chatSourceId, 
             });
         }
 
-        // Phase 1: Scrape + split all pages concurrently
-        const limiter = new Bottleneck({ maxConcurrent: scrapeConcurrency });
-        let scrapedCount = resumeFrom;
-
-        const scrapedPages = await Promise.all(allLinks.slice(resumeFrom).map((link) => limiter.schedule(async () => {
-            try {
-                await ensureChatActive(chatId);
-                const { body, title } = await scrapeWebpage(link, rootUrl);
-                const contentHash = computeContentHash(body);
-
-                const existing = existingPages.get(link);
-                if (existing && existing.contentHash === contentHash) {
-                    console.log(`Skipping unchanged: ${link}`);
-                    pagesCrawled++;
-                    scrapedCount++;
-                    await saveCheckpoint(chatId, scrapedCount);
-                    await updateChatProgress(chatId, {
-                        status: "SCRAPING",
-                        current: scrapedCount,
-                        total: totalLinks,
-                        progress: Math.round((scrapedCount / totalLinks) * 50),
-                    });
-                    return null;
-                }
-
-                const chunkObjects = splitDocumentationContent(body, {
-                    chunkSize: 1000,
-                    chunkOverlap: 150,
-                });
-                const chunks = chunkObjects.map((chunk) => chunk.content);
-                console.log(`Scraped: ${link} (${chunks.length} chunks)`);
-
-                pagesCrawled++;
-                scrapedCount++;
-                await saveCheckpoint(chatId, scrapedCount);
-                await updateChatProgress(chatId, {
-                    status: "SCRAPING",
-                    current: scrapedCount,
-                    total: totalLinks,
-                    progress: Math.round((scrapedCount / totalLinks) * 50),
-                });
-
-                return { chunks, chunkObjects, title, link, contentHash, existing };
-            } catch (err) {
-                pagesFailed++;
-                console.error(`Failed link ${link}:`, err.message);
-                scrapedCount++;
-                await saveCheckpoint(chatId, scrapedCount);
-                await updateChatProgress(chatId, {
-                    status: "SCRAPING",
-                    current: scrapedCount,
-                    total: totalLinks,
-                    progress: Math.round((scrapedCount / totalLinks) * 50),
-                });
-                return null;
-            }
-        })));
-
         const validPages = scrapedPages.filter(Boolean);
-        if (validPages.length === 0) {
+        if (validPages.length === 0 && (!isUpload || scrapedPages.length === 0 || scrapedPages[0] !== null)) {
             throw new Error("No pages were successfully scraped.");
         }
 
@@ -505,61 +549,90 @@ async function processVectorLess(docsRootUrl, chatId, chatSourceId, scrapeLimit)
         const { maxPagesPerJob, vectorlessBatchSize } = getWorkerConfig();
         await updateChatProgress(chatId, { status: "SCRAPING", progress: 0 });
 
-        const rootUrl = normalizeUrl(docsRootUrl);
-        console.log("Scraping root:", rootUrl);
-
-        const { internalLinks } = await scrapeWebpage(rootUrl, rootUrl);
-        const effectiveLimit = typeof scrapeLimit === 'number' && scrapeLimit > 0 ? scrapeLimit : maxPagesPerJob;
-        let allLinks = internalLinks.slice(0, effectiveLimit);
-        const totalLinks = allLinks.length;
-
-        console.log("Total unique links found:", totalLinks);
-
+        const isUpload = docsRootUrl.startsWith("https://upload.local/");
         let allData = "";
         const pages = [];
+        let allLinks = [];
 
-        for (let i = 0; i < totalLinks; i += vectorlessBatchSize) {
-            await ensureChatActive(chatId);
+        if (isUpload) {
+            const hash = docsRootUrl.substring("https://upload.local/".length);
+            const filePath = path.join(process.cwd(), "uploads", `${hash}.txt`);
+            const body = await fs.readFile(filePath, "utf-8");
+            const chatSource = await prisma.chatSource.findUnique({ where: { id: chatSourceId } });
+            const title = chatSource?.heading || "Uploaded Document";
+            const contentHash = computeContentHash(body);
 
-            const batchLinks = allLinks.slice(i, i + vectorlessBatchSize);
-            if (batchLinks.length === 0) break;
-            const results = await Promise.all(
-                batchLinks.map(async (link) => {
-                    if (!isValidDocUrl(link, rootUrl)) return null;
-                    try {
-                        const { title, body } = await scrapeWebpage(link, rootUrl);
-                        const contentHash = computeContentHash(body);
-                        pagesCrawled++;
-                        return { link, title, body, contentHash };
-                    } catch (error) {
-                        pagesFailed++;
-                        console.error(`Failed: ${link}`, error.message);
-                        return null;
-                    }
-                }),
-            );
-
-            for (const res of results) {
-                if (!res) continue;
-                const pageContent = `Title: ${res.title}\n ${res.body}\n\n`;
-                const start = allData.length;
-                allData += pageContent;
-                const end = allData.length;
-                pages.push({
-                    pageUrl: res.link,
-                    heading: res.title,
-                    startIndex: start,
-                    endIndex: end,
-                    contentHash: res.contentHash,
-                });
-            }
-
+            allData = `Title: ${title}\n ${body}\n\n`;
+            pages.push({
+                pageUrl: docsRootUrl,
+                heading: title,
+                startIndex: 0,
+                endIndex: allData.length,
+                contentHash: contentHash,
+            });
+            pagesCrawled = 1;
+            allLinks = [docsRootUrl];
+            
             await updateChatProgress(chatId, {
                 status: "SCRAPING",
-                current: Math.min(i + vectorlessBatchSize, totalLinks),
-                total: totalLinks,
-                progress: totalLinks ? Math.round((Math.min(i + vectorlessBatchSize, totalLinks) / totalLinks) * 100) : 0,
+                current: 1,
+                total: 1,
+                progress: 100,
             });
+        } else {
+            const rootUrl = normalizeUrl(docsRootUrl);
+            console.log("Scraping root:", rootUrl);
+
+            const { internalLinks } = await scrapeWebpage(rootUrl, rootUrl);
+            const effectiveLimit = typeof scrapeLimit === 'number' && scrapeLimit > 0 ? scrapeLimit : maxPagesPerJob;
+            allLinks = internalLinks.slice(0, effectiveLimit);
+            const totalLinks = allLinks.length;
+
+            console.log("Total unique links found:", totalLinks);
+
+            for (let i = 0; i < totalLinks; i += vectorlessBatchSize) {
+                await ensureChatActive(chatId);
+
+                const batchLinks = allLinks.slice(i, i + vectorlessBatchSize);
+                if (batchLinks.length === 0) break;
+                const results = await Promise.all(
+                    batchLinks.map(async (link) => {
+                        if (!isValidDocUrl(link, rootUrl)) return null;
+                        try {
+                            const { title, body } = await scrapeWebpage(link, rootUrl);
+                            const contentHash = computeContentHash(body);
+                            pagesCrawled++;
+                            return { link, title, body, contentHash };
+                        } catch (error) {
+                            pagesFailed++;
+                            console.error(`Failed: ${link}`, error.message);
+                            return null;
+                        }
+                    }),
+                );
+
+                for (const res of results) {
+                    if (!res) continue;
+                    const pageContent = `Title: ${res.title}\n ${res.body}\n\n`;
+                    const start = allData.length;
+                    allData += pageContent;
+                    const end = allData.length;
+                    pages.push({
+                        pageUrl: res.link,
+                        heading: res.title,
+                        startIndex: start,
+                        endIndex: end,
+                        contentHash: res.contentHash,
+                    });
+                }
+
+                await updateChatProgress(chatId, {
+                    status: "SCRAPING",
+                    current: Math.min(i + vectorlessBatchSize, totalLinks),
+                    total: totalLinks,
+                    progress: totalLinks ? Math.round((Math.min(i + vectorlessBatchSize, totalLinks) / totalLinks) * 100) : 0,
+                });
+            }
         }
 
         if (!allData.trim()) {

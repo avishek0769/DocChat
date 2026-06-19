@@ -45,6 +45,7 @@ import {
     Link as LinkIcon,
     Share2,
     AlertCircle,
+    Upload,
 } from "lucide-react";
 import clsx from "clsx";
 import ReactMarkdown from "react-markdown";
@@ -62,6 +63,7 @@ import {
     exportChatMessages,
     exportRawSource,
     toggleChatShare,
+    uploadDoc,
 } from "../lib/api";
 import { formatTokens } from "../lib/format";
 
@@ -166,6 +168,9 @@ export const ChatPage = () => {
     const [currentLinks, setCurrentLinks] = useState<CurrentLink[]>([]);
     const [indexedPages, setIndexedPages] = useState<IndexedPage[]>([]);
     const [newSourceUrl, setNewSourceUrl] = useState("");
+    const [sidebarTab, setSidebarTab] = useState<"url" | "file">("url");
+    const [sidebarFile, setSidebarFile] = useState<File | null>(null);
+    const [isUploadingSource, setIsUploadingSource] = useState(false);
 
     const [isSharing, setIsSharing] = useState(false);
     const [shareToken, setShareToken] = useState<string | null>(null);
@@ -315,15 +320,160 @@ export const ChatPage = () => {
     };
 
     const handleAddSource = async () => {
-        const value = newSourceUrl.trim();
-        if (!value) return;
+        if (sidebarTab === "url" && !newSourceUrl.trim()) return;
+        if (sidebarTab === "file" && !sidebarFile) return;
+
+        setIsUploadingSource(true);
+        setError("");
         try {
-            await addChatSource(chatId, { docsUrl: value });
+            let docsUrl = "";
+            let heading = "";
+
+            if (sidebarTab === "file" && sidebarFile) {
+                const uploadResult = await uploadDoc(sidebarFile);
+                docsUrl = uploadResult.docsUrl;
+                heading = uploadResult.heading;
+            } else {
+                docsUrl = newSourceUrl.trim();
+            }
+
+            await addChatSource(chatId, { docsUrl, heading: sidebarTab === "file" ? heading : undefined });
             setNewSourceUrl("");
+            setSidebarFile(null);
+            setSidebarTab("url");
             await loadChatPage();
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to add source.");
+        } finally {
+            setIsUploadingSource(false);
         }
+    };
+
+    const renderAddSourceSection = (isMobile: boolean = false) => {
+        return (
+            <div className="mt-4 space-y-2">
+                <label className="text-xs uppercase tracking-wider text-gray-500 font-semibold block">
+                    Add Source
+                </label>
+
+                <div className="flex border-b border-white/10 mb-2">
+                    <button
+                        type="button"
+                        onClick={() => setSidebarTab("url")}
+                        className={`flex-1 py-1.5 text-xs font-medium text-center border-b-2 transition-all ${
+                            sidebarTab === "url"
+                                ? "border-accent-blue text-accent-blue bg-accent-blue/5"
+                                : "border-transparent text-gray-400 hover:text-white"
+                        }`}
+                    >
+                        URL
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setSidebarTab("file")}
+                        className={`flex-1 py-1.5 text-xs font-medium text-center border-b-2 transition-all ${
+                            sidebarTab === "file"
+                                ? "border-accent-blue text-accent-blue bg-accent-blue/5"
+                                : "border-transparent text-gray-400 hover:text-white"
+                        }`}
+                    >
+                        File
+                    </button>
+                </div>
+
+                {sidebarTab === "url" ? (
+                    <input
+                        type="url"
+                        value={newSourceUrl}
+                        onChange={(e) => setNewSourceUrl(e.target.value)}
+                        placeholder="https://docs.example.com"
+                        className="w-full bg-[#111] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-blue/50 focus:ring-1 focus:ring-accent-blue/50 transition-all font-mono"
+                    />
+                ) : (
+                    <div className="space-y-2">
+                        <div 
+                            className={`border border-dashed rounded-lg p-4 text-center cursor-pointer transition-all ${
+                                sidebarFile 
+                                    ? "border-accent-blue/50 bg-accent-blue/5" 
+                                    : "border-white/15 hover:border-white/30 bg-white/2 hover:bg-white/4"
+                            }`}
+                            onClick={() => document.getElementById(`sidebar-file-upload${isMobile ? '-mob' : ''}`)?.click()}
+                            onDragOver={(e) => e.preventDefault()}
+                            onDrop={(e) => {
+                                e.preventDefault();
+                                const file = e.dataTransfer.files?.[0];
+                                if (file) {
+                                    const ext = file.name.split(".").pop()?.toLowerCase();
+                                    if (!["pdf", "docx", "txt", "md"].includes(ext || "")) {
+                                        setError("Unsupported file format.");
+                                        return;
+                                    }
+                                    if (file.size > 10 * 1024 * 1024) {
+                                        setError("File size exceeds 10MB limit.");
+                                        return;
+                                    }
+                                    setSidebarFile(file);
+                                    setError("");
+                                }
+                            }}
+                        >
+                            <input 
+                                id={`sidebar-file-upload${isMobile ? '-mob' : ''}`}
+                                type="file"
+                                accept=".pdf,.docx,.txt,.md"
+                                className="hidden"
+                                onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                        if (file.size > 10 * 1024 * 1024) {
+                                            setError("File size exceeds 10MB.");
+                                            return;
+                                        }
+                                        setSidebarFile(file);
+                                        setError("");
+                                    }
+                                }}
+                            />
+                            <Upload className="w-5 h-5 text-accent-blue mx-auto mb-1.5" />
+                            {sidebarFile ? (
+                                <p className="text-xs font-medium text-white truncate px-2">
+                                    {sidebarFile.name}
+                                </p>
+                            ) : (
+                                <p className="text-xs text-gray-400">
+                                    PDF, DOCX, TXT, MD up to 10MB
+                                </p>
+                            )}
+                        </div>
+                        {sidebarFile && (
+                            <button
+                                type="button"
+                                onClick={() => setSidebarFile(null)}
+                                className="text-[10px] text-red-400 hover:text-red-300 font-medium"
+                            >
+                                Clear File
+                            </button>
+                        )}
+                    </div>
+                )}
+
+                <button
+                    type="button"
+                    onClick={handleAddSource}
+                    disabled={isUploadingSource || (sidebarTab === "url" ? !newSourceUrl.trim() : !sidebarFile)}
+                    className="w-full px-3 py-2 rounded-lg bg-accent-blue hover:bg-accent-blue/90 disabled:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors flex justify-center items-center gap-1.5"
+                >
+                    {isUploadingSource ? (
+                        <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            Uploading...
+                        </>
+                    ) : (
+                        "Add to Chat"
+                    )}
+                </button>
+            </div>
+        );
     };
 
     const handleRemoveSource = async (docsUrl: string) => {
@@ -688,25 +838,7 @@ export const ChatPage = () => {
                                     <FileText className="w-4 h-4 text-accent-blue" />
                                     Show all pages
                                 </button>
-                                <div className="mt-4 space-y-2">
-                                    <label className="text-xs uppercase tracking-wider text-gray-500 font-semibold">
-                                        Add Source
-                                    </label>
-                                    <input
-                                        type="url"
-                                        value={newSourceUrl}
-                                        onChange={(e) => setNewSourceUrl(e.target.value)}
-                                        placeholder="https://docs.example.com"
-                                        className="w-full bg-[#111] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-blue/50 focus:ring-1 focus:ring-accent-blue/50 transition-all font-mono"
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={handleAddSource}
-                                        className="w-full px-3 py-2 rounded-lg bg-accent-blue hover:bg-accent-blue/90 text-white text-sm font-medium transition-colors"
-                                    >
-                                        Add to Chat
-                                    </button>
-                                </div>
+                                {renderAddSourceSection(false)}
                             </div>
 
                             {/* Scraped Pages List */}
@@ -1373,25 +1505,7 @@ export const ChatPage = () => {
                                         <FileText className="w-4 h-4 text-accent-blue" />
                                         Show all pages
                                     </button>
-                                    <div className="mt-4 space-y-2">
-                                        <label className="text-xs uppercase tracking-wider text-gray-500 font-semibold">
-                                            Add Source
-                                        </label>
-                                        <input
-                                            type="url"
-                                            value={newSourceUrl}
-                                            onChange={(e) => setNewSourceUrl(e.target.value)}
-                                            placeholder="https://docs.example.com"
-                                            className="w-full bg-[#111] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-blue/50 focus:ring-1 focus:ring-accent-blue/50 transition-all font-mono"
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={handleAddSource}
-                                            className="w-full px-3 py-2 rounded-lg bg-accent-blue hover:bg-accent-blue/90 text-white text-sm font-medium transition-colors"
-                                        >
-                                            Add to Chat
-                                        </button>
-                                    </div>
+                                    {renderAddSourceSection(true)}
                                 </div>
                                 <div className="flex-1 overflow-y-auto p-4">
                                     <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">
