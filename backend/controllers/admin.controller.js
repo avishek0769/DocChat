@@ -37,27 +37,33 @@ const getRangeStart = (range = "7d") => {
 const overview = asyncHandler(async (req, res) => {
     const range = req.query.range || "7d";
     const sinceDate = getRangeStart(range);
-    const [totalUsers, totalChats, totalMessages, totalUsageEvents, totalIngestionRuns, latestAuditEvents] =
-        await Promise.all([
-            prisma.user.count({ where: { createdAt: { gte: sinceDate } } }),
-            prisma.chat.count({ where: { createdAt: { gte: sinceDate } } }),
-            prisma.chatMessage.count({ where: { createdAt: { gte: sinceDate } } }),
-            prisma.usageEvents.count({ where: { timestamp: { gte: sinceDate } } }),
-            prisma.ingestionRun.count({ where: { startedAt: { gte: sinceDate } } }),
-            prisma.auditEvent.findMany({
-                where: { createdAt: { gte: sinceDate } },
-                orderBy: { createdAt: "desc" },
-                take: 50,
-                select: {
-                    id: true,
-                    type: true,
-                    userId: true,
-                    chatId: true,
-                    metadata: true,
-                    createdAt: true,
-                },
-            }),
-        ]);
+    const [
+        totalUsers,
+        totalChats,
+        totalMessages,
+        totalUsageEvents,
+        totalIngestionRuns,
+        latestAuditEvents,
+    ] = await Promise.all([
+        prisma.user.count({ where: { createdAt: { gte: sinceDate } } }),
+        prisma.chat.count({ where: { createdAt: { gte: sinceDate } } }),
+        prisma.chatMessage.count({ where: { createdAt: { gte: sinceDate } } }),
+        prisma.usageEvents.count({ where: { timestamp: { gte: sinceDate } } }),
+        prisma.ingestionRun.count({ where: { startedAt: { gte: sinceDate } } }),
+        prisma.auditEvent.findMany({
+            where: { createdAt: { gte: sinceDate } },
+            orderBy: { createdAt: "desc" },
+            take: 50,
+            select: {
+                id: true,
+                type: true,
+                userId: true,
+                chatId: true,
+                metadata: true,
+                createdAt: true,
+            },
+        }),
+    ]);
 
     return res.status(200).json(
         new ApiResponse(
@@ -408,18 +414,15 @@ const stopImpersonation = asyncHandler(async (req, res) => {
         console.error("Failed to write stop impersonation audit event:", error.message);
     }
 
-    return res.status(200).json(
-        new ApiResponse(200, {}, "Impersonation stopped successfully"),
-    );
+    return res.status(200).json(new ApiResponse(200, {}, "Impersonation stopped successfully"));
 });
 
-export { overview, users, userDetails, usage, ingestion, impersonate, stopImpersonation };
 const getSettings = asyncHandler(async (req, res) => {
     const { getWebhookConfig } = await import("../utils/notificationDispatcher.js");
     const config = await getWebhookConfig();
-    return res.status(200).json(
-        new ApiResponse(200, { webhook: config || {} }, "Settings retrieved successfully"),
-    );
+    return res
+        .status(200)
+        .json(new ApiResponse(200, { webhook: config || {} }, "Settings retrieved successfully"));
 });
 
 const updateSettings = asyncHandler(async (req, res) => {
@@ -434,14 +437,16 @@ const updateSettings = asyncHandler(async (req, res) => {
         slackUrl: typeof webhook.slackUrl === "string" ? webhook.slackUrl.trim() || null : null,
         discordUrl: typeof webhook.discordUrl === "string" ? webhook.discordUrl.trim() || null : null,
         customUrl: typeof webhook.customUrl === "string" ? webhook.customUrl.trim() || null : null,
-        enabledAlerts: Array.isArray(webhook.enabledAlerts) ? webhook.enabledAlerts : ["queue_depth", "ingestion_failure", "api_error"],
+        enabledAlerts: Array.isArray(webhook.enabledAlerts)
+            ? webhook.enabledAlerts
+            : ["queue_depth", "ingestion_failure", "api_error"],
     };
 
     await saveWebhookConfig(sanitized);
 
-    return res.status(200).json(
-        new ApiResponse(200, { webhook: sanitized }, "Settings updated successfully"),
-    );
+    return res
+        .status(200)
+        .json(new ApiResponse(200, { webhook: sanitized }, "Settings updated successfully"));
 });
 
 const testWebhook = asyncHandler(async (req, res) => {
@@ -450,14 +455,24 @@ const testWebhook = asyncHandler(async (req, res) => {
     await dispatchAlert({
         type: "test",
         title: "Test Alert from DocChat",
-        message: "This is a test webhook notification. If you received this, your webhook configuration is working correctly.",
+        message:
+            "This is a test webhook notification. If you received this, your webhook configuration is working correctly.",
         severity: "info",
         source: "admin",
     });
 
-    return res.status(200).json(
-        new ApiResponse(200, null, "Test webhook sent successfully"),
-    );
+    return res.status(200).json(new ApiResponse(200, null, "Test webhook sent successfully"));
 });
 
-export { overview, users, userDetails, usage, ingestion, getSettings, updateSettings, testWebhook };
+export {
+    overview,
+    users,
+    userDetails,
+    getSettings,
+    updateSettings,
+    testWebhook,
+    usage,
+    ingestion,
+    impersonate,
+    stopImpersonation,
+};

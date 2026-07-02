@@ -298,6 +298,7 @@ const currentUserProfile = asyncHandler(async (req, res) => {
         fullname: req.user.fullname,
         username: req.user.username,
         email: req.user.email,
+        isAdmin: Boolean(req.user.isAdmin),
     };
     res.status(200).json(new ApiResponse(200, user, "Current user profile fetched successfully !"));
 });
