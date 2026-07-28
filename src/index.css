@@ -211,3 +211,11 @@ html:not(.dark) img[src*="logo"] {
     filter: invert(1) hue-rotate(180deg) brightness(0.2) drop-shadow(0 0 8px rgba(99, 102, 241, 0.2));
 }
 
+/* Ensure entered text is dark in light mode for input/textarea fields */
+html:not(.dark) input,
+html:not(.dark) textarea,
+html:not(.dark) select {
+    color: var(--text-primary) !important;
+}
+
+
