@@ -20,15 +20,25 @@ app.use((req, res, next) => {
 });
 
 app.use((req, res, next) => {
+  if (req.method === "OPTIONS" || req.originalUrl === "/healthz" || req.originalUrl === "/metrics") {
+    return next();
+  }
   const start = Date.now();
   res.on("finish", () => {
-    logger.info({
+    const logData = {
       requestId: req.id,
       method: req.method,
       url: req.originalUrl,
       statusCode: res.statusCode,
       durationMs: Date.now() - start,
-    });
+    };
+    if (res.statusCode >= 500) {
+      logger.error(logData, "Server error request");
+    } else if (res.statusCode >= 400) {
+      logger.warn(logData, "Client error request");
+    } else {
+      logger.debug(logData, "HTTP Request");
+    }
   });
   next();
 });

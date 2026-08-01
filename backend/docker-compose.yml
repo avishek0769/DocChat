@@ -18,11 +18,11 @@ services:
     #     networks:
     #         - docs-support-agent-network
 
-    qdrant:
-        image: qdrant/qdrant:latest
-        container_name: qdrant
-        ports:
-            - "6333:6333"
+    # qdrant:
+    #     image: qdrant/qdrant:latest
+    #     container_name: qdrant
+    #     ports:
+    #         - "6333:6333"
     #     volumes:
     #         - qdrant-vlm:/qdrant/storage
 
@@ -34,7 +34,7 @@ volumes:
     # open-webui:
     # external: true
     # qdrant-vlm:
-    # external: true
+    #     external: true
 # networks:
-# docs-support-agent-network:
-# external: true
+#     docs-support-agent-network:
+#         external: true

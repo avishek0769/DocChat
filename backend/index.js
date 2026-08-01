@@ -13,9 +13,7 @@ connectDB()
     });
 
     const server = app.listen(process.env.PORT, () => {
-      logger.info(`Server running at port: ${process.env.PORT}`);
-      logger.info(`Health endpoint enabled at: /healthz`);
-      logger.info(`Metrics endpoint enabled at: /metrics`);
+      logger.info(`Server running on port ${process.env.PORT}`);
     });
 
     const handleShutdown = async (signal) => {
