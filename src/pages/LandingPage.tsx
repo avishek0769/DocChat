@@ -231,7 +231,7 @@ const LandingPage = () => {
             </nav>
 
             {/* 1. Hero Section */}
-            <section className="relative z-10 pt-24 pb-20 px-6 flex flex-col items-center justify-center text-center max-w-4xl mx-auto">
+            <section className="relative z-10 pt-36 pb-20 px-6 flex flex-col items-center justify-center text-center max-w-4xl mx-auto">
                 <motion.h1
                     variants={fadeInUp}
                     initial="hidden"

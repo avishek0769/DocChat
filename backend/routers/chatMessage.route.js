@@ -28,7 +28,7 @@ chatMessageRouter
     .post(verifyStrictJWT, llmRateLimiter, validate(sendMessageSchema), verifyChatOwnership, sendMessage);
 chatMessageRouter
     .route("/all/:chatId")
-    .get(verifyStrictJWT, validate(chatIdParamSchema, chatMessagesQuerySchema), verifyChatOwnership, getChatMessages);
+    .get(verifyStrictJWT, validate(chatIdParamSchema), validate(chatMessagesQuerySchema), verifyChatOwnership, getChatMessages);
 chatMessageRouter
     .route("/sources/:messageId")
     .get(verifyStrictJWT, validate(messageIdParamSchema), getChatMessageSources);

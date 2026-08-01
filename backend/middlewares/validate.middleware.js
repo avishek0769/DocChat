@@ -17,7 +17,12 @@ const validate = (schemas) => {
                 throw new ApiError(400, `Validation failed: ${messages.join("; ")}`, fieldErrors);
             }
 
-            req[field] = result.data;
+            Object.defineProperty(req, field, {
+                value: result.data,
+                writable: true,
+                configurable: true,
+                enumerable: true,
+            });
         }
 
         next();

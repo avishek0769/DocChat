@@ -422,7 +422,7 @@ if (!chat.chatSources[0].isVectorLess) {
 
 const getChatMessages = asyncHandler(async (req, res) => {
     const { chatId } = req.params;
-    const limit = req.query.limit ?? 50;
+    const limit = Number(req.query.limit ?? 50);
     const cursor = req.query.cursor || undefined;
 
     const chat = await prisma.chat.findUnique({
@@ -438,7 +438,7 @@ const getChatMessages = asyncHandler(async (req, res) => {
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         take: limit + 1,
         ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-        include: { chatMessageSources: true },
+        include: { sourceChunks: true },
     });
 
     const hasMore = messages.length > limit;
@@ -452,9 +452,9 @@ const getChatMessages = asyncHandler(async (req, res) => {
             .json(new ApiResponse(200, { messages: [], nextCursor: null, hasMore: false }, "No messages found for this chat."));
     }
 
-    const messagesWithMeta = orderedMessages.map(({ chatMessageSources, ...msg }) => ({
+    const messagesWithMeta = orderedMessages.map(({ sourceChunks, ...msg }) => ({
         ...msg,
-        hasSystemInstructions: chatMessageSources.length > 0,
+        hasSystemInstructions: sourceChunks.length > 0,
     }));
 
     return res
@@ -673,7 +673,7 @@ const getSharedChatMessages = asyncHandler(async (req, res) => {
     const messages = await prisma.chatMessage.findMany({
         where: { chatId: chat.id },
         orderBy: { createdAt: "asc" },
-        include: { chatMessageSources: true },
+        include: { sourceChunks: true },
     });
 
     if (!messages.length) {
@@ -682,9 +682,9 @@ const getSharedChatMessages = asyncHandler(async (req, res) => {
             .json(new ApiResponse(200, { messages: [] }, "No messages found for this chat."));
     }
 
-    const messagesWithMeta = messages.map(({ chatMessageSources, ...msg }) => ({
+    const messagesWithMeta = messages.map(({ sourceChunks, ...msg }) => ({
         ...msg,
-        hasSystemInstructions: chatMessageSources.length > 0,
+        hasSystemInstructions: sourceChunks.length > 0,
     }));
 
     return res

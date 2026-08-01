@@ -119,7 +119,10 @@ const apiRequest = async <T>(path: string, init?: RequestInit): Promise<T> => {
     const payload = (await response.json().catch(() => ({}))) as ApiEnvelope<T>;
 
    if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
+        // Only force sign-out on 401 (unauthenticated). A 403 means the user IS
+        // authenticated but lacks permission — clearing the session on 403 would
+        // sign admins out when they visit a resource they happen to lack access to.
+        if (response.status === 401) {
             forceSignOut();
         }
         // Build a human-readable summary from structured errors

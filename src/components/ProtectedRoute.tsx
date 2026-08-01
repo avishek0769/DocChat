@@ -37,8 +37,17 @@ export const ProtectedRoute = ({ children, adminOnly = false }: Props) => {
     }
 
     if (adminOnly) {
+        // Fast-path: if the session already says admin (set at login), render immediately.
         const sessionAdmin = Boolean(getAuthUser()?.isAdmin);
-        if (isAdmin === false) {
+        if (sessionAdmin && isAdmin === null) {
+            return children;
+        }
+        // Still waiting for the async profile fetch — show blank loading screen.
+        if (isAdmin === null) {
+            return <div className="min-h-screen bg-[#0b0b0f] flex items-center justify-center" />;
+        }
+        // Profile loaded: deny access with a clear message if not admin.
+        if (!isAdmin) {
             return (
                 <div className="min-h-screen bg-[#0b0b0f] text-gray-50 flex items-center justify-center px-4">
                     <div className="max-w-md w-full rounded-2xl border border-white/10 bg-white/5 p-6 text-center">
@@ -67,9 +76,6 @@ export const ProtectedRoute = ({ children, adminOnly = false }: Props) => {
                     </div>
                 </div>
             );
-        }
-        if (isAdmin === null && !sessionAdmin) {
-            return <div className="min-h-screen bg-[#0b0b0f] flex items-center justify-center" />;
         }
     }
 
