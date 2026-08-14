@@ -354,7 +354,9 @@ export const SharedChatPage = () => {
                             <div>
                                 <h1 className="text-lg font-semibold text-white flex items-center gap-2">
                                     {docInfo.title}
-                                    <span className="text-xs px-2 py-1 rounded bg-accent-blue/10 text-accent-blue border border-accent-blue/20">Shared</span>
+                                    <span className="text-xs px-2 py-1 rounded bg-accent-blue/10 text-accent-blue border border-accent-blue/20">
+                                        Shared
+                                    </span>
                                 </h1>
                             </div>
                         </div>
@@ -365,7 +367,9 @@ export const SharedChatPage = () => {
                                 className="px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors bg-accent-blue text-white hover:bg-blue-600 flex items-center gap-2 disabled:opacity-50"
                             >
                                 <Bot className="w-4 h-4" />
-                                <span className="hidden sm:inline">{isForking ? "Continuing..." : "Continue this chat"}</span>
+                                <span className="hidden sm:inline">
+                                    {isForking ? "Continuing..." : "Continue this chat"}
+                                </span>
                             </button>
                             <button
                                 onClick={() => setRightPanelOpen(!rightPanelOpen)}

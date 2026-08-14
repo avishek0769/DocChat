@@ -87,13 +87,13 @@ function isPrivateIP(ip) {
     // IPv4 private/reserved ranges
     const parts = ip.split(".").map(Number);
     if (parts.length === 4 && parts.every((p) => p >= 0 && p <= 255)) {
-        if (parts[0] === 127) return true;                              // 127.0.0.0/8  loopback
-        if (parts[0] === 10) return true;                               // 10.0.0.0/8   private
+        if (parts[0] === 127) return true; // 127.0.0.0/8  loopback
+        if (parts[0] === 10) return true; // 10.0.0.0/8   private
         if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true; // 172.16.0.0/12
-        if (parts[0] === 192 && parts[1] === 168) return true;          // 192.168.0.0/16
-        if (parts[0] === 169 && parts[1] === 254) return true;          // 169.254.0.0/16 link-local
+        if (parts[0] === 192 && parts[1] === 168) return true; // 192.168.0.0/16
+        if (parts[0] === 169 && parts[1] === 254) return true; // 169.254.0.0/16 link-local
         if (parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127) return true; // 100.64.0.0/10 CGNAT
-        if (parts[0] === 0) return true;                                // 0.0.0.0/8
+        if (parts[0] === 0) return true; // 0.0.0.0/8
     }
 
     // IPv6 loopback and link-local
@@ -127,11 +127,7 @@ async function validatePublicUrl(urlString) {
     }
 
     // 2. Block known metadata hostnames
-    const blockedHostnames = [
-        "metadata.google.internal",
-        "metadata.internal",
-        "kubernetes.default.svc",
-    ];
+    const blockedHostnames = ["metadata.google.internal", "metadata.internal", "kubernetes.default.svc"];
     if (blockedHostnames.includes(parsed.hostname.toLowerCase())) {
         throw new Error("SSRF Protection: Access to internal metadata services is blocked.");
     }
@@ -140,9 +136,7 @@ async function validatePublicUrl(urlString) {
     try {
         const { address } = await dns.lookup(parsed.hostname);
         if (isPrivateIP(address)) {
-            throw new Error(
-                "SSRF Protection: The URL resolves to a private/reserved IP address.",
-            );
+            throw new Error("SSRF Protection: The URL resolves to a private/reserved IP address.");
         }
     } catch (err) {
         // Re-throw our own SSRF errors
@@ -250,10 +244,13 @@ async function getRobotsPolicy(urlString, config) {
 function getDomainLimiter(urlString, config, crawlDelayMs) {
     const hostname = new URL(urlString).hostname.toLowerCase();
     if (!domainLimiters.has(hostname)) {
-        domainLimiters.set(hostname, new Bottleneck({
-            maxConcurrent: config.maxConcurrencyPerDomain,
-            minTime: crawlDelayMs,
-        }));
+        domainLimiters.set(
+            hostname,
+            new Bottleneck({
+                maxConcurrent: config.maxConcurrencyPerDomain,
+                minTime: crawlDelayMs,
+            }),
+        );
     } else {
         domainLimiters.get(hostname).updateSettings({
             maxConcurrent: config.maxConcurrencyPerDomain,
@@ -415,8 +412,14 @@ function resetCrawlStateForTests() {
 
 function classifyChunk(content, heading, hasCodeBlock) {
     const text = content.trim();
-    const firstMeaningfulLine = text.split("\n").find((line) => line.trim())?.trim() || "";
-    const headingIsApi = heading ? /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+\S+/i.test(heading) : false;
+    const firstMeaningfulLine =
+        text
+            .split("\n")
+            .find((line) => line.trim())
+            ?.trim() || "";
+    const headingIsApi = heading
+        ? /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+\S+/i.test(heading)
+        : false;
     const bodyIsApi = /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+\S+/i.test(firstMeaningfulLine);
 
     if (hasCodeBlock) return "code";
@@ -460,7 +463,10 @@ function splitDocumentationContent(text, options = {}) {
     };
 
     const pushChunkFromLines = (linesToUse, hasCodeBlock) => {
-        const content = linesToUse.map((line) => line.text).join("\n").trim();
+        const content = linesToUse
+            .map((line) => line.text)
+            .join("\n")
+            .trim();
         const chunk = makeChunk(content, currentHeading, hasCodeBlock);
         if (chunk) chunks.push(chunk);
     };
@@ -474,14 +480,15 @@ function splitDocumentationContent(text, options = {}) {
             currentBlockType = "code";
         }
 
-        const isHeading =
-            !inCodeFence &&
-            /^#{1,6}\s/.test(trimmed);
+        const isHeading = !inCodeFence && /^#{1,6}\s/.test(trimmed);
 
         if (isHeading) {
             pushBlock();
             if (currentLines.length) {
-                pushChunkFromLines(currentLines, currentLines.some((item) => item.type === "code"));
+                pushChunkFromLines(
+                    currentLines,
+                    currentLines.some((item) => item.type === "code"),
+                );
                 currentLines = [];
             }
             currentHeading = trimmed;
@@ -502,8 +509,12 @@ function splitDocumentationContent(text, options = {}) {
         }
 
         const isApiLine = /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+\S+/i.test(trimmed);
-        const isStructuralLine = isApiLine || /^\|.*\|$/.test(trimmed) || /^\s*[\-\*\+]\s+/.test(trimmed) || /^\s*\d+\.\s+/.test(trimmed);
-        currentBlockType = isApiLine ? "api" : (currentBlockType === "code" ? "code" : "text");
+        const isStructuralLine =
+            isApiLine ||
+            /^\|.*\|$/.test(trimmed) ||
+            /^\s*[\-\*\+]\s+/.test(trimmed) ||
+            /^\s*\d+\.\s+/.test(trimmed);
+        currentBlockType = isApiLine ? "api" : currentBlockType === "code" ? "code" : "text";
 
         if (isStructuralLine && currentBlock.length) {
             pushBlock();
@@ -514,7 +525,10 @@ function splitDocumentationContent(text, options = {}) {
 
     pushBlock();
     if (currentLines.length) {
-        pushChunkFromLines(currentLines, currentLines.some((item) => item.type === "code"));
+        pushChunkFromLines(
+            currentLines,
+            currentLines.some((item) => item.type === "code"),
+        );
     }
 
     const finalChunks = [];
@@ -525,7 +539,13 @@ function splitDocumentationContent(text, options = {}) {
         const contentLength = chunk.content.length;
         if (chunk.chunkType === "code" || contentLength > chunkSize) {
             if (buffer.length) {
-                finalChunks.push(makeChunk(buffer.map((item) => item.content).join("\n\n"), buffer[0].heading, buffer.some((item) => item.hasCodeBlock)));
+                finalChunks.push(
+                    makeChunk(
+                        buffer.map((item) => item.content).join("\n\n"),
+                        buffer[0].heading,
+                        buffer.some((item) => item.hasCodeBlock),
+                    ),
+                );
                 buffer = [];
                 bufferLength = 0;
             }
@@ -535,7 +555,13 @@ function splitDocumentationContent(text, options = {}) {
 
         const extraLength = buffer.length ? 2 : 0;
         if (bufferLength + extraLength + contentLength > chunkSize && buffer.length) {
-            finalChunks.push(makeChunk(buffer.map((item) => item.content).join("\n\n"), buffer[0].heading, buffer.some((item) => item.hasCodeBlock)));
+            finalChunks.push(
+                makeChunk(
+                    buffer.map((item) => item.content).join("\n\n"),
+                    buffer[0].heading,
+                    buffer.some((item) => item.hasCodeBlock),
+                ),
+            );
             buffer = [];
             bufferLength = 0;
         }
@@ -545,7 +571,13 @@ function splitDocumentationContent(text, options = {}) {
     }
 
     if (buffer.length) {
-        finalChunks.push(makeChunk(buffer.map((item) => item.content).join("\n\n"), buffer[0].heading, buffer.some((item) => item.hasCodeBlock)));
+        finalChunks.push(
+            makeChunk(
+                buffer.map((item) => item.content).join("\n\n"),
+                buffer[0].heading,
+                buffer.some((item) => item.hasCodeBlock),
+            ),
+        );
     }
 
     return finalChunks.filter(Boolean);

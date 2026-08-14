@@ -694,7 +694,11 @@ const listAllChats = asyncHandler(async (req, res) => {
     }
 
     res.status(200).json(
-        new ApiResponse(200, { chats: chatsWithUsage, hasMore, nextCursor }, "Chats fetched successfully"),
+        new ApiResponse(
+            200,
+            { chats: chatsWithUsage, hasMore, nextCursor },
+            "Chats fetched successfully",
+        ),
     );
 });
 
@@ -978,9 +982,7 @@ const bulkDeleteChats = asyncHandler(async (req, res) => {
         .map((chat) => chat.id);
 
     if (ownedChatIds.length === 0) {
-        return res.status(200).json(
-            new ApiResponse(200, { deletedCount: 0 }, "No chats deleted"),
-        );
+        return res.status(200).json(new ApiResponse(200, { deletedCount: 0 }, "No chats deleted"));
     }
 
     const result = await prisma.chat.updateMany({
@@ -1004,9 +1006,7 @@ const bulkDeleteChats = asyncHandler(async (req, res) => {
         );
     }
 
-    res.status(200).json(
-        new ApiResponse(200, { deletedCount }, "Chats deleted successfully"),
-    );
+    res.status(200).json(new ApiResponse(200, { deletedCount }, "Chats deleted successfully"));
 });
 
 const restoreChat = asyncHandler(async (req, res) => {
@@ -1191,7 +1191,7 @@ const chunkPreview = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Text exceeds the 100,000 character sandbox limit.");
     }
 
-    const parsedSize    = parseInt(chunkSize, 10);
+    const parsedSize = parseInt(chunkSize, 10);
     const parsedOverlap = parseInt(overlap, 10);
 
     if (isNaN(parsedSize) || parsedSize < 10 || parsedSize > 5000) {
@@ -1209,9 +1209,9 @@ const chunkPreview = asyncHandler(async (req, res) => {
             200,
             {
                 chunks,
-                count:     chunks.length,
+                count: chunks.length,
                 chunkSize: parsedSize,
-                overlap:   parsedOverlap,
+                overlap: parsedOverlap,
             },
             "Chunk preview generated successfully",
         ),
@@ -1235,8 +1235,8 @@ const downloadRawSource = asyncHandler(async (req, res) => {
         throw new ApiError(404, "Source not found or does not belong to this chat");
     }
 
-    res.setHeader('Content-Type', 'text/plain');
-    res.setHeader('Content-Disposition', `attachment; filename="source-${sourceId}-raw.txt"`);
+    res.setHeader("Content-Type", "text/plain");
+    res.setHeader("Content-Disposition", `attachment; filename="source-${sourceId}-raw.txt"`);
 
     if (chatSource.isVectorLess) {
         if (!chatSource.documentTree?.sourceData) {
@@ -1262,7 +1262,7 @@ const downloadRawSource = asyncHandler(async (req, res) => {
 
             for (const point of response.points) {
                 hasData = true;
-                res.write(`--- ${point.payload.title || 'Page'} (${point.payload.url}) ---\n`);
+                res.write(`--- ${point.payload.title || "Page"} (${point.payload.url}) ---\n`);
                 res.write(`${point.payload.body}\n\n`);
             }
 

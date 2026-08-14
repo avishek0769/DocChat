@@ -1,10 +1,5 @@
 import { forceSignOut, getAccessToken, getAuthUser } from "./auth";
-import {
-    getFromCache,
-    setInCache,
-    removeFromCache,
-    removeMatchingFromCache,
-} from "./cache";
+import { getFromCache, setInCache, removeFromCache, removeMatchingFromCache } from "./cache";
 
 // Provide a minimal typing for Vite's import.meta.env to avoid TS errors when
 // this project isn't using the Vite types globally.
@@ -118,7 +113,7 @@ const apiRequest = async <T>(path: string, init?: RequestInit): Promise<T> => {
 
     const payload = (await response.json().catch(() => ({}))) as ApiEnvelope<T>;
 
-   if (!response.ok) {
+    if (!response.ok) {
         // Only force sign-out on 401 (unauthenticated). A 403 means the user IS
         // authenticated but lacks permission — clearing the session on 403 would
         // sign admins out when they visit a resource they happen to lack access to.
@@ -242,10 +237,9 @@ export const getChats = (params?: { limit?: number; cursor?: string }) => {
 };
 
 export const getRecentFailedIngestionRuns = (limit = 5) =>
-    apiRequest<{ runs: FailedIngestionRunItem[] }>(
-        `/chat/ingestion-runs/failed?limit=${limit}`,
-        { method: "GET" },
-    );
+    apiRequest<{ runs: FailedIngestionRunItem[] }>(`/chat/ingestion-runs/failed?limit=${limit}`, {
+        method: "GET",
+    });
 
 export const createChat = async (payload: {
     name?: string;
@@ -262,13 +256,22 @@ export const createChat = async (payload: {
     return result;
 };
 
-export const addChatSource = async (chatId: string, payload: { docsUrl: string; isVectorLess?: boolean }) =>
-    apiRequest<{ chatId: string; chatSourceId: string; attached: boolean; status: string }>(`/chat/${chatId}/sources`, {
-        method: "POST",
-        body: JSON.stringify(payload),
-    });
+export const addChatSource = async (
+    chatId: string,
+    payload: { docsUrl: string; isVectorLess?: boolean },
+) =>
+    apiRequest<{ chatId: string; chatSourceId: string; attached: boolean; status: string }>(
+        `/chat/${chatId}/sources`,
+        {
+            method: "POST",
+            body: JSON.stringify(payload),
+        },
+    );
 
-export const removeChatSource = async (chatId: string, payload: { docsUrl: string; isVectorLess?: boolean }) =>
+export const removeChatSource = async (
+    chatId: string,
+    payload: { docsUrl: string; isVectorLess?: boolean },
+) =>
     apiRequest<{ chatId: string; chatSourceId: string; detached: boolean }>(`/chat/${chatId}/sources`, {
         method: "DELETE",
         body: JSON.stringify(payload),
@@ -314,7 +317,7 @@ export const getChatStatus = (chatId: string) =>
 export const subscribeToChatStatus = (
     chatId: string,
     onMessage: (progress: { status: string; progress: number; current: number; total: number }) => void,
-    onError: (error: Event) => void
+    onError: (error: Event) => void,
 ) => {
     const token = getAccessToken();
     const url = new URL(`${API_BASE_URL}/chat/status/stream/${chatId}`);
@@ -397,7 +400,7 @@ export const sendMessageStream = async (payload: {
     provider: string;
     chatId: string;
     onChunk?: (chunk: string) => void;
-    signal?: AbortSignal; 
+    signal?: AbortSignal;
 }) => {
     const token = getAccessToken();
     const headers = new Headers({ "Content-Type": "application/json" });
@@ -410,7 +413,7 @@ export const sendMessageStream = async (payload: {
         headers,
         credentials: "include",
         body: JSON.stringify(payload),
-        signal: payload.signal, 
+        signal: payload.signal,
     });
 
     if (!response.ok || !response.body) {
@@ -445,8 +448,8 @@ export const sendMessageStream = async (payload: {
 };
 
 export const exportChatMessages = async (
-  chatId: string,
-  format: "txt" | "md" | "pdf"
+    chatId: string,
+    format: "txt" | "md" | "pdf",
 ): Promise<void> => {
     const token = getAccessToken();
     const headers = new Headers();
@@ -454,14 +457,11 @@ export const exportChatMessages = async (
         headers.set("Authorization", `Bearer ${token}`);
     }
 
-    const response = await fetch(
-  `${API_BASE_URL}/message/export/${chatId}?format=${format}`,
-  {
-    method: "GET",
-    headers,
-    credentials: "include",
-  }
-);
+    const response = await fetch(`${API_BASE_URL}/message/export/${chatId}?format=${format}`, {
+        method: "GET",
+        headers,
+        credentials: "include",
+    });
 
     if (!response.ok) {
         throw new Error("Failed to export chat");
@@ -497,8 +497,8 @@ export const exportRawSource = async (chatId: string, sourceId: string): Promise
 
     // Try to get filename from Content-Disposition if present
     let filename = `source-${sourceId}-raw.txt`;
-    const disposition = response.headers.get('Content-Disposition');
-    if (disposition && disposition.includes('filename=')) {
+    const disposition = response.headers.get("Content-Disposition");
+    if (disposition && disposition.includes("filename=")) {
         const match = disposition.match(/filename="?([^"]+)"?/);
         if (match && match[1]) {
             filename = match[1];
@@ -519,7 +519,11 @@ export const exportRawSource = async (chatId: string, sourceId: string): Promise
 export const getLifetimeTokens = () =>
     withCache(cacheKey("/usage/lifetime-tokens"), 5 * 60 * 1000, () =>
         apiRequest<{
-            _sum: { inputTokens: number | null; outputTokens: number | null; estimatedCostUsd: number | null };
+            _sum: {
+                inputTokens: number | null;
+                outputTokens: number | null;
+                estimatedCostUsd: number | null;
+            };
         }>("/usage/lifetime-tokens", { method: "GET" }),
     );
 
@@ -552,7 +556,11 @@ export const getTopChatsByUsage = () =>
         apiRequest<
             Array<{
                 chatId: string;
-                _sum: { inputTokens: number | null; outputTokens: number | null; estimatedCostUsd: number | null };
+                _sum: {
+                    inputTokens: number | null;
+                    outputTokens: number | null;
+                    estimatedCostUsd: number | null;
+                };
                 name?: string | null;
             }>
         >("/usage/top-chats", { method: "GET" }),
@@ -601,7 +609,7 @@ export const getUsageBreakdown = (params?: {
     const query = new URLSearchParams(
         Object.entries(params || {})
             .filter(([_, v]) => v !== undefined)
-            .map(([k, v]) => [k, String(v)])
+            .map(([k, v]) => [k, String(v)]),
     ).toString();
 
     return apiRequest<{
@@ -746,11 +754,19 @@ export const getSharedChatDetails = (shareToken: string) =>
     apiRequest<{ chat: ChatItem }>(`/chat/shared/${shareToken}`, { method: "GET" });
 
 export const getSharedChatMessages = (shareToken: string) =>
-    apiRequest<{ messages: ChatMessageItem[] }>(`/message/shared/${shareToken}/messages`, { method: "GET" });
+    apiRequest<{ messages: ChatMessageItem[] }>(`/message/shared/${shareToken}/messages`, {
+        method: "GET",
+    });
 
 export const getSharedMessageSources = (shareToken: string, messageId: string) =>
-    withCache(cacheKey(`/message/shared/${shareToken}/messages/${messageId}/sources`), 5 * 60 * 1000, () =>
-        apiRequest<{ messageSources: ChatMessageSourceItem[] }>(`/message/shared/${shareToken}/messages/${messageId}/sources`, { method: "GET" })
+    withCache(
+        cacheKey(`/message/shared/${shareToken}/messages/${messageId}/sources`),
+        5 * 60 * 1000,
+        () =>
+            apiRequest<{ messageSources: ChatMessageSourceItem[] }>(
+                `/message/shared/${shareToken}/messages/${messageId}/sources`,
+                { method: "GET" },
+            ),
     );
 
 export const forkSharedChat = (shareToken: string) =>

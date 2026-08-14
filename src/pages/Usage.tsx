@@ -13,7 +13,14 @@ import {
 import type { TooltipItem } from "chart.js";
 import { Bar } from "react-chartjs-2";
 
-import { getApiKeyCount, getLifetimeTokens, getTopChatsByUsage, getTokensByGroup, getUsageBreakdown, type UsageBreakdownItem } from "../lib/api";
+import {
+    getApiKeyCount,
+    getLifetimeTokens,
+    getTopChatsByUsage,
+    getTokensByGroup,
+    getUsageBreakdown,
+    type UsageBreakdownItem,
+} from "../lib/api";
 import { formatTokens } from "../lib/format";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
@@ -349,7 +356,9 @@ export const Usage = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                         <div className="p-6 rounded-xl bg-white/2 border border-white/5">
                             <p className="text-sm font-medium text-gray-400">Estimated Lifetime Cost</p>
-                            <h3 className="text-3xl font-bold text-white mt-2">${lifetimeCost.toFixed(4)}</h3>
+                            <h3 className="text-3xl font-bold text-white mt-2">
+                                ${lifetimeCost.toFixed(4)}
+                            </h3>
                             <p className="text-xs text-gray-500 font-medium mt-2">
                                 Deterministic estimate stored on usage events
                             </p>
@@ -447,13 +456,27 @@ export const Usage = () => {
                                     <tbody className="divide-y divide-white/5">
                                         {topModels.map((item, i) => (
                                             <tr key={i} className="hover:bg-white/2 transition-colors">
-                                                <td className="py-3 font-mono text-gray-200">{modelDisplayName(item.model)}</td>
-                                                <td className="py-3 text-gray-400">{item.provider || "—"}</td>
-                                                <td className="py-3 text-right text-gray-300">{formatTokens(item.totalInputTokens)}</td>
-                                                <td className="py-3 text-right text-gray-300">{formatTokens(item.totalOutputTokens)}</td>
-                                                <td className="py-3 text-right text-gray-300">${item.estimatedCostUsd.toFixed(4)}</td>
-                                                <td className="py-3 text-right font-semibold text-white">{formatTokens(item.totalTokens)}</td>
-                                                <td className="py-3 text-right text-gray-400">{item.requestCount}</td>
+                                                <td className="py-3 font-mono text-gray-200">
+                                                    {modelDisplayName(item.model)}
+                                                </td>
+                                                <td className="py-3 text-gray-400">
+                                                    {item.provider || "—"}
+                                                </td>
+                                                <td className="py-3 text-right text-gray-300">
+                                                    {formatTokens(item.totalInputTokens)}
+                                                </td>
+                                                <td className="py-3 text-right text-gray-300">
+                                                    {formatTokens(item.totalOutputTokens)}
+                                                </td>
+                                                <td className="py-3 text-right text-gray-300">
+                                                    ${item.estimatedCostUsd.toFixed(4)}
+                                                </td>
+                                                <td className="py-3 text-right font-semibold text-white">
+                                                    {formatTokens(item.totalTokens)}
+                                                </td>
+                                                <td className="py-3 text-right text-gray-400">
+                                                    {item.requestCount}
+                                                </td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -461,7 +484,6 @@ export const Usage = () => {
                             </div>
                         )}
                     </div>
-
                 </div>
             </main>
         </div>

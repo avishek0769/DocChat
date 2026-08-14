@@ -47,13 +47,13 @@ const appendWithinBudget = (lines, nextValue, budget, state) => {
 const buildSourceContext = ({ relevantSources = [], relevantNodes = [], budget }) => {
     const sourceItems = relevantSources.length
         ? relevantSources.map((point, index) => ({
-            label: `Source ${index + 1}`,
-            body: point.payload?.body || "",
-        }))
+              label: `Source ${index + 1}`,
+              body: point.payload?.body || "",
+          }))
         : relevantNodes.map((node, index) => ({
-            label: node.heading || `Source ${index + 1}`,
-            body: node.data || "",
-        }));
+              label: node.heading || `Source ${index + 1}`,
+              body: node.data || "",
+          }));
 
     if (!sourceItems.length) return "";
 
@@ -88,19 +88,20 @@ const buildMemoryContext = ({ memories = [], budget }) => {
     return lines.length > 1 ? lines.join("\n") : "";
 };
 
-const toMessagePairs = (messages = []) => messages.flatMap((message) => {
-    const pair = [];
+const toMessagePairs = (messages = []) =>
+    messages.flatMap((message) => {
+        const pair = [];
 
-    if (message.userPrompt) {
-        pair.push({ role: "user", content: normalizeText(message.userPrompt) });
-    }
+        if (message.userPrompt) {
+            pair.push({ role: "user", content: normalizeText(message.userPrompt) });
+        }
 
-    if (message.llmResponse) {
-        pair.push({ role: "assistant", content: normalizeText(message.llmResponse) });
-    }
+        if (message.llmResponse) {
+            pair.push({ role: "assistant", content: normalizeText(message.llmResponse) });
+        }
 
-    return pair;
-});
+        return pair;
+    });
 
 const buildSummaryContext = ({ messages = [], budget }) => {
     if (!messages.length) return "";
@@ -195,12 +196,9 @@ const buildMessagesForLLM = ({
         messages: recentMessages,
         budget: contextBudget.recent,
     });
-    const systemContent = [
-        systemInstructions,
-        sourceContext,
-        memoryContext,
-        summaryContext,
-    ].filter(Boolean).join("\n\n");
+    const systemContent = [systemInstructions, sourceContext, memoryContext, summaryContext]
+        .filter(Boolean)
+        .join("\n\n");
     const userBudget = Math.min(contextBudget.user, contextBudget.total);
     const userMessage = {
         role: "user",
@@ -215,15 +213,7 @@ const buildMessagesForLLM = ({
     ];
     const remainingBudget = Math.max(contextBudget.total - estimateTokens(userMessage.content), 0);
 
-    return [
-        ...fitMessagesToBudget(messagesBeforeUser, remainingBudget),
-        userMessage,
-    ];
+    return [...fitMessagesToBudget(messagesBeforeUser, remainingBudget), userMessage];
 };
 
-export {
-    DEFAULT_CONTEXT_BUDGET,
-    buildMessagesForLLM,
-    estimateTokens,
-    truncateToTokenBudget,
-};
+export { DEFAULT_CONTEXT_BUDGET, buildMessagesForLLM, estimateTokens, truncateToTokenBudget };

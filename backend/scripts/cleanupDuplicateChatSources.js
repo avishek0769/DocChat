@@ -2,7 +2,7 @@ import prisma from "../utils/prismaClient.js";
 
 async function cleanupDuplicateChatSources() {
     console.log("Finding duplicate ChatSource records...");
-    
+
     const duplicates = await prisma.$queryRaw`
         SELECT "documentation_url", "is_vector_less", COUNT(*) as count
         FROM "ChatSource"
@@ -13,7 +13,9 @@ async function cleanupDuplicateChatSources() {
     console.log(`Found ${duplicates.length} duplicate groups.`);
 
     for (const group of duplicates) {
-        console.log(`Processing duplicates for: ${group.documentation_url} (isVectorLess: ${group.is_vector_less})`);
+        console.log(
+            `Processing duplicates for: ${group.documentation_url} (isVectorLess: ${group.is_vector_less})`,
+        );
 
         const chatSources = await prisma.chatSource.findMany({
             where: {
@@ -21,7 +23,7 @@ async function cleanupDuplicateChatSources() {
                 isVectorLess: group.is_vector_less,
             },
             orderBy: {
-                createdAt: 'asc', // oldest first
+                createdAt: "asc", // oldest first
             },
         });
 
@@ -30,34 +32,36 @@ async function cleanupDuplicateChatSources() {
         const duplicatesToRemove = chatSources.slice(1);
 
         for (const duplicate of duplicatesToRemove) {
-            console.log(`  Re-linking records from duplicate ID ${duplicate.id} to canonical ID ${canonical.id}`);
+            console.log(
+                `  Re-linking records from duplicate ID ${duplicate.id} to canonical ID ${canonical.id}`,
+            );
 
             // Re-link Chats
             await prisma.chat.updateMany({
                 where: {
                     chatSources: {
-                        some: { id: duplicate.id }
-                    }
+                        some: { id: duplicate.id },
+                    },
                 },
                 data: {
                     // Note: updateMany cannot do relation connects in Prisma easily.
                     // We need to fetch chats connected to this duplicate, connect to canonical, and disconnect from duplicate.
-                }
+                },
             });
 
             const affectedChats = await prisma.chat.findMany({
-                where: { chatSources: { some: { id: duplicate.id } } }
+                where: { chatSources: { some: { id: duplicate.id } } },
             });
-            
+
             for (const chat of affectedChats) {
                 await prisma.chat.update({
                     where: { id: chat.id },
                     data: {
                         chatSources: {
                             connect: { id: canonical.id },
-                            disconnect: { id: duplicate.id }
-                        }
-                    }
+                            disconnect: { id: duplicate.id },
+                        },
+                    },
                 });
             }
 
@@ -69,11 +73,15 @@ async function cleanupDuplicateChatSources() {
 
             // Re-link DocumentTree (if exists)
             // DocumentTree has @unique on chatSourceId. If canonical already has one, we delete the duplicate's.
-            const duplicateTree = await prisma.documentTree.findUnique({ where: { chatSourceId: duplicate.id }});
+            const duplicateTree = await prisma.documentTree.findUnique({
+                where: { chatSourceId: duplicate.id },
+            });
             if (duplicateTree) {
-                const canonicalTree = await prisma.documentTree.findUnique({ where: { chatSourceId: canonical.id }});
+                const canonicalTree = await prisma.documentTree.findUnique({
+                    where: { chatSourceId: canonical.id },
+                });
                 if (canonicalTree) {
-                    await prisma.documentTree.delete({ where: { id: duplicateTree.id }});
+                    await prisma.documentTree.delete({ where: { id: duplicateTree.id } });
                 } else {
                     await prisma.documentTree.update({
                         where: { id: duplicateTree.id },

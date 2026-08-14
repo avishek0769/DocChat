@@ -14,33 +14,33 @@ import {
 const app = express();
 
 app.use((req, res, next) => {
-  req.id = req.headers["x-request-id"] || uuidv4();
-  res.setHeader("x-request-id", req.id);
-  next();
+    req.id = req.headers["x-request-id"] || uuidv4();
+    res.setHeader("x-request-id", req.id);
+    next();
 });
 
 app.use((req, res, next) => {
-  if (req.method === "OPTIONS" || req.originalUrl === "/healthz" || req.originalUrl === "/metrics") {
-    return next();
-  }
-  const start = Date.now();
-  res.on("finish", () => {
-    const logData = {
-      requestId: req.id,
-      method: req.method,
-      url: req.originalUrl,
-      statusCode: res.statusCode,
-      durationMs: Date.now() - start,
-    };
-    if (res.statusCode >= 500) {
-      logger.error(logData, "Server error request");
-    } else if (res.statusCode >= 400) {
-      logger.warn(logData, "Client error request");
-    } else {
-      logger.debug(logData, "HTTP Request");
+    if (req.method === "OPTIONS" || req.originalUrl === "/healthz" || req.originalUrl === "/metrics") {
+        return next();
     }
-  });
-  next();
+    const start = Date.now();
+    res.on("finish", () => {
+        const logData = {
+            requestId: req.id,
+            method: req.method,
+            url: req.originalUrl,
+            statusCode: res.statusCode,
+            durationMs: Date.now() - start,
+        };
+        if (res.statusCode >= 500) {
+            logger.error(logData, "Server error request");
+        } else if (res.statusCode >= 400) {
+            logger.warn(logData, "Client error request");
+        } else {
+            logger.debug(logData, "HTTP Request");
+        }
+    });
+    next();
 });
 
 app.use(metricsMiddleware);
@@ -68,22 +68,22 @@ app.get("/metrics", metricsAuthMiddleware, async (req, res) => {
 });
 
 const errorHandler = (err, req, res, next) => {
-  const statusCode = err.statusCode || 500;
-  const message = err.message || "Internal Server Error";
-  logger.error({ requestId: req.id, err }, "Unhandled error");
-  const body = { message };
-  if (Array.isArray(err.errors) && err.errors.length > 0) {
-    body.errors = err.errors;
-  }
-  res.status(statusCode).json(body);
+    const statusCode = err.statusCode || 500;
+    const message = err.message || "Internal Server Error";
+    logger.error({ requestId: req.id, err }, "Unhandled error");
+    const body = { message };
+    if (Array.isArray(err.errors) && err.errors.length > 0) {
+        body.errors = err.errors;
+    }
+    res.status(statusCode).json(body);
 };
 
 app.use(
-  cors({
-    origin: process.env.CORS_ORIGIN,
-    methods: process.env.CORS_METHODS,
-    credentials: true,
-  }),
+    cors({
+        origin: process.env.CORS_ORIGIN,
+        methods: process.env.CORS_METHODS,
+        credentials: true,
+    }),
 );
 app.use(express.urlencoded({ extended: true, limit: "16kb" }));
 app.use(express.static("public"));

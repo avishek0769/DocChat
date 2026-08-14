@@ -2,10 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { buildMessagesForLLM, estimateTokens } from "../utils/contextBuilder.js";
 
-const makeHistory = (count) => Array.from({ length: count }, (_, index) => ({
-    userPrompt: `Question ${index + 1} ${"old detail ".repeat(20)}`,
-    llmResponse: `Answer ${index + 1} ${"historical answer ".repeat(20)}`,
-}));
+const makeHistory = (count) =>
+    Array.from({ length: count }, (_, index) => ({
+        userPrompt: `Question ${index + 1} ${"old detail ".repeat(20)}`,
+        llmResponse: `Answer ${index + 1} ${"historical answer ".repeat(20)}`,
+    }));
 
 test("buildMessagesForLLM keeps prompts within the configured budget", () => {
     const messages = buildMessagesForLLM({
@@ -14,9 +15,7 @@ test("buildMessagesForLLM keeps prompts within the configured budget", () => {
             { payload: { body: "Primary source ".repeat(500) } },
             { payload: { body: "Secondary source ".repeat(500) } },
         ],
-        memories: [
-            { memory: "The user prefers concise examples.".repeat(20) },
-        ],
+        memories: [{ memory: "The user prefers concise examples.".repeat(20) }],
         history: makeHistory(80),
         userPrompt: "What should I do next?",
         budget: {
@@ -28,7 +27,10 @@ test("buildMessagesForLLM keeps prompts within the configured budget", () => {
             user: 80,
         },
     });
-    const tokenEstimate = messages.reduce((total, message) => total + estimateTokens(message.content), 0);
+    const tokenEstimate = messages.reduce(
+        (total, message) => total + estimateTokens(message.content),
+        0,
+    );
 
     assert.ok(tokenEstimate <= 900);
     assert.equal(messages.at(-1).role, "user");
@@ -52,7 +54,10 @@ test("buildMessagesForLLM preserves source context and bounded conversation cont
         },
     });
     const systemMessage = messages[0].content;
-    const recentContents = messages.slice(1, -1).map((message) => message.content).join(" ");
+    const recentContents = messages
+        .slice(1, -1)
+        .map((message) => message.content)
+        .join(" ");
 
     assert.match(systemMessage, /DOCUMENTATION SOURCES/);
     assert.match(systemMessage, /Source 1/);

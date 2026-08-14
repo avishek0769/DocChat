@@ -37,27 +37,20 @@ export const ProtectedRoute = ({ children, adminOnly = false }: Props) => {
     }
 
     if (adminOnly) {
-        // Fast-path: if the session already says admin (set at login), render immediately.
         const sessionAdmin = Boolean(getAuthUser()?.isAdmin);
-        if (sessionAdmin && isAdmin === null) {
-            return children;
-        }
-        // Still waiting for the async profile fetch — show blank loading screen.
-        if (isAdmin === null) {
-            return <div className="min-h-screen bg-[#0b0b0f] flex items-center justify-center" />;
-        }
-        // Profile loaded: deny access with a clear message if not admin.
-        if (!isAdmin) {
+        if (isAdmin === false) {
             return (
                 <div className="min-h-screen bg-[#0b0b0f] text-gray-50 flex items-center justify-center px-4">
                     <div className="max-w-md w-full rounded-2xl border border-white/10 bg-white/5 p-6 text-center">
                         <p className="text-xs uppercase tracking-[0.24em] text-gray-500 mb-3">
                             Admin Access Required
                         </p>
-                        <h1 className="text-2xl font-semibold mb-2">You do not have access to this page.</h1>
+                        <h1 className="text-2xl font-semibold mb-2">
+                            You do not have access to this page.
+                        </h1>
                         <p className="text-sm text-gray-400 mb-6">
-                            This section is reserved for admin accounts. If you believe this is a mistake,
-                            sign out and sign back in with an admin account.
+                            This section is reserved for admin accounts. If you believe this is a
+                            mistake, sign out and sign back in with an admin account.
                         </p>
                         <div className="flex flex-col sm:flex-row gap-3 justify-center">
                             <a
@@ -76,6 +69,9 @@ export const ProtectedRoute = ({ children, adminOnly = false }: Props) => {
                     </div>
                 </div>
             );
+        }
+        if (isAdmin === null && !sessionAdmin) {
+            return <div className="min-h-screen bg-[#0b0b0f] flex items-center justify-center" />;
         }
     }
 

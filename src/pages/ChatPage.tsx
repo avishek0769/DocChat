@@ -92,13 +92,15 @@ const toModelDisplayName = (model?: string) => {
     return model;
 };
 
-const mapApiMessagesToUiMessages = (messageList: Array<{
-    id: string;
-    userPrompt: string;
-    llmResponse: string;
-    llmModel: string;
-    createdAt: string;
-}>) => {
+const mapApiMessagesToUiMessages = (
+    messageList: Array<{
+        id: string;
+        userPrompt: string;
+        llmResponse: string;
+        llmModel: string;
+        createdAt: string;
+    }>,
+) => {
     const messagePairs: Message[] = [];
     for (const msg of messageList) {
         messagePairs.push({
@@ -172,7 +174,6 @@ export const ChatPage = () => {
     const [shareModalOpen, setShareModalOpen] = useState(false);
     const [exportFormat, setExportFormat] = useState<"txt" | "md" | "pdf">("txt");
 
-
     const handleShare = () => {
         setShareModalOpen(true);
     };
@@ -212,7 +213,7 @@ export const ChatPage = () => {
             for (const link of currentLinks) {
                 if (link.id) {
                     await exportRawSource(chatId, link.id);
-                    await new Promise(res => setTimeout(res, 500));
+                    await new Promise((res) => setTimeout(res, 500));
                 }
             }
         } catch (err) {
@@ -465,10 +466,10 @@ export const ChatPage = () => {
 
         const selectedOption = modelOptions.find((opt) => opt.model === selectedModel) ||
             modelOptions[0] || {
-            provider: "DEFAULT",
-            model: "default-1",
-            label: `Default (Fast) - GPT - OSS`,
-        };
+                provider: "DEFAULT",
+                model: "default-1",
+                label: `Default (Fast) - GPT - OSS`,
+            };
 
         const newUserMessage: Message = {
             id: Date.now().toString(),
@@ -531,7 +532,7 @@ export const ChatPage = () => {
                 model: selectedOption.model,
                 provider: selectedOption.provider,
                 chatId,
-                signal: abortControllerRef.current.signal, 
+                signal: abortControllerRef.current.signal,
                 onChunk: (chunk) => {
                     if (!firstChunkReceivedRef.current) {
                         firstChunkReceivedRef.current = true;
@@ -560,13 +561,13 @@ export const ChatPage = () => {
                     prev.map((m) =>
                         m.id === aiId
                             ? {
-                                ...m,
-                                messageId: latestAi.id,
-                                // Keep the exact model selected in UI for message badge text.
-                                model: selectedOption.label,
-                                sources: [],
-                                sourcesLoaded: false,
-                            }
+                                  ...m,
+                                  messageId: latestAi.id,
+                                  // Keep the exact model selected in UI for message badge text.
+                                  model: selectedOption.label,
+                                  sources: [],
+                                  sourcesLoaded: false,
+                              }
                             : m,
                     ),
                 );
@@ -582,16 +583,18 @@ export const ChatPage = () => {
             const errMsg = err instanceof Error ? err.message : "Failed to send message.";
 
             // 409 = chat not ready or failed — show inline banner, restore input
-            if (err instanceof Error && (err.message.includes("indexing") || err.message.includes("ingestion"))) {
+            if (
+                err instanceof Error &&
+                (err.message.includes("indexing") || err.message.includes("ingestion"))
+            ) {
                 setError(errMsg);
-                setInput(newUserMessage.content);           // restore so user can retry
+                setInput(newUserMessage.content); // restore so user can retry
                 setMessages((prev) => prev.filter((m) => m.id !== aiId || m.id !== newUserMessage.id));
             } else {
                 setError(errMsg);
                 setMessages((prev) => prev.filter((m) => m.id !== aiId));
             }
-        }
-        finally {
+        } finally {
             setIsTyping(false);
         }
     };
@@ -736,7 +739,10 @@ export const ChatPage = () => {
                                                 className="px-3 py-2 rounded-lg text-sm transition-colors border border-transparent text-gray-400"
                                             >
                                                 <div className="flex items-center justify-between gap-2 min-w-0">
-                                                    <span className="truncate pr-2 text-gray-300" title={page.title}>
+                                                    <span
+                                                        className="truncate pr-2 text-gray-300"
+                                                        title={page.title}
+                                                    >
                                                         {page.title}
                                                     </span>
                                                     <button
@@ -838,9 +844,7 @@ export const ChatPage = () => {
                             </div>
                             <select
                                 value={exportFormat}
-                                onChange={(e) =>
-                                    setExportFormat(e.target.value as "txt" | "md" | "pdf")
-                                }
+                                onChange={(e) => setExportFormat(e.target.value as "txt" | "md" | "pdf")}
                                 className="px-2 py-1.5 rounded-lg border border-white/10 bg-white/5 text-gray-300 text-sm"
                             >
                                 <option value="txt">TXT</option>
@@ -854,7 +858,9 @@ export const ChatPage = () => {
                                 className="px-2 sm:px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border border-white/10 bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 flex items-center gap-1.5 sm:gap-2 disabled:opacity-50"
                             >
                                 <Download className="w-4 h-4" />
-                                <span className="hidden sm:inline">{isExporting ? "Exporting..." : "Export"}</span>
+                                <span className="hidden sm:inline">
+                                    {isExporting ? "Exporting..." : "Export"}
+                                </span>
                             </button>
 
                             <button
@@ -864,7 +870,9 @@ export const ChatPage = () => {
                                 className="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border border-white/10 bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 flex items-center gap-2 disabled:opacity-50"
                             >
                                 <Share2 className="w-4 h-4" />
-                                <span className="hidden sm:inline">{isSharing ? "Sharing..." : "Share"}</span>
+                                <span className="hidden sm:inline">
+                                    {isSharing ? "Sharing..." : "Share"}
+                                </span>
                             </button>
                             <button
                                 onClick={() => setRightPanelOpen(!rightPanelOpen)}
@@ -1000,7 +1008,7 @@ export const ChatPage = () => {
                                     "relative bg-[#1a1a24] border rounded-2xl shadow-2xl overflow-hidden focus-within:ring-1 transition-all",
                                     input.length > WARNING_LENGTH_THRESHOLD
                                         ? "border-amber-500/50 focus-within:border-amber-500/70 focus-within:ring-amber-500/30"
-                                        : "border-white/10 focus-within:border-accent-blue/50 focus-within:ring-accent-blue/50"
+                                        : "border-white/10 focus-within:border-accent-blue/50 focus-within:ring-accent-blue/50",
                                 )}
                             >
                                 <textarea
@@ -1126,7 +1134,9 @@ export const ChatPage = () => {
                                         {shareToken ? (
                                             <>
                                                 <p className="text-sm text-gray-400">
-                                                    Anyone with this link can view the chat history. They can also continue the chat by creating their own copy.
+                                                    Anyone with this link can view the chat history. They
+                                                    can also continue the chat by creating their own
+                                                    copy.
                                                 </p>
                                                 <div className="flex gap-2 items-center">
                                                     <input
@@ -1137,7 +1147,9 @@ export const ChatPage = () => {
                                                     />
                                                     <button
                                                         onClick={() => {
-                                                            navigator.clipboard.writeText(`${window.location.origin}/shared/${shareToken}`);
+                                                            navigator.clipboard.writeText(
+                                                                `${window.location.origin}/shared/${shareToken}`,
+                                                            );
                                                             setLinkCopied(true);
                                                             setTimeout(() => setLinkCopied(false), 2000);
                                                         }}
@@ -1146,7 +1158,9 @@ export const ChatPage = () => {
                                                         {linkCopied ? (
                                                             <>
                                                                 <Check className="w-4 h-4 text-green-400" />
-                                                                <span className="text-sm font-medium text-green-400">Copied</span>
+                                                                <span className="text-sm font-medium text-green-400">
+                                                                    Copied
+                                                                </span>
                                                             </>
                                                         ) : (
                                                             <Copy className="w-4 h-4" />
@@ -1164,7 +1178,8 @@ export const ChatPage = () => {
                                         ) : (
                                             <>
                                                 <p className="text-sm text-gray-400">
-                                                    Generate a link to share this conversation with others.
+                                                    Generate a link to share this conversation with
+                                                    others.
                                                 </p>
                                                 <button
                                                     onClick={handleToggleShare}
@@ -1246,7 +1261,8 @@ export const ChatPage = () => {
                                                             >
                                                                 {(() => {
                                                                     try {
-                                                                        return new URL(source.url).pathname;
+                                                                        return new URL(source.url)
+                                                                            .pathname;
                                                                     } catch {
                                                                         return source.url;
                                                                     }
@@ -1325,7 +1341,9 @@ export const ChatPage = () => {
                                 className="sm:hidden absolute left-0 top-0 h-full w-[85vw] max-w-[320px] border-r border-white/10 bg-[#0b0b0f] z-50 flex flex-col"
                             >
                                 <div className="p-4 border-b border-white/10 flex items-center justify-between">
-                                    <h3 className="text-sm font-semibold text-white">Chat information</h3>
+                                    <h3 className="text-sm font-semibold text-white">
+                                        Chat information
+                                    </h3>
                                     <button
                                         onClick={() => setLeftPanelOpen(false)}
                                         className="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-white/10"
@@ -1459,7 +1477,9 @@ export const ChatPage = () => {
                                 <div className="p-4 border-b border-white/10 flex items-center justify-between">
                                     <div className="flex items-center gap-2">
                                         <Search className="w-4 h-4 text-accent-blue" />
-                                        <h2 className="font-semibold text-gray-200">Sources Retrieved</h2>
+                                        <h2 className="font-semibold text-gray-200">
+                                            Sources Retrieved
+                                        </h2>
                                     </div>
                                     <button
                                         onClick={() => setRightPanelOpen(false)}
@@ -1511,7 +1531,8 @@ export const ChatPage = () => {
                                                                 >
                                                                     {(() => {
                                                                         try {
-                                                                            return new URL(source.url).pathname;
+                                                                            return new URL(source.url)
+                                                                                .pathname;
                                                                         } catch {
                                                                             return source.url;
                                                                         }
@@ -1591,7 +1612,9 @@ export const ChatPage = () => {
                             className="bg-[#1a1a24] border border-white/10 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col relative z-10"
                         >
                             <div className="p-4 sm:p-6 border-b border-white/10 flex items-center justify-between gap-3">
-                                <h2 className="text-lg sm:text-xl font-semibold text-white">Indexed Pages</h2>
+                                <h2 className="text-lg sm:text-xl font-semibold text-white">
+                                    Indexed Pages
+                                </h2>
                                 <button
                                     aria-label="close indexed modal"
                                     onClick={() => setIsIndexedModalOpen(false)}
@@ -1763,7 +1786,6 @@ const ChatMessage = ({
                 {isAi && !message.isStreaming && (
                     <div className="flex items-center gap-2 opacity-100 transition-opacity mt-1">
                         <button
-
                             onClick={handleCopy}
                             className="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-1.5 text-sm font-medium"
                         >
@@ -1778,7 +1800,6 @@ const ChatMessage = ({
                         <>
                             <div className="w-px h-3 bg-white/10" />
                             <button
-
                                 onClick={() => onViewSources(message)}
                                 className="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-1.5 text-sm font-medium"
                             >

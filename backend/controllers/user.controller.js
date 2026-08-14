@@ -8,9 +8,7 @@ import redis from "../utils/redis.js";
 import { Resend } from "resend";
 import { createAuditEvent } from "../utils/audit.js";
 
-const resend = process.env.RESEND_API_KEY
-    ? new Resend(process.env.RESEND_API_KEY)
-    : null;
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 const AccessOptions = {
     httpOnly: true,
@@ -95,10 +93,7 @@ const sendVerificationCode = asyncHandler(async (req, res) => {
     await redis.set(email, code, "EX", 3 * 60);
 
     if (!resend) {
-        throw new ApiError(
-            503,
-            "Email service is not configured. Please set RESEND_API_KEY.",
-        );
+        throw new ApiError(503, "Email service is not configured. Please set RESEND_API_KEY.");
     }
 
     await resend.emails.send({
@@ -318,10 +313,7 @@ const sendResetCode = asyncHandler(async (req, res) => {
     await redis.set(email, code, "EX", 3 * 60);
 
     if (!resend) {
-        throw new ApiError(
-            503,
-            "Email service is not configured. Please set RESEND_API_KEY.",
-        );
+        throw new ApiError(503, "Email service is not configured. Please set RESEND_API_KEY.");
     }
 
     await resend.emails.send({

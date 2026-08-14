@@ -108,7 +108,7 @@ const Settings = () => {
             if (editingKeyId) {
                 await updateApiKey(editingKeyId, {
                     name: newKeyName,
-                    ...(newKeyValue ? { key: newKeyValue } : {})
+                    ...(newKeyValue ? { key: newKeyValue } : {}),
                 });
             } else {
                 await createApiKey({
@@ -220,7 +220,11 @@ const Settings = () => {
                                             type={showKey ? "text" : "password"}
                                             value={newKeyValue}
                                             onChange={(e) => handleKeyChange(e.target.value)}
-                                            placeholder={editingKeyId ? "(Leave blank to keep existing key)" : "sk-... (Auto-detects provider)"}
+                                            placeholder={
+                                                editingKeyId
+                                                    ? "(Leave blank to keep existing key)"
+                                                    : "sk-... (Auto-detects provider)"
+                                            }
                                             className="w-full bg-[#111] border border-white/10 rounded-lg pl-4 pr-12 py-2.5 text-white focus:outline-none focus:border-accent-blue/50 font-mono text-sm"
                                         />
                                         <button
@@ -270,10 +274,23 @@ const Settings = () => {
                                 )}
                                 <button
                                     onClick={handleSaveKey}
-                                    disabled={isSaving || !newKeyName || (!newKeyValue && !editingKeyId) || !selectedProvider}
+                                    disabled={
+                                        isSaving ||
+                                        !newKeyName ||
+                                        (!newKeyValue && !editingKeyId) ||
+                                        !selectedProvider
+                                    }
                                     className="bg-accent-blue hover:bg-blue-600 disabled:opacity-50 disabled:bg-gray-700 disabled:cursor-not-allowed text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 justify-center shrink-0 w-full sm:w-auto"
                                 >
-                                    {isSaving ? "Saving..." : (editingKeyId ? "Update Key" : <><Plus className="w-4 h-4" /> Save Key Configuration</>)}
+                                    {isSaving ? (
+                                        "Saving..."
+                                    ) : editingKeyId ? (
+                                        "Update Key"
+                                    ) : (
+                                        <>
+                                            <Plus className="w-4 h-4" /> Save Key Configuration
+                                        </>
+                                    )}
                                 </button>
                             </div>
                         </div>

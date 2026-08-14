@@ -23,7 +23,9 @@ function validateGroupByMiddleware(req, res, next) {
 
 usageRouter.route("/lifetime-tokens").get(verifyStrictJWT, totalTokensUsedInLifetime);
 usageRouter.route("/group/:groupBy").get(verifyStrictJWT, validateGroupByMiddleware, tokensUsedByGroup);
-usageRouter.route("/tokens/:groupBy").get(verifyStrictJWT, validateGroupByMiddleware, validate(tokensByGroupSchema), tokensUsedByGroup);
+usageRouter
+    .route("/tokens/:groupBy")
+    .get(verifyStrictJWT, validateGroupByMiddleware, validate(tokensByGroupSchema), tokensUsedByGroup);
 usageRouter.route("/top-chats").get(verifyStrictJWT, topChatsByTokensUsed);
 usageRouter.route("/breakdown").get(verifyStrictJWT, usageBreakdownByModel);
 

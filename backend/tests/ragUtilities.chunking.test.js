@@ -4,10 +4,7 @@ import { splitDocumentationContent } from "../utils/ragUtilities.js";
 
 describe("splitDocumentationContent", () => {
     it("returns chunk objects with code blocks kept intact", () => {
-        const fixture = readFileSync(
-            new URL("./fixtures/code-doc-sample.md", import.meta.url),
-            "utf8",
-        );
+        const fixture = readFileSync(new URL("./fixtures/code-doc-sample.md", import.meta.url), "utf8");
 
         const chunks = splitDocumentationContent(fixture, {
             chunkSize: 250,

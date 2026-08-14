@@ -245,7 +245,12 @@ export default function ChatScreen({ route, navigation }: Props) {
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    centered: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background },
+    centered: {
+        flex: 1,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: colors.background,
+    },
     listContent: { padding: 16, flexGrow: 1 },
     empty: { color: colors.muted, textAlign: "center", marginTop: 40 },
     modelBar: { maxHeight: 52, borderBottomWidth: 1, borderBottomColor: colors.border },

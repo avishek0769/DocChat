@@ -42,15 +42,27 @@ import { apiRateLimiter } from "../middlewares/rateLimit.middleware.js";
 const chatRouter = Router();
 
 chatRouter.route("/expectation").get(verifyStrictJWT, validate(expectationQuerySchema), expectation);
-chatRouter.route("/create").post(verifyStrictJWT, apiRateLimiter, validate(createChatSchema), createChat);
+chatRouter
+    .route("/create")
+    .post(verifyStrictJWT, apiRateLimiter, validate(createChatSchema), createChat);
 chatRouter
     .route("/:chatId/sources")
-    .post(verifyStrictJWT, validate(chatIdParamSchema), validate(addChatSourceSchema), verifyChatOwnership, addChatSource)
-    .delete(verifyStrictJWT, validate(chatIdParamSchema), validate(addChatSourceSchema), verifyChatOwnership, removeChatSource);
+    .post(
+        verifyStrictJWT,
+        validate(chatIdParamSchema),
+        validate(addChatSourceSchema),
+        verifyChatOwnership,
+        addChatSource,
+    )
+    .delete(
+        verifyStrictJWT,
+        validate(chatIdParamSchema),
+        validate(addChatSourceSchema),
+        verifyChatOwnership,
+        removeChatSource,
+    );
 chatRouter.route("/qdrant-cleanup").get(verifyStrictJWT, validate(qdrantCleanupSchema), qdrantCleanup);
-chatRouter
-    .route("/status/:chatId")
-    .get(verifyStrictJWT, validate(chatIdParamSchema), progressStatus);
+chatRouter.route("/status/:chatId").get(verifyStrictJWT, validate(chatIdParamSchema), progressStatus);
 chatRouter
     .route("/status/stream/:chatId")
     .get(verifyStrictJWT, validate(chatIdParamSchema), streamChatStatus);
@@ -69,16 +81,20 @@ chatRouter
 chatRouter
     .route("/:chatId")
     .get(verifyStrictJWT, validate(chatIdParamSchema), verifyChatOwnership, chatDetails)
-    .patch(verifyStrictJWT, validate(chatIdParamSchema), validate(renameChatSchema), verifyChatOwnership, renameChat);
+    .patch(
+        verifyStrictJWT,
+        validate(chatIdParamSchema),
+        validate(renameChatSchema),
+        verifyChatOwnership,
+        renameChat,
+    );
 chatRouter
     .route("/pages-indexed/:chatId")
     .get(verifyStrictJWT, validate(chatIdParamSchema), verifyChatOwnership, listAllPagesIndexed);
 chatRouter
     .route("/:chatId/sources/:sourceId/raw")
     .get(verifyStrictJWT, validate(chatIdParamSchema), verifyChatOwnership, downloadRawSource);
-chatRouter
-    .route("/bulk-delete")
-    .post(verifyStrictJWT, validate(bulkDeleteChatsSchema), bulkDeleteChats);
+chatRouter.route("/bulk-delete").post(verifyStrictJWT, validate(bulkDeleteChatsSchema), bulkDeleteChats);
 chatRouter
     .route("/:chatId")
     .delete(verifyStrictJWT, validate(chatIdParamSchema), verifyChatOwnership, deleteChat);

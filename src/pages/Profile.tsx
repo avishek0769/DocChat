@@ -210,7 +210,8 @@ const Profile = () => {
                             <div>
                                 <p className="text-sm font-medium text-gray-200">Delete all my data</p>
                                 <p className="text-xs text-gray-500">
-                                    Permanently deletes your chats, messages, API keys, and usage history.
+                                    Permanently deletes your chats, messages, API keys, and usage
+                                    history.
                                 </p>
                             </div>
                             <button
@@ -221,9 +222,7 @@ const Profile = () => {
                                 Delete My Data
                             </button>
                         </div>
-                        {deleteError && (
-                            <p className="mt-3 text-xs text-red-400">{deleteError}</p>
-                        )}
+                        {deleteError && <p className="mt-3 text-xs text-red-400">{deleteError}</p>}
                     </section>
 
                     {/* Logout */}
@@ -262,7 +261,8 @@ const Profile = () => {
                         </div>
                         <h3 className="text-lg font-semibold mb-2">Delete all data?</h3>
                         <p className="text-sm text-gray-400 mb-6">
-                            This will permanently delete all your chats, messages, API keys, and usage history. This cannot be undone.
+                            This will permanently delete all your chats, messages, API keys, and usage
+                            history. This cannot be undone.
                         </p>
                         <div className="flex gap-3">
                             <button

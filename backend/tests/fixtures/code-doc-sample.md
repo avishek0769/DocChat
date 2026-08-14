@@ -13,8 +13,8 @@ const response = await fetch("/api/me", {
 
 GET /api/me
 
-| Method | Path | Description |
-| --- | --- | --- |
-| GET | /api/me | Returns the current user |
+| Method | Path    | Description              |
+| ------ | ------- | ------------------------ |
+| GET    | /api/me | Returns the current user |
 
 - Include the bearer token in the Authorization header.

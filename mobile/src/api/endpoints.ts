@@ -103,8 +103,7 @@ export const createChat = (payload: {
         body: JSON.stringify(payload),
     });
 
-export const deleteChat = (chatId: string) =>
-    apiRequest(`/chat/${chatId}`, { method: "DELETE" });
+export const deleteChat = (chatId: string) => apiRequest(`/chat/${chatId}`, { method: "DELETE" });
 
 export const getChatMessages = (chatId: string) =>
     apiRequest<{ messages: ChatMessageItem[] }>(`/message/all/${chatId}`, { method: "GET" });
@@ -117,15 +116,13 @@ export const getMessageSources = (messageId: string) =>
 export const getAvailableModels = () =>
     apiRequest<{ models: string[] }>("/message/models", { method: "GET" });
 
-export const getApiKeys = () =>
-    apiRequest<{ apiKeys: ApiKeyItem[] }>("/apikey/list", { method: "GET" });
+export const getApiKeys = () => apiRequest<{ apiKeys: ApiKeyItem[] }>("/apikey/list", { method: "GET" });
 
 /** POST /apikey/add — store a new provider key (encrypted server-side). */
 export const createApiKey = (payload: { key: string; name: string; provider: Provider }) =>
     apiRequest("/apikey/add", { method: "POST", body: JSON.stringify(payload) });
 
-export const deleteApiKey = (id: string) =>
-    apiRequest(`/apikey/${id}`, { method: "DELETE" });
+export const deleteApiKey = (id: string) => apiRequest(`/apikey/${id}`, { method: "DELETE" });
 
 export const getLifetimeTokens = () =>
     apiRequest<LifetimeTokens>("/usage/lifetime-tokens", { method: "GET" });

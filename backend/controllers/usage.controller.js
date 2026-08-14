@@ -13,21 +13,19 @@ const totalTokensUsedInLifetime = asyncHandler(async (req, res) => {
             estimatedCostUsd: true,
         },
     });
-    return res
-        .status(200)
-        .json(
-            new ApiResponse(
-                200,
-                {
-                    _sum: {
-                        inputTokens: usage._sum.inputTokens || 0,
-                        outputTokens: usage._sum.outputTokens || 0,
-                        estimatedCostUsd: Number(usage._sum.estimatedCostUsd || 0),
-                    },
+    return res.status(200).json(
+        new ApiResponse(
+            200,
+            {
+                _sum: {
+                    inputTokens: usage._sum.inputTokens || 0,
+                    outputTokens: usage._sum.outputTokens || 0,
+                    estimatedCostUsd: Number(usage._sum.estimatedCostUsd || 0),
                 },
-                "Total tokens used in lifetime retrieved successfully",
-            ),
-        );
+            },
+            "Total tokens used in lifetime retrieved successfully",
+        ),
+    );
 });
 
 const tokensUsedByGroup = asyncHandler(async (req, res) => {
@@ -174,7 +172,7 @@ const usageBreakdownByModel = asyncHandler(async (req, res) => {
 
     const conditions = [Prisma.sql`u."user_id" = ${req.user.id}`];
     if (from) conditions.push(Prisma.sql`u."timestamp" >= ${new Date(from)}`);
-    if (to)   conditions.push(Prisma.sql`u."timestamp" <= ${new Date(to)}`);
+    if (to) conditions.push(Prisma.sql`u."timestamp" <= ${new Date(to)}`);
     const whereClause = Prisma.join(conditions, " AND ");
 
     const breakdown = await prisma.$queryRaw`
@@ -207,15 +205,19 @@ const usageBreakdownByModel = asyncHandler(async (req, res) => {
     const total = countResult[0]?.count || 0;
 
     return res.status(200).json(
-        new ApiResponse(200, {
-            data: breakdown,
-            pagination: {
-                page:       Number(page),
-                limit:      Number(limit),
-                total,
-                totalPages: Math.ceil(total / Number(limit)),
+        new ApiResponse(
+            200,
+            {
+                data: breakdown,
+                pagination: {
+                    page: Number(page),
+                    limit: Number(limit),
+                    total,
+                    totalPages: Math.ceil(total / Number(limit)),
+                },
             },
-        }, "Usage breakdown by model/provider retrieved successfully")
+            "Usage breakdown by model/provider retrieved successfully",
+        ),
     );
 });
 

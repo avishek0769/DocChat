@@ -48,9 +48,15 @@ const AdminUsers = () => {
                 <div className="max-w-6xl mx-auto space-y-8">
                     <header>
                         <h1 className="text-3xl font-bold mb-2">Users</h1>
-                        <p className="text-gray-400 text-sm">Browse platform users and open a detail view.</p>
+                        <p className="text-gray-400 text-sm">
+                            Browse platform users and open a detail view.
+                        </p>
                     </header>
-                    {error && <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">{error}</div>}
+                    {error && (
+                        <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+                            {error}
+                        </div>
+                    )}
                     <section className="p-6 rounded-xl bg-white/2 border border-white/5 overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead>
@@ -64,11 +70,18 @@ const AdminUsers = () => {
                             <tbody className="divide-y divide-white/5">
                                 {users.map((user) => (
                                     <tr key={user.id} className="hover:bg-white/2">
-                                        <td className="py-3 text-white">{user.fullname || user.username || user.id}</td>
+                                        <td className="py-3 text-white">
+                                            {user.fullname || user.username || user.id}
+                                        </td>
                                         <td className="py-3 text-gray-400">{user.email || "—"}</td>
-                                        <td className="py-3 text-gray-400">{user.isAdmin ? "Admin" : "User"}</td>
+                                        <td className="py-3 text-gray-400">
+                                            {user.isAdmin ? "Admin" : "User"}
+                                        </td>
                                         <td className="py-3 text-right space-x-3">
-                                            <Link className="text-accent-blue hover:underline" to={`/admin/users/${user.id}`}>
+                                            <Link
+                                                className="text-accent-blue hover:underline"
+                                                to={`/admin/users/${user.id}`}
+                                            >
                                                 View user
                                             </Link>
                                             <button
@@ -82,15 +95,33 @@ const AdminUsers = () => {
                                     </tr>
                                 ))}
                                 {!users.length && (
-                                    <tr><td className="py-10 text-center text-gray-500" colSpan={4}>No users found.</td></tr>
+                                    <tr>
+                                        <td className="py-10 text-center text-gray-500" colSpan={4}>
+                                            No users found.
+                                        </td>
+                                    </tr>
                                 )}
                             </tbody>
                         </table>
                     </section>
                     <div className="flex items-center justify-between">
-                        <button disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} className="px-4 py-2 rounded-lg bg-white/5 disabled:opacity-50">Prev</button>
-                        <span className="text-sm text-gray-400">Page {page} of {totalPages}</span>
-                        <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} className="px-4 py-2 rounded-lg bg-white/5 disabled:opacity-50">Next</button>
+                        <button
+                            disabled={page <= 1}
+                            onClick={() => setPage((p) => Math.max(1, p - 1))}
+                            className="px-4 py-2 rounded-lg bg-white/5 disabled:opacity-50"
+                        >
+                            Prev
+                        </button>
+                        <span className="text-sm text-gray-400">
+                            Page {page} of {totalPages}
+                        </span>
+                        <button
+                            disabled={page >= totalPages}
+                            onClick={() => setPage((p) => p + 1)}
+                            className="px-4 py-2 rounded-lg bg-white/5 disabled:opacity-50"
+                        >
+                            Next
+                        </button>
                     </div>
                 </div>
             </main>

@@ -75,7 +75,10 @@ function normalizeCollectionsResponse(response) {
     return [];
 }
 
-export async function cleanupQdrantCollections({ force = false, minAgeDays = DEFAULT_MIN_AGE_DAYS } = {}) {
+export async function cleanupQdrantCollections({
+    force = false,
+    minAgeDays = DEFAULT_MIN_AGE_DAYS,
+} = {}) {
     const dryRun = !force;
     const referencedCollectionNames = await getReferencedCollectionNames();
 
@@ -102,7 +105,11 @@ export async function cleanupQdrantCollections({ force = false, minAgeDays = DEF
         const minAgeMs = minAgeDays * MS_PER_DAY;
 
         if (!age.isKnown) {
-            skipped.push({ name: collectionName, reason: "unknownAge", message: "Unable to parse timestamp from collection name; skipping for safety." });
+            skipped.push({
+                name: collectionName,
+                reason: "unknownAge",
+                message: "Unable to parse timestamp from collection name; skipping for safety.",
+            });
             continue;
         }
 

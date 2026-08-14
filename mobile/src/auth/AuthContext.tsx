@@ -6,14 +6,7 @@
  * any request signs the user out. Mirrors the responsibilities of the web
  * client's `src/lib/auth.ts`.
  */
-import React, {
-    createContext,
-    useCallback,
-    useContext,
-    useEffect,
-    useMemo,
-    useState,
-} from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
 import { login as apiLogin } from "../api/endpoints";
 import { setAuthToken, setUnauthorizedHandler } from "../api/client";
@@ -79,10 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         applySession(null);
     }, [applySession]);
 
-    const value = useMemo(
-        () => ({ status, user, signIn, signOut }),
-        [status, user, signIn, signOut],
-    );
+    const value = useMemo(() => ({ status, user, signIn, signOut }), [status, user, signIn, signOut]);
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

@@ -15,7 +15,7 @@ const httpRequestDuration = new client.Histogram({
     help: "Duration of HTTP requests in seconds",
     labelNames: ["method", "route", "status_code"],
     buckets: [0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0],
-    registers: [registry]
+    registers: [registry],
 });
 
 // Middleware to record request latency
@@ -28,16 +28,16 @@ export const metricsMiddleware = (req, res, next) => {
     res.on("finish", () => {
         const diff = process.hrtime(start);
         const durationInSeconds = diff[0] + diff[1] / 1e9;
-        
+
         // Use req.route?.path (or fallback) to avoid high cardinality metrics from path parameters
         const route = req.route ? req.route.path : "unmatched";
         httpRequestDuration.observe(
             {
                 method: req.method,
                 route: route || "unknown",
-                status_code: res.statusCode
+                status_code: res.statusCode,
             },
-            durationInSeconds
+            durationInSeconds,
         );
     });
 
@@ -63,8 +63,8 @@ export async function checkHealth() {
         timestamp: new Date().toISOString(),
         services: {
             database: "UP",
-            redis: "UP"
-        }
+            redis: "UP",
+        },
     };
 
     let isHealthy = true;
@@ -121,12 +121,13 @@ export async function recordIngestionJobDuration(durationInSeconds) {
 async function getWorkerMetricsFromRedis() {
     const buckets = ["5", "15", "30", "60", "120", "300", "600", "+Inf"];
     const hash = await redis.hgetall("metrics:ingestion_job_duration_seconds:buckets").catch(() => ({}));
-    const sum = await redis.get("metrics:ingestion_job_duration_seconds:sum").catch(() => "0") || "0";
-    const count = await redis.get("metrics:ingestion_job_duration_seconds:count").catch(() => "0") || "0";
+    const sum = (await redis.get("metrics:ingestion_job_duration_seconds:sum").catch(() => "0")) || "0";
+    const count =
+        (await redis.get("metrics:ingestion_job_duration_seconds:count").catch(() => "0")) || "0";
 
     const lines = [
         "# HELP ingestion_job_duration_seconds Duration of ingestion jobs in seconds.",
-        "# TYPE ingestion_job_duration_seconds histogram"
+        "# TYPE ingestion_job_duration_seconds histogram",
     ];
 
     let runningSum = 0;
@@ -154,7 +155,7 @@ const queueJobsWaiting = new client.Gauge({
         } catch (error) {
             console.error("Failed to query queue metrics:", error.message);
         }
-    }
+    },
 });
 
 const queueJobsActive = new client.Gauge({
@@ -168,7 +169,7 @@ const queueJobsActive = new client.Gauge({
         } catch (error) {
             console.error("Failed to query queue metrics:", error.message);
         }
-    }
+    },
 });
 
 const queueJobsFailed = new client.Gauge({
@@ -182,7 +183,7 @@ const queueJobsFailed = new client.Gauge({
         } catch (error) {
             console.error("Failed to query queue metrics:", error.message);
         }
-    }
+    },
 });
 
 const queueJobsCompleted = new client.Gauge({
@@ -196,7 +197,7 @@ const queueJobsCompleted = new client.Gauge({
         } catch (error) {
             console.error("Failed to query queue metrics:", error.message);
         }
-    }
+    },
 });
 
 // Generate the full Prometheus-formatted metrics string

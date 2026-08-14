@@ -19,11 +19,7 @@ test("robots parser blocks disallowed paths and honors more specific allow rules
     resetCrawlStateForTests();
 
     const parser = parseRobotsTxt(
-        [
-            "User-agent: *",
-            "Disallow: /docs/private",
-            "Allow: /docs/private/public",
-        ].join("\n"),
+        ["User-agent: *", "Disallow: /docs/private", "Allow: /docs/private/public"].join("\n"),
         "https://docs.example.com/robots.txt",
     );
 
@@ -32,7 +28,11 @@ test("robots parser blocks disallowed paths and honors more specific allow rules
         false,
     );
     assert.equal(
-        isUrlAllowedByRobots("https://docs.example.com/docs/private/public/page", parser, "DocChatBot/1.0"),
+        isUrlAllowedByRobots(
+            "https://docs.example.com/docs/private/public/page",
+            parser,
+            "DocChatBot/1.0",
+        ),
         true,
     );
 });
@@ -41,11 +41,7 @@ test("robots parser exposes crawl-delay for the configured worker user-agent", (
     resetCrawlStateForTests();
 
     const parser = parseRobotsTxt(
-        [
-            "User-agent: DocChatBot",
-            "Crawl-delay: 2.5",
-            "Disallow:",
-        ].join("\n"),
+        ["User-agent: DocChatBot", "Crawl-delay: 2.5", "Disallow:"].join("\n"),
         "https://docs.example.com/robots.txt",
     );
 

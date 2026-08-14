@@ -1,13 +1,11 @@
 interface SkeletonProps {
-  className?: string;
+    className?: string;
 }
 
 const Skeleton = ({ className = "" }: SkeletonProps) => {
-  return (
-    <div
-      className={`skeleton-shimmer rounded-md bg-white/10 ring-1 ring-white/10 ${className}`}
-    />
-  );
+    return (
+        <div className={`skeleton-shimmer rounded-md bg-white/10 ring-1 ring-white/10 ${className}`} />
+    );
 };
 
 export default Skeleton;

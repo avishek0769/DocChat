@@ -79,7 +79,7 @@ const getStoredSession = (): AuthSession | null => {
     } catch {
         return null; // Ignore quota or security errors
     }
-    
+
     if (!raw) return null;
 
     try {
@@ -88,13 +88,17 @@ const getStoredSession = (): AuthSession | null => {
 
         // Guard against stale or manually edited localStorage entries.
         if (!hasToken) {
-            try { localStorage.removeItem(AUTH_STORAGE_KEY); } catch {}
+            try {
+                localStorage.removeItem(AUTH_STORAGE_KEY);
+            } catch {}
             return null;
         }
 
         return parsed as AuthSession;
     } catch {
-        try { localStorage.removeItem(AUTH_STORAGE_KEY); } catch {}
+        try {
+            localStorage.removeItem(AUTH_STORAGE_KEY);
+        } catch {}
         return null;
     }
 };
@@ -283,7 +287,10 @@ const clearImpersonation = () => {
     }
 };
 
-export const startImpersonation = (impersonationToken: string, targetUser: ImpersonationInfo["targetUser"]) => {
+export const startImpersonation = (
+    impersonationToken: string,
+    targetUser: ImpersonationInfo["targetUser"],
+) => {
     const originalSession = getStoredSession();
     if (!originalSession) return;
 

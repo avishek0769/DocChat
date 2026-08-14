@@ -14,11 +14,11 @@ vi.mock("bullmq", () => {
                     waiting: 2,
                     active: 1,
                     failed: 0,
-                    completed: 5
+                    completed: 5,
                 };
             }
             async close() {}
-        }
+        },
     };
 });
 
@@ -26,16 +26,28 @@ vi.mock("bullmq", () => {
 vi.mock("ioredis", () => {
     class MockRedis {
         constructor() {}
-        on() { return this; }
-        once() { return this; }
-        off() { return this; }
-        quit() { return Promise.resolve(); }
-        disconnect() { return Promise.resolve(); }
-        connect() { return Promise.resolve(); }
+        on() {
+            return this;
+        }
+        once() {
+            return this;
+        }
+        off() {
+            return this;
+        }
+        quit() {
+            return Promise.resolve();
+        }
+        disconnect() {
+            return Promise.resolve();
+        }
+        connect() {
+            return Promise.resolve();
+        }
     }
     return {
         default: MockRedis,
-        Redis: MockRedis
+        Redis: MockRedis,
     };
 });
 
@@ -54,7 +66,7 @@ const originalGet = redis.get;
 let mockRedisStore = {
     buckets: {},
     sum: 0,
-    count: 0
+    count: 0,
 };
 
 // Mock the methods on the singleton instances
@@ -64,26 +76,26 @@ redis.ping = async () => "PONG";
 
 redis.multi = () => {
     const chain = {
-        hincrby: function(key, field, value) {
+        hincrby: function (key, field, value) {
             if (key === "metrics:ingestion_job_duration_seconds:buckets") {
                 const current = parseInt(mockRedisStore.buckets[field] || "0", 10);
                 mockRedisStore.buckets[field] = String(current + parseInt(value, 10));
             }
             return chain;
         },
-        incrbyfloat: function(key, value) {
+        incrbyfloat: function (key, value) {
             if (key === "metrics:ingestion_job_duration_seconds:sum") {
                 mockRedisStore.sum += parseFloat(value);
             }
             return chain;
         },
-        incr: function(key) {
+        incr: function (key) {
             if (key === "metrics:ingestion_job_duration_seconds:count") {
                 mockRedisStore.count += 1;
             }
             return chain;
         },
-        exec: async () => []
+        exec: async () => [],
     };
     return chain;
 };
@@ -106,7 +118,8 @@ redis.get = async (key) => {
 };
 
 // Import metrics after patching and mocking
-const { checkHealth, recordIngestionJobDuration, getPrometheusMetrics } = await import("../utils/metrics.js");
+const { checkHealth, recordIngestionJobDuration, getPrometheusMetrics } =
+    await import("../utils/metrics.js");
 
 // Reset the singleton methods in the teardown block to prevent polluting other test files
 afterAll(() => {
@@ -131,7 +144,7 @@ test("metrics getPrometheusMetrics output formatting with recorded data", async 
     mockRedisStore = {
         buckets: {},
         sum: 0,
-        count: 0
+        count: 0,
     };
 
     // Record an ingestion job duration of 12.5 seconds (falls in <= 15 bucket)
@@ -144,13 +157,13 @@ test("metrics getPrometheusMetrics output formatting with recorded data", async 
     assert.match(metricsStr, /http_request_duration_seconds/);
     assert.match(metricsStr, /bullmq_queue_jobs_waiting 2/);
     assert.match(metricsStr, /bullmq_queue_jobs_active 1/);
-    
+
     // Cumulative histogram assertions
     assert.match(metricsStr, /ingestion_job_duration_seconds_bucket\{le="5"\} 1/);
     assert.match(metricsStr, /ingestion_job_duration_seconds_bucket\{le="15"\} 2/);
     assert.match(metricsStr, /ingestion_job_duration_seconds_bucket\{le="30"\} 2/);
     assert.match(metricsStr, /ingestion_job_duration_seconds_bucket\{le="\+Inf"\} 2/);
-    
+
     assert.match(metricsStr, /ingestion_job_duration_seconds_sum 16\.7/);
     assert.match(metricsStr, /ingestion_job_duration_seconds_count 2/);
 });

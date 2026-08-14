@@ -55,12 +55,24 @@ export default function RootNavigator() {
                     <Stack.Screen name="Chats" component={ChatsScreen} options={{ title: "DocChat" }} />
                     <Stack.Screen name="Chat" component={ChatScreen} />
                     <Stack.Screen name="Usage" component={UsageScreen} options={{ title: "Account" }} />
-                    <Stack.Screen name="ApiKeys" component={ApiKeysScreen} options={{ title: "API Keys" }} />
+                    <Stack.Screen
+                        name="ApiKeys"
+                        component={ApiKeysScreen}
+                        options={{ title: "API Keys" }}
+                    />
                 </>
             ) : (
                 <>
-                    <Stack.Screen name="SignIn" component={SignInScreen} options={{ headerShown: false }} />
-                    <Stack.Screen name="SignUp" component={SignUpScreen} options={{ title: "Create account" }} />
+                    <Stack.Screen
+                        name="SignIn"
+                        component={SignInScreen}
+                        options={{ headerShown: false }}
+                    />
+                    <Stack.Screen
+                        name="SignUp"
+                        component={SignUpScreen}
+                        options={{ title: "Create account" }}
+                    />
                     <Stack.Screen
                         name="ForgotPassword"
                         component={ForgotPasswordScreen}

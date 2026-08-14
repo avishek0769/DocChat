@@ -161,7 +161,12 @@ export const Sidebar = ({ isCollapsed = false }: SidebarProps) => {
 
             {/* Profile Bottom & Theme Toggle */}
             <div className="p-4 border-t border-white/5 flex flex-col gap-4">
-                <div className={clsx("flex items-center justify-between", isCollapsed ? "justify-center" : "px-2")}>
+                <div
+                    className={clsx(
+                        "flex items-center justify-between",
+                        isCollapsed ? "justify-center" : "px-2",
+                    )}
+                >
                     {!isCollapsed && (
                         <span className="text-xs font-semibold text-gray-500 uppercase tracking-[0.2em]">
                             Theme

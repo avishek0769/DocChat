@@ -23,10 +23,11 @@ import {
     deleteMyData,
 } from "../controllers/user.controller.js";
 
-
 const userRouter = Router();
 
-userRouter.route("/send-verification-code").post(otpLimiter, validate(sendVerificationCodeSchema), sendVerificationCode);
+userRouter
+    .route("/send-verification-code")
+    .post(otpLimiter, validate(sendVerificationCodeSchema), sendVerificationCode);
 userRouter.route("/verify-email").post(validate(verifyEmailSchema), verifyEmail);
 userRouter.route("/register").post(authLimiter, validate(userRegisterSchema), userRegister);
 userRouter.route("/login").post(authLimiter, validate(userLogInSchema), userLogIn);

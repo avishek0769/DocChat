@@ -1,22 +1,12 @@
 import { useState, useCallback } from "react";
 import { Sidebar } from "../components/Sidebar";
-import {
-    FlaskConical,
-    AlertCircle,
-    RotateCcw,
-    ScanText,
-    ChevronRight,
-} from "lucide-react";
+import { FlaskConical, AlertCircle, RotateCcw, ScanText, ChevronRight } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // chunkText — pure utility, isolated so the ingestion worker can
 // import and reuse this same logic later without any UI coupling.
 // ─────────────────────────────────────────────────────────────────────────────
-export function chunkText(
-    text: string,
-    chunkSize: number,
-    overlap: number
-): string[] {
+export function chunkText(text: string, chunkSize: number, overlap: number): string[] {
     if (!text.trim() || chunkSize <= 0) return [];
     const safeOverlap = Math.min(overlap, chunkSize - 1);
     const chunks: string[] = [];
@@ -36,11 +26,11 @@ export function chunkText(
 const Sandbox = () => {
     const [inputText, setInputText] = useState<string>("");
     const [chunkSize, setChunkSize] = useState<number>(200);
-    const [overlap, setOverlap]     = useState<number>(50);
-    const [chunks, setChunks]       = useState<string[]>([]);
-    const [hasRun, setHasRun]       = useState<boolean>(false);
+    const [overlap, setOverlap] = useState<number>(50);
+    const [chunks, setChunks] = useState<string[]>([]);
+    const [hasRun, setHasRun] = useState<boolean>(false);
     const [isLoading, setIsLoading] = useState<boolean>(false);
-    const [error, setError]         = useState<string>("");
+    const [error, setError] = useState<string>("");
 
     // Overlap can never be >= chunkSize
     const maxOverlap = Math.max(0, chunkSize - 10);
@@ -96,16 +86,12 @@ const Sandbox = () => {
 
             <main className="flex-1 p-8 lg:p-12 overflow-y-auto w-full">
                 <div className="max-w-4xl mx-auto space-y-12">
-
                     {/* ── Page Header ── */}
                     <header>
-                        <h1 className="text-3xl font-bold mb-2">
-                            Chunking Sandbox
-                        </h1>
+                        <h1 className="text-3xl font-bold mb-2">Chunking Sandbox</h1>
                         <p className="text-gray-400 text-sm">
-                            Preview how your text will be split before running the
-                            full ingestion pipeline. No vectors are stored and no
-                            chat data is created.
+                            Preview how your text will be split before running the full ingestion
+                            pipeline. No vectors are stored and no chat data is created.
                         </p>
                     </header>
 
@@ -113,19 +99,14 @@ const Sandbox = () => {
                     <div className="flex items-start gap-3 text-sm text-gray-400 bg-accent-blue/5 p-4 rounded-xl border border-accent-blue/10">
                         <AlertCircle className="w-4 h-4 text-accent-blue shrink-0 mt-1.5" />
                         <div className="space-y-1">
-                            <p className="font-medium text-gray-200 text-lg">
-                                Sandbox Mode
-                            </p>
+                            <p className="font-medium text-gray-200 text-lg">Sandbox Mode</p>
                             <p className="leading-relaxed">
-                                Chunk size and overlap have a large impact on retrieval
-                                quality. Use this tool to interactively test different
-                                configurations on your text without touching the production
-                                pipeline. The{" "}
-                                <strong className="text-gray-300">
-                                    highlighted region
-                                </strong>{" "}
-                                in each chunk shows the characters carried over from the
-                                previous chunk as overlap.
+                                Chunk size and overlap have a large impact on retrieval quality. Use this
+                                tool to interactively test different configurations on your text without
+                                touching the production pipeline. The{" "}
+                                <strong className="text-gray-300">highlighted region</strong> in each
+                                chunk shows the characters carried over from the previous chunk as
+                                overlap.
                             </p>
                         </div>
                     </div>
@@ -141,9 +122,7 @@ const Sandbox = () => {
                     <section className="space-y-6">
                         <div className="flex items-center gap-3 border-b border-white/10 pb-4">
                             <ScanText className="w-6 h-6 text-accent-blue" />
-                            <h2 className="text-xl font-semibold text-gray-200">
-                                Input Text
-                            </h2>
+                            <h2 className="text-xl font-semibold text-gray-200">Input Text</h2>
                         </div>
 
                         <div className="bg-white/5 border border-white/10 rounded-xl p-6 space-y-3">
@@ -166,14 +145,11 @@ const Sandbox = () => {
                     <section className="space-y-6">
                         <div className="flex items-center gap-3 border-b border-white/10 pb-4">
                             <FlaskConical className="w-6 h-6 text-accent-blue" />
-                            <h2 className="text-xl font-semibold text-gray-200">
-                                Chunking Parameters
-                            </h2>
+                            <h2 className="text-xl font-semibold text-gray-200">Chunking Parameters</h2>
                         </div>
 
                         <div className="bg-white/5 border border-white/10 rounded-xl p-6">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-
                                 {/* Chunk Size */}
                                 <div className="space-y-3">
                                     <div className="flex justify-between items-center">
@@ -190,9 +166,7 @@ const Sandbox = () => {
                                         max={2000}
                                         step={50}
                                         value={chunkSize}
-                                        onChange={(e) =>
-                                            handleChunkSizeChange(Number(e.target.value))
-                                        }
+                                        onChange={(e) => handleChunkSizeChange(Number(e.target.value))}
                                         className="w-full accent-blue-500 cursor-pointer"
                                     />
                                     <div className="flex justify-between text-xs text-gray-600">
@@ -220,9 +194,7 @@ const Sandbox = () => {
                                         max={maxOverlap}
                                         step={10}
                                         value={overlap}
-                                        onChange={(e) =>
-                                            setOverlap(Number(e.target.value))
-                                        }
+                                        onChange={(e) => setOverlap(Number(e.target.value))}
                                         className="w-full accent-blue-500 cursor-pointer"
                                     />
                                     <div className="flex justify-between text-xs text-gray-600">
@@ -230,8 +202,8 @@ const Sandbox = () => {
                                         <span>{maxOverlap}</span>
                                     </div>
                                     <p className="text-xs text-gray-500">
-                                        Characters shared between consecutive chunks for
-                                        context continuity.
+                                        Characters shared between consecutive chunks for context
+                                        continuity.
                                     </p>
                                 </div>
                             </div>
@@ -272,9 +244,7 @@ const Sandbox = () => {
                     {hasRun && (
                         <section className="space-y-6">
                             <div className="flex items-center gap-3 border-b border-white/10 pb-4">
-                                <h2 className="text-xl font-semibold text-gray-200">
-                                    Results
-                                </h2>
+                                <h2 className="text-xl font-semibold text-gray-200">Results</h2>
                                 {/* Stats pills — same font-mono pill style as Settings.tsx */}
                                 <div className="flex gap-2 ml-auto flex-wrap">
                                     <span className="px-2 py-0.5 rounded-full bg-white/10 text-xs font-mono text-gray-300">
@@ -290,8 +260,10 @@ const Sandbox = () => {
                             </div>
 
                             {chunks.length === 0 ? (
-                                <div className="p-8 text-center bg-white/1 border border-white/5
-                                                border-dashed rounded-xl text-sm text-gray-400">
+                                <div
+                                    className="p-8 text-center bg-white/1 border border-white/5
+                                                border-dashed rounded-xl text-sm text-gray-400"
+                                >
                                     No chunks generated. Try adjusting your parameters.
                                 </div>
                             ) : (
@@ -314,25 +286,31 @@ const Sandbox = () => {
                                             >
                                                 {/* Left: chunk number badge */}
                                                 <div className="shrink-0">
-                                                    <span className="inline-flex items-center justify-center
+                                                    <span
+                                                        className="inline-flex items-center justify-center
                                                                      w-8 h-8 rounded-lg bg-accent-blue/10
                                                                      border border-accent-blue/20 text-accent-blue
-                                                                     text-xs font-bold font-mono">
+                                                                     text-xs font-bold font-mono"
+                                                    >
                                                         {idx + 1}
                                                     </span>
                                                 </div>
 
                                                 {/* Right: chunk body + meta */}
                                                 <div className="flex-1 min-w-0">
-                                                    <p className="text-sm text-gray-300 font-mono
-                                                                  whitespace-pre-wrap break-words leading-relaxed">
+                                                    <p
+                                                        className="text-sm text-gray-300 font-mono
+                                                                  whitespace-pre-wrap break-words leading-relaxed"
+                                                    >
                                                         {/* Highlight the overlap at the start of every
                                                             chunk except the first */}
                                                         {idx > 0 && overlap > 0 ? (
                                                             <>
-                                                                <span className="bg-accent-purple/30 text-purple-200
+                                                                <span
+                                                                    className="bg-accent-purple/30 text-purple-200
                                                                                  rounded px-0.5 border-b
-                                                                                 border-accent-purple/40">
+                                                                                 border-accent-purple/40"
+                                                                >
                                                                     {chunk.slice(0, overlap)}
                                                                 </span>
                                                                 {chunk.slice(overlap)}
@@ -352,7 +330,6 @@ const Sandbox = () => {
                             )}
                         </section>
                     )}
-
                 </div>
             </main>
         </div>

@@ -147,16 +147,12 @@ const Dashboard = () => {
 
     const toggleChatSelection = (chatId: string) => {
         setSelectedChats((prev) =>
-            prev.includes(chatId)
-                ? prev.filter((id) => id !== chatId)
-                : [...prev, chatId]
+            prev.includes(chatId) ? prev.filter((id) => id !== chatId) : [...prev, chatId],
         );
     };
 
     const filteredChats = chats.filter((chat) => {
-        const liveStatus = normalizeStatus(
-            chatProgress[chat.id]?.status || chat.status,
-        );
+        const liveStatus = normalizeStatus(chatProgress[chat.id]?.status || chat.status);
 
         const search = searchTerm.trim().toLowerCase();
 
@@ -251,8 +247,8 @@ const Dashboard = () => {
             if (update.status !== "ready") continue;
             const prevStatus = normalizeStatus(
                 chatProgressRef.current[update.id]?.status ||
-                chatsRef.current.find((c) => c.id === update.id)?.status ||
-                "",
+                    chatsRef.current.find((c) => c.id === update.id)?.status ||
+                    "",
             );
             if (prevStatus !== "ready") {
                 invalidatePagesIndexed(update.id);
@@ -294,46 +290,51 @@ const Dashboard = () => {
         );
     }, []);
 
-    const handleProgressUpdate = useCallback((chatId: string, statusData: { status: string; progress: number }) => {
-        const status = normalizeStatus(statusData.status);
-        const progress = clampProgress(statusData.progress);
-        
-        if (status === "ready") {
-            const prevStatus = normalizeStatus(
-                chatProgressRef.current[chatId]?.status ||
-                    chatsRef.current.find((c) => c.id === chatId)?.status ||
-                    ""
-            );
-            if (prevStatus !== "ready") {
-                invalidatePagesIndexed(chatId);
+    const handleProgressUpdate = useCallback(
+        (chatId: string, statusData: { status: string; progress: number }) => {
+            const status = normalizeStatus(statusData.status);
+            const progress = clampProgress(statusData.progress);
+
+            if (status === "ready") {
+                const prevStatus = normalizeStatus(
+                    chatProgressRef.current[chatId]?.status ||
+                        chatsRef.current.find((c) => c.id === chatId)?.status ||
+                        "",
+                );
+                if (prevStatus !== "ready") {
+                    invalidatePagesIndexed(chatId);
+                }
             }
-        }
 
-        setChatProgress((prev) => ({
-            ...prev,
-            [chatId]: { status, progress }
-        }));
+            setChatProgress((prev) => ({
+                ...prev,
+                [chatId]: { status, progress },
+            }));
 
-        setChats((prev) =>
-            prev.map((chat) => {
-                if (chat.id !== chatId) return chat;
+            setChats((prev) =>
+                prev.map((chat) => {
+                    if (chat.id !== chatId) return chat;
 
-                const estimatedPages = chat.totalPages > 0
-                    ? Math.round((progress / 100) * chat.totalPages)
-                    : chat.pages;
+                    const estimatedPages =
+                        chat.totalPages > 0
+                            ? Math.round((progress / 100) * chat.totalPages)
+                            : chat.pages;
 
-                const nextPages = status === "ready"
-                    ? chat.totalPages || chat.pages
-                    : Math.max(chat.pages, estimatedPages);
+                    const nextPages =
+                        status === "ready"
+                            ? chat.totalPages || chat.pages
+                            : Math.max(chat.pages, estimatedPages);
 
-                return {
-                    ...chat,
-                    status,
-                    pages: nextPages,
-                };
-            })
-        );
-    }, []);
+                    return {
+                        ...chat,
+                        status,
+                        pages: nextPages,
+                    };
+                }),
+            );
+        },
+        [],
+    );
 
     useEffect(() => {
         const inFlightChats = chats.filter(
@@ -353,10 +354,10 @@ const Dashboard = () => {
             }
         } else {
             // SSE Logic
-            const currentInFlightIds = new Set(inFlightChats.map(c => c.id));
+            const currentInFlightIds = new Set(inFlightChats.map((c) => c.id));
 
             // Clean up completed/removed chats
-            Object.keys(sseCleanupsRef.current).forEach(chatId => {
+            Object.keys(sseCleanupsRef.current).forEach((chatId) => {
                 if (!currentInFlightIds.has(chatId)) {
                     sseCleanupsRef.current[chatId]();
                     delete sseCleanupsRef.current[chatId];
@@ -364,7 +365,7 @@ const Dashboard = () => {
             });
 
             // Start SSE for new in-flight chats
-            inFlightChats.forEach(chat => {
+            inFlightChats.forEach((chat) => {
                 if (!sseCleanupsRef.current[chat.id]) {
                     sseCleanupsRef.current[chat.id] = subscribeToChatStatus(
                         chat.id,
@@ -372,7 +373,7 @@ const Dashboard = () => {
                         () => {
                             // On error, fallback to polling
                             setUsePollingFallback(true);
-                        }
+                        },
                     );
                 }
             });
@@ -385,12 +386,12 @@ const Dashboard = () => {
                 clearInterval(pollIntervalRef.current);
             }
             const cleanups = sseCleanupsRef.current;
-            Object.values(cleanups).forEach(cleanup => cleanup());
+            Object.values(cleanups).forEach((cleanup) => cleanup());
         };
     }, []);
 
     const handleCreateChat = async () => {
-        if (!chatUrls.some(url => url.trim())) return;
+        if (!chatUrls.some((url) => url.trim())) return;
         setIsCreating(true);
         setError("");
         try {
@@ -450,19 +451,13 @@ const Dashboard = () => {
 
             await bulkDeleteChats(selectedChats);
 
-            setChats((prev) =>
-                prev.filter((chat) => !selectedChats.includes(chat.id))
-            );
+            setChats((prev) => prev.filter((chat) => !selectedChats.includes(chat.id)));
 
             showToast(`${selectedChats.length} chats deleted`);
 
             setSelectedChats([]);
         } catch (err) {
-            setError(
-                err instanceof Error
-                    ? err.message
-                    : "Failed to delete selected chats."
-            );
+            setError(err instanceof Error ? err.message : "Failed to delete selected chats.");
         } finally {
             setIsDeleting(false);
         }
@@ -500,7 +495,9 @@ const Dashboard = () => {
             const response = await renameChat(renameTarget.id, nextName);
             const updatedName = response?.chat?.name || nextName;
             setChats((prev) =>
-                prev.map((chat) => (chat.id === renameTarget.id ? { ...chat, title: updatedName } : chat)),
+                prev.map((chat) =>
+                    chat.id === renameTarget.id ? { ...chat, title: updatedName } : chat,
+                ),
             );
             setRenameTarget(null);
             setRenameName("");
@@ -542,8 +539,7 @@ const Dashboard = () => {
     };
 
     // Disabled state for the Start Processing button
-    const isStartDisabled =
-        !chatUrls.some(url => url.trim());
+    const isStartDisabled = !chatUrls.some((url) => url.trim());
     const getStatusBadge = (isVectorLess: boolean, status: string) => {
         switch (status) {
             case "ready":
@@ -590,7 +586,6 @@ const Dashboard = () => {
                                 <span className="text-white">{chats.length}</span> chats
                             </div>
                             <button
-
                                 onClick={() => setIsModalOpen(true)}
                                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-accent-blue hover:bg-accent-blue/90 text-white font-medium transition-colors shadow-lg shadow-accent-blue/20"
                             >
@@ -663,9 +658,7 @@ const Dashboard = () => {
                                 className="p-5 rounded-xl bg-white/2 border border-white/5 flex items-center justify-between"
                             >
                                 <div>
-                                    <div className="text-sm text-gray-400 mb-1">
-                                        {stat.label}
-                                    </div>
+                                    <div className="text-sm text-gray-400 mb-1">{stat.label}</div>
                                     <p className="text-2xl font-bold">{stat.value}</p>
                                     {stat.action}
                                 </div>
@@ -703,7 +696,9 @@ const Dashboard = () => {
                                                     {run.chat?.name || run.chatId}
                                                 </p>
                                                 <p className="text-xs text-gray-500 mt-1">
-                                                    {run.chatSource?.heading || run.chatSourceId || "No source"}
+                                                    {run.chatSource?.heading ||
+                                                        run.chatSourceId ||
+                                                        "No source"}
                                                 </p>
                                             </div>
                                             <div className="text-right">
@@ -716,7 +711,9 @@ const Dashboard = () => {
                                             </div>
                                         </div>
                                         <div className="mt-4 rounded-xl bg-white/5 p-3 text-sm text-gray-300 border border-white/5">
-                                            {run.errorMessage || run.errorCode || "Unknown ingestion failure."}
+                                            {run.errorMessage ||
+                                                run.errorCode ||
+                                                "Unknown ingestion failure."}
                                         </div>
                                     </div>
                                 ))}
@@ -764,7 +761,8 @@ const Dashboard = () => {
                         {selectedChats.length > 0 && (
                             <div className="mb-4 flex items-center justify-between rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3">
                                 <span className="text-sm text-gray-300">
-                                    {selectedChats.length} chat{selectedChats.length > 1 ? "s" : ""} selected
+                                    {selectedChats.length} chat{selectedChats.length > 1 ? "s" : ""}{" "}
+                                    selected
                                 </span>
 
                                 <button
@@ -854,41 +852,42 @@ const Dashboard = () => {
                                             {/* Processing Progress Bar */}
                                             {(liveStatus === "processing" ||
                                                 liveStatus === "queued") && (
-                                                    <div className="mb-4">
-                                                        {chat.isVectorLess ? (
-                                                            <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-gray-400 flex items-center gap-2">
-                                                                Processing (vectorless)... feel free to return later.
-                                                            </div>
-                                                        ) : (
-                                                            <>
-                                                                <div className="flex items-center justify-between text-xs mb-2">
-                                                                    <span className="text-gray-400 flex items-center gap-1.5">
-                                                                        <Loader2 className="w-3 h-3 animate-spin text-yellow-400" />
-                                                                        Ingesting pages...
-                                                                    </span>
-                                                                    <span className="text-yellow-400 font-medium font-mono">
-                                                                        {Math.round(
-                                                                            (progressPercent / 100) *
+                                                <div className="mb-4">
+                                                    {chat.isVectorLess ? (
+                                                        <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-gray-400 flex items-center gap-2">
+                                                            Processing (vectorless)... feel free to
+                                                            return later.
+                                                        </div>
+                                                    ) : (
+                                                        <>
+                                                            <div className="flex items-center justify-between text-xs mb-2">
+                                                                <span className="text-gray-400 flex items-center gap-1.5">
+                                                                    <Loader2 className="w-3 h-3 animate-spin text-yellow-400" />
+                                                                    Ingesting pages...
+                                                                </span>
+                                                                <span className="text-yellow-400 font-medium font-mono">
+                                                                    {Math.round(
+                                                                        (progressPercent / 100) *
                                                                             (chat.totalPages || 0),
-                                                                        )}
-                                                                        /{chat.totalPages || 0}
-                                                                    </span>
-                                                                </div>
-                                                                <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden border border-white/5">
-                                                                    <div
-                                                                        className="h-full bg-linear-to-r from-yellow-500 to-amber-400 rounded-full transition-all duration-500 ease-out"
-                                                                        style={{
-                                                                            width: `${progressPercent}%`,
-                                                                        }}
-                                                                    />
-                                                                </div>
-                                                                <p className="text-xs text-gray-500 mt-1.5 text-right">
-                                                                    {progressPercent}% complete
-                                                                </p>
-                                                            </>
-                                                        )}
-                                                    </div>
-                                                )}
+                                                                    )}
+                                                                    /{chat.totalPages || 0}
+                                                                </span>
+                                                            </div>
+                                                            <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden border border-white/5">
+                                                                <div
+                                                                    className="h-full bg-linear-to-r from-yellow-500 to-amber-400 rounded-full transition-all duration-500 ease-out"
+                                                                    style={{
+                                                                        width: `${progressPercent}%`,
+                                                                    }}
+                                                                />
+                                                            </div>
+                                                            <p className="text-xs text-gray-500 mt-1.5 text-right">
+                                                                {progressPercent}% complete
+                                                            </p>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            )}
 
                                             {/* Stats for ready/failed */}
                                             {liveStatus !== "processing" && liveStatus !== "queued" && (
@@ -964,28 +963,27 @@ const Dashboard = () => {
                                     );
                                 })}
                             </div>
+                        ) : chats.length === 0 ? (
+                            <EmptyState
+                                icon={<PlusCircle className="w-12 h-12" />}
+                                title="Create your first documentation chat"
+                                description="Add a documentation URL and build a knowledge base. Once indexing is complete, you can start asking questions about your docs."
+                                actionLabel="Create New Chat"
+                                onAction={() => setIsModalOpen(true)}
+                            />
                         ) : (
-                            chats.length === 0 ? (
-                                <EmptyState
-                                    icon={<PlusCircle className="w-12 h-12" />}
-                                    title="Create your first documentation chat"
-                                    description="Add a documentation URL and build a knowledge base. Once indexing is complete, you can start asking questions about your docs."
-                                    actionLabel="Create New Chat"
-                                    onAction={() => setIsModalOpen(true)}
-                                />
-                            ) : (
-                                <div className="rounded-2xl border border-white/5 border-dashed bg-white/1 p-12 text-center flex flex-col items-center">
-                                    <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mb-4 border border-white/10">
-                                        <Database className="w-8 h-8 text-gray-400" />
-                                    </div>
-                                    <h3 className="text-xl font-semibold mb-2">
-                                        No chats match the current search or filter.
-                                    </h3>
-                                    <p className="text-gray-400 max-w-sm mb-6">
-                                        Try a different search term or clear the status filter to see more chats.
-                                    </p>
+                            <div className="rounded-2xl border border-white/5 border-dashed bg-white/1 p-12 text-center flex flex-col items-center">
+                                <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mb-4 border border-white/10">
+                                    <Database className="w-8 h-8 text-gray-400" />
                                 </div>
-                            )
+                                <h3 className="text-xl font-semibold mb-2">
+                                    No chats match the current search or filter.
+                                </h3>
+                                <p className="text-gray-400 max-w-sm mb-6">
+                                    Try a different search term or clear the status filter to see more
+                                    chats.
+                                </p>
+                            </div>
                         )}
                     </div>
                 </div>
@@ -1040,7 +1038,9 @@ const Dashboard = () => {
                                                     className="text-[11px] text-gray-500 mt-2"
                                                     title={
                                                         source.lastIndexedAt
-                                                            ? new Date(source.lastIndexedAt).toLocaleString()
+                                                            ? new Date(
+                                                                  source.lastIndexedAt,
+                                                              ).toLocaleString()
                                                             : undefined
                                                     }
                                                 >
@@ -1143,7 +1143,8 @@ const Dashboard = () => {
                                     className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-blue/50 focus:ring-1 focus:ring-accent-blue/50 transition-all font-mono"
                                 />
                                 <p className="text-xs text-gray-500">
-                                    Add one or more documentation URLs. We'll scrape each page and its sub-pages automatically.
+                                    Add one or more documentation URLs. We'll scrape each page and its
+                                    sub-pages automatically.
                                 </p>
                                 <button
                                     type="button"
@@ -1159,7 +1160,9 @@ const Dashboard = () => {
                                                 key={url}
                                                 className="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-white/5 border border-white/10"
                                             >
-                                                <span className="text-xs text-gray-300 truncate font-mono">{url}</span>
+                                                <span className="text-xs text-gray-300 truncate font-mono">
+                                                    {url}
+                                                </span>
                                                 <button
                                                     type="button"
                                                     onClick={() => handleRemoveChatUrl(url)}
@@ -1175,15 +1178,18 @@ const Dashboard = () => {
 
                             {/* Ingestion Mode */}
                             <div className="space-y-2">
-                                <label className="text-sm font-medium text-gray-300">Ingestion Mode</label>
+                                <label className="text-sm font-medium text-gray-300">
+                                    Ingestion Mode
+                                </label>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                     <button
                                         type="button"
                                         onClick={() => setIsVectorLess(false)}
-                                        className={`rounded-lg border px-3 py-2.5 text-left transition-colors ${!isVectorLess
-                                            ? "border-accent-blue/60 bg-accent-blue/10"
-                                            : "border-white/10 bg-white/5 hover:bg-white/10"
-                                            }`}
+                                        className={`rounded-lg border px-3 py-2.5 text-left transition-colors ${
+                                            !isVectorLess
+                                                ? "border-accent-blue/60 bg-accent-blue/10"
+                                                : "border-white/10 bg-white/5 hover:bg-white/10"
+                                        }`}
                                     >
                                         <p className="text-sm font-medium text-white">Vector</p>
                                         <p className="text-xs text-gray-400 mt-0.5">
@@ -1193,10 +1199,11 @@ const Dashboard = () => {
                                     <button
                                         type="button"
                                         onClick={() => setIsVectorLess(true)}
-                                        className={`rounded-lg border px-3 py-2.5 text-left transition-colors ${isVectorLess
-                                            ? "border-accent-blue/60 bg-accent-blue/10"
-                                            : "border-white/10 bg-white/5 hover:bg-white/10"
-                                            }`}
+                                        className={`rounded-lg border px-3 py-2.5 text-left transition-colors ${
+                                            isVectorLess
+                                                ? "border-accent-blue/60 bg-accent-blue/10"
+                                                : "border-white/10 bg-white/5 hover:bg-white/10"
+                                        }`}
                                     >
                                         <p className="text-sm font-medium text-white">Vectorless</p>
                                         <p className="text-xs text-gray-400 mt-1 line-clamp-2">
@@ -1309,9 +1316,13 @@ const Dashboard = () => {
                         </div>
                         <h3 className="text-lg font-semibold mb-2 text-center">Rename Chat</h3>
                         <p className="text-sm text-gray-400 mb-4 text-center">
-                            Give <strong className="text-gray-200">"{renameTarget.title}"</strong> a clearer name.
+                            Give <strong className="text-gray-200">"{renameTarget.title}"</strong> a
+                            clearer name.
                         </p>
-                        <label htmlFor="dashboard-rename-chat" className="block text-sm text-gray-300 mb-2">
+                        <label
+                            htmlFor="dashboard-rename-chat"
+                            className="block text-sm text-gray-300 mb-2"
+                        >
                             Chat name
                         </label>
                         <input
@@ -1345,7 +1356,9 @@ const Dashboard = () => {
                             </button>
                             <button
                                 type="submit"
-                                disabled={isRenaming || !renameName.trim() || renameName.trim().length > 100}
+                                disabled={
+                                    isRenaming || !renameName.trim() || renameName.trim().length > 100
+                                }
                                 className="flex-1 px-4 py-2 rounded-lg text-sm font-medium text-white bg-accent-blue hover:bg-accent-blue/90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors inline-flex items-center justify-center gap-2"
                             >
                                 {isRenaming ? (

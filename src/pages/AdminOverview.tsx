@@ -12,12 +12,12 @@ const AdminOverview = () => {
 
     useEffect(() => {
         const load = async () => {
-                setError("");
-                try {
+            setError("");
+            try {
                 setData(await getAdminOverview(range));
-                } catch (err) {
-                    setError(err instanceof Error ? err.message : "Failed to load admin overview.");
-                }
+            } catch (err) {
+                setError(err instanceof Error ? err.message : "Failed to load admin overview.");
+            }
         };
         load();
     }, [range]);
@@ -68,12 +68,17 @@ const AdminOverview = () => {
                             const icons = [Users, MessageSquare, Database, Activity];
                             const Icon = icons[idx % icons.length];
                             return (
-                                <div key={item.label} className="p-5 rounded-xl bg-white/2 border border-white/5">
+                                <div
+                                    key={item.label}
+                                    className="p-5 rounded-xl bg-white/2 border border-white/5"
+                                >
                                     <div className="flex items-center justify-between mb-4">
                                         <p className="text-sm text-gray-400">{item.label}</p>
                                         <Icon className="w-5 h-5 text-accent-blue" />
                                     </div>
-                                    <p className="text-3xl font-bold">{Number(item.value || 0).toLocaleString()}</p>
+                                    <p className="text-3xl font-bold">
+                                        {Number(item.value || 0).toLocaleString()}
+                                    </p>
                                 </div>
                             );
                         })}
@@ -88,21 +93,29 @@ const AdminOverview = () => {
                             <table className="w-full text-sm">
                                 <thead>
                                     <tr className="text-gray-400 border-b border-white/5">
-                                    <th className="text-left pb-3 font-medium">Type</th>
+                                        <th className="text-left pb-3 font-medium">Type</th>
                                         <th className="text-left pb-3 font-medium">User ID</th>
                                         <th className="text-left pb-3 font-medium">Chat ID</th>
                                         <th className="text-left pb-3 font-medium">Metadata</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-white/5">
-                                    {recent.length ? recent.map((item) => (
-                                        <tr key={item.id} className="hover:bg-white/2">
-                                            <td className="py-3 text-gray-300">{item.type}</td>
-                                            <td className="py-3 text-gray-400">{item.userId || "—"}</td>
-                                            <td className="py-3 text-gray-400">{item.chatId || "—"}</td>
-                                            <td className="py-3 text-gray-400">{item.metadata ? JSON.stringify(item.metadata) : "—"}</td>
-                                        </tr>
-                                    )) : (
+                                    {recent.length ? (
+                                        recent.map((item) => (
+                                            <tr key={item.id} className="hover:bg-white/2">
+                                                <td className="py-3 text-gray-300">{item.type}</td>
+                                                <td className="py-3 text-gray-400">
+                                                    {item.userId || "—"}
+                                                </td>
+                                                <td className="py-3 text-gray-400">
+                                                    {item.chatId || "—"}
+                                                </td>
+                                                <td className="py-3 text-gray-400">
+                                                    {item.metadata ? JSON.stringify(item.metadata) : "—"}
+                                                </td>
+                                            </tr>
+                                        ))
+                                    ) : (
                                         <tr>
                                             <td colSpan={4} className="py-10 text-center text-gray-500">
                                                 No recent activity.

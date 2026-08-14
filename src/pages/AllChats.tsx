@@ -17,7 +17,14 @@ import {
 } from "lucide-react";
 import { Sidebar } from "../components/Sidebar";
 import EmptyState from "../components/EmptyState";
-import { deleteChat, getChats, getChatStatus, renameChat, subscribeToChatStatus, type ChatItem } from "../lib/api";
+import {
+    deleteChat,
+    getChats,
+    getChatStatus,
+    renameChat,
+    subscribeToChatStatus,
+    type ChatItem,
+} from "../lib/api";
 import { formatTokens } from "../lib/format";
 
 type ChatRow = {
@@ -118,9 +125,7 @@ const AllChats = () => {
 
     const handleProgressUpdate = useCallback((chatId: string, statusData: { status: string }) => {
         const status = String(statusData.status || "QUEUED").toLowerCase();
-        setChats((prev) =>
-            prev.map((chat) => (chat.id === chatId ? { ...chat, status } : chat))
-        );
+        setChats((prev) => prev.map((chat) => (chat.id === chatId ? { ...chat, status } : chat)));
     }, []);
 
     const pollStatuses = useCallback(async () => {
@@ -137,11 +142,14 @@ const AllChats = () => {
             inFlightChats.map(async (chat) => {
                 try {
                     const statusData = await getChatStatus(chat.id);
-                    return { id: chat.id, status: String(statusData.progress?.status || "QUEUED").toLowerCase() };
+                    return {
+                        id: chat.id,
+                        status: String(statusData.progress?.status || "QUEUED").toLowerCase(),
+                    };
                 } catch {
                     return null;
                 }
-            })
+            }),
         );
 
         setChats((prev) =>
@@ -149,7 +157,7 @@ const AllChats = () => {
                 const update = updates.find((u) => u?.id === chat.id);
                 if (!update) return chat;
                 return { ...chat, status: update.status };
-            })
+            }),
         );
     }, [chats]);
 
@@ -179,7 +187,7 @@ const AllChats = () => {
                     sseCleanupsRef.current[chat.id] = subscribeToChatStatus(
                         chat.id,
                         (progress) => handleProgressUpdate(chat.id, progress),
-                        () => setUsePollingFallback(true)
+                        () => setUsePollingFallback(true),
                     );
                 }
             });
@@ -192,7 +200,7 @@ const AllChats = () => {
                 clearInterval(pollIntervalRef.current);
             }
             const cleanups = sseCleanupsRef.current;
-            Object.values(cleanups).forEach(cleanup => cleanup());
+            Object.values(cleanups).forEach((cleanup) => cleanup());
         };
     }, []);
 
@@ -245,7 +253,9 @@ const AllChats = () => {
             const response = await renameChat(renameTarget.id, nextName);
             const updatedName = response?.chat?.name || nextName;
             setChats((prev) =>
-                prev.map((chat) => (chat.id === renameTarget.id ? { ...chat, title: updatedName } : chat)),
+                prev.map((chat) =>
+                    chat.id === renameTarget.id ? { ...chat, title: updatedName } : chat,
+                ),
             );
             setRenameTarget(null);
             setRenameName("");
@@ -358,32 +368,32 @@ const AllChats = () => {
                     <div className="space-y-3">
                         {isLoading ? (
                             <div className="space-y-3">
-  {[1,2,3,4,5,6].map((i) => (
-    <div
-      key={i}
-      className="flex items-center justify-between bg-white/2 border border-white/5 p-4 rounded-xl"
-    >
-      <div className="flex items-center gap-4 flex-1">
-        <Skeleton className="w-6 h-6 rounded-full" />
+                                {[1, 2, 3, 4, 5, 6].map((i) => (
+                                    <div
+                                        key={i}
+                                        className="flex items-center justify-between bg-white/2 border border-white/5 p-4 rounded-xl"
+                                    >
+                                        <div className="flex items-center gap-4 flex-1">
+                                            <Skeleton className="w-6 h-6 rounded-full" />
 
-        <div className="flex-1">
-          <Skeleton className="h-4 w-48 mb-2" />
+                                            <div className="flex-1">
+                                                <Skeleton className="h-4 w-48 mb-2" />
 
-          <div className="flex gap-2">
-            <Skeleton className="h-5 w-20" />
-            <Skeleton className="h-5 w-24" />
-          </div>
-        </div>
-      </div>
+                                                <div className="flex gap-2">
+                                                    <Skeleton className="h-5 w-20" />
+                                                    <Skeleton className="h-5 w-24" />
+                                                </div>
+                                            </div>
+                                        </div>
 
-      <div className="flex gap-4">
-        <Skeleton className="h-4 w-12" />
-        <Skeleton className="h-4 w-16" />
-        <Skeleton className="h-8 w-20" />
-      </div>
-    </div>
-  ))}
-</div>
+                                        <div className="flex gap-4">
+                                            <Skeleton className="h-4 w-12" />
+                                            <Skeleton className="h-4 w-16" />
+                                            <Skeleton className="h-8 w-20" />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                         ) : filteredChats.length > 0 ? (
                             filteredChats.map((chat) => (
                                 <div
@@ -518,8 +528,8 @@ const AllChats = () => {
                                 <strong className="text-gray-200">"{deleteTarget.title}"</strong>?
                             </p>
                             <p className="text-xs text-gray-500 mb-6">
-                                This will permanently remove all indexed pages and chat history. This action
-                                cannot be undone.
+                                This will permanently remove all indexed pages and chat history. This
+                                action cannot be undone.
                             </p>
                             {deleteError && (
                                 <div className="mb-5 flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-left text-sm text-red-400">
@@ -573,9 +583,13 @@ const AllChats = () => {
                             </div>
                             <h3 className="text-lg font-semibold mb-2 text-center">Rename Chat</h3>
                             <p className="text-sm text-gray-400 mb-4 text-center">
-                                Give <strong className="text-gray-200">"{renameTarget.title}"</strong> a clearer name.
+                                Give <strong className="text-gray-200">"{renameTarget.title}"</strong> a
+                                clearer name.
                             </p>
-                            <label htmlFor="allchats-rename-chat" className="block text-sm text-gray-300 mb-2">
+                            <label
+                                htmlFor="allchats-rename-chat"
+                                className="block text-sm text-gray-300 mb-2"
+                            >
                                 Chat name
                             </label>
                             <input
@@ -609,7 +623,11 @@ const AllChats = () => {
                                 </button>
                                 <button
                                     type="submit"
-                                    disabled={isRenaming || !renameName.trim() || renameName.trim().length > 100}
+                                    disabled={
+                                        isRenaming ||
+                                        !renameName.trim() ||
+                                        renameName.trim().length > 100
+                                    }
                                     className="flex-1 px-4 py-2 rounded-lg text-sm font-medium text-white bg-accent-blue hover:bg-accent-blue/90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors inline-flex items-center justify-center gap-2"
                                 >
                                     {isRenaming ? (

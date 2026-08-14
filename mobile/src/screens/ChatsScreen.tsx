@@ -127,7 +127,11 @@ export default function ChatsScreen({ navigation }: Props) {
                 data={chats}
                 keyExtractor={(item) => item.id}
                 refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                        tintColor={colors.primary}
+                    />
                 }
                 ListEmptyComponent={
                     <Text style={styles.empty}>
@@ -216,7 +220,12 @@ const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     listContent: { padding: 16 },
     emptyContainer: { flexGrow: 1, alignItems: "center", justifyContent: "center", padding: 32 },
-    centered: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background },
+    centered: {
+        flex: 1,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: colors.background,
+    },
     empty: { color: colors.muted, textAlign: "center", fontSize: 15, lineHeight: 22 },
     headerRight: { flexDirection: "row", gap: 16 },
     headerAction: { color: colors.primary, fontSize: 15, fontWeight: "600", paddingHorizontal: 4 },

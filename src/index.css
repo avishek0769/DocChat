@@ -7,16 +7,16 @@
     --bg-panel: #f1f5f9;
     --bg-popover: #ffffff;
     --bg-footer: #f8fafc;
-    
+
     --border-primary: rgba(15, 23, 42, 0.08);
     --border-secondary: rgba(15, 23, 42, 0.04);
-    
+
     --text-primary: #0f172a;
     --text-primary-lighter: #1e293b;
     --text-secondary: #334155;
     --text-muted: #475569;
     --text-muted-lighter: #64748b;
-    
+
     --glass-bg: rgba(255, 255, 255, 0.75);
     --glass-border: rgba(15, 23, 42, 0.06);
 
@@ -32,16 +32,16 @@
     --bg-panel: #111111;
     --bg-popover: #1a1a24;
     --bg-footer: #0a0a0c;
-    
+
     --border-primary: rgba(255, 255, 255, 0.1);
     --border-secondary: rgba(255, 255, 255, 0.05);
-    
+
     --text-primary: #f9fafb;
     --text-primary-lighter: #f3f4f6;
     --text-secondary: #e5e7eb;
     --text-muted: #d1d5db;
     --text-muted-lighter: #9ca3af;
-    
+
     --glass-bg: rgba(11, 11, 15, 0.55);
     --glass-border: rgba(255, 255, 255, 0.08);
 
@@ -53,7 +53,7 @@
 @theme {
     --color-accent-blue: #3b82f6;
     --color-accent-purple: #8b5cf6;
-    
+
     --color-bg-page: var(--bg-page);
     --color-bg-card: var(--bg-card);
     --color-bg-panel: var(--bg-panel);
@@ -86,8 +86,22 @@
         -moz-osx-font-smoothing: grayscale;
     }
 
-    body, aside, main, header, nav, .glass, button, input, select, textarea, a {
-        transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+    body,
+    aside,
+    main,
+    header,
+    nav,
+    .glass,
+    button,
+    input,
+    select,
+    textarea,
+    a {
+        transition:
+            background-color 0.2s ease,
+            border-color 0.2s ease,
+            color 0.2s ease,
+            box-shadow 0.2s ease;
     }
 }
 
@@ -210,4 +224,3 @@ html:not(.dark) textarea::placeholder {
 html:not(.dark) img[src*="logo"] {
     filter: invert(1) hue-rotate(180deg) brightness(0.2) drop-shadow(0 0 8px rgba(99, 102, 241, 0.2));
 }
-

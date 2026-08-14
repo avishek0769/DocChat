@@ -79,9 +79,7 @@ const CodeBlock = ({ language, code }: { language?: string; code: string }) => {
             </div>
             <div className="p-4 overflow-x-auto text-sm font-mono leading-relaxed text-gray-300 custom-scrollbar w-full max-w-full">
                 <pre>
-                    <code
-                        dangerouslySetInnerHTML={{ __html: highlighted }}
-                    />
+                    <code dangerouslySetInnerHTML={{ __html: highlighted }} />
                 </pre>
             </div>
         </div>

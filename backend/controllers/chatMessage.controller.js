@@ -24,7 +24,9 @@ if (MEM0_ENABLED) {
     if (process.env.MEM0_API_KEY) {
         memory = new MemoryClient({ apiKey: process.env.MEM0_API_KEY });
     } else {
-        console.warn("WARNING: MEM0_ENABLED is true, but MEM0_API_KEY is not set in environment variables. Mem0 integration is disabled.");
+        console.warn(
+            "WARNING: MEM0_ENABLED is true, but MEM0_API_KEY is not set in environment variables. Mem0 integration is disabled.",
+        );
     }
 }
 
@@ -141,7 +143,10 @@ const sendMessage = asyncHandler(async (req, res) => {
         });
 
         if (!apiKey) {
-            throw new ApiError(400, `No API key found for this provider (${provider}). Please configure it in your settings.`);
+            throw new ApiError(
+                400,
+                `No API key found for this provider (${provider}). Please configure it in your settings.`,
+            );
         }
         apiKeyId = apiKey.id;
         if (apiKey.userId !== req.user.id) {
@@ -191,7 +196,10 @@ const sendMessage = asyncHandler(async (req, res) => {
             if (!source.collectionName) continue;
 
             try {
-                await qdrant.createPayloadIndex(source.collectionName, { field_name: "body", field_schema: "text" });
+                await qdrant.createPayloadIndex(source.collectionName, {
+                    field_name: "body",
+                    field_schema: "text",
+                });
             } catch (e) {
                 // Ignore index exists or other non-fatal indexing errors
             }
@@ -270,10 +278,11 @@ const sendMessage = asyncHandler(async (req, res) => {
     let memories = [];
     if (MEM0_ENABLED && memory) {
         try {
-            memories = await memory.search(userPrompt, {
-                user_id: req.user.id,
-                limit: 5,
-            }) || [];
+            memories =
+                (await memory.search(userPrompt, {
+                    user_id: req.user.id,
+                    limit: 5,
+                })) || [];
         } catch (error) {
             console.error("Mem0 search error (non-fatal):", error.message);
         }
@@ -324,7 +333,9 @@ const sendMessage = asyncHandler(async (req, res) => {
             }
         }
     } catch (error) {
-        res.write(`\n\ndata: {"error": "Stream ended with error: ${error.message.replace(/\n/g, ' ')}"}\n\n`);
+        res.write(
+            `\n\ndata: {"error": "Stream ended with error: ${error.message.replace(/\n/g, " ")}"}\n\n`,
+        );
     } finally {
         res.end();
     }
@@ -449,7 +460,13 @@ const getChatMessages = asyncHandler(async (req, res) => {
     if (!orderedMessages.length) {
         return res
             .status(200)
-            .json(new ApiResponse(200, { messages: [], nextCursor: null, hasMore: false }, "No messages found for this chat."));
+            .json(
+                new ApiResponse(
+                    200,
+                    { messages: [], nextCursor: null, hasMore: false },
+                    "No messages found for this chat.",
+                ),
+            );
     }
 
     const messagesWithMeta = orderedMessages.map(({ sourceChunks, ...msg }) => ({
@@ -459,9 +476,14 @@ const getChatMessages = asyncHandler(async (req, res) => {
 
     return res
         .status(200)
-        .json(new ApiResponse(200, { messages: messagesWithMeta, nextCursor, hasMore }, "Chat messages retrieved successfully."));
+        .json(
+            new ApiResponse(
+                200,
+                { messages: messagesWithMeta, nextCursor, hasMore },
+                "Chat messages retrieved successfully.",
+            ),
+        );
 });
-
 
 // NOTE: No relation between ChatMessage and Chat in the current schema
 const exportChatMessages = asyncHandler(async (req, res) => {
@@ -494,10 +516,7 @@ const exportChatMessages = asyncHandler(async (req, res) => {
         });
 
         res.setHeader("Content-Type", "text/markdown; charset=utf-8");
-        res.setHeader(
-            "Content-Disposition",
-            `attachment; filename="chat-export-${chatId}.md"`
-        );
+        res.setHeader("Content-Disposition", `attachment; filename="chat-export-${chatId}.md"`);
 
         return res.send(markdown);
     }
@@ -516,10 +535,7 @@ const exportChatMessages = asyncHandler(async (req, res) => {
         const doc = new PDFDocument();
 
         res.setHeader("Content-Type", "application/pdf");
-        res.setHeader(
-            "Content-Disposition",
-            `attachment; filename="chat-export-${chatId}.pdf"`
-        );
+        res.setHeader("Content-Disposition", `attachment; filename="chat-export-${chatId}.pdf"`);
 
         doc.pipe(res);
 
@@ -618,9 +634,7 @@ const getChatMessageSources = asyncHandler(async (req, res) => {
 
     return res
         .status(200)
-        .json(
-            new ApiResponse(200, { messageSources }, "Chat message sources retrieved successfully."),
-        );
+        .json(new ApiResponse(200, { messageSources }, "Chat message sources retrieved successfully."));
 });
 const getSharedChatMessageSources = asyncHandler(async (req, res) => {
     const { shareToken, messageId } = req.params;
@@ -689,7 +703,13 @@ const getSharedChatMessages = asyncHandler(async (req, res) => {
 
     return res
         .status(200)
-        .json(new ApiResponse(200, { messages: messagesWithMeta }, "Chat messages retrieved successfully."));
+        .json(
+            new ApiResponse(
+                200,
+                { messages: messagesWithMeta },
+                "Chat messages retrieved successfully.",
+            ),
+        );
 });
 
 export {

@@ -126,7 +126,11 @@ export default function ApiKeysScreen({ navigation }: Props) {
                 data={keys}
                 keyExtractor={(item) => item.id}
                 refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                        tintColor={colors.primary}
+                    />
                 }
                 ListEmptyComponent={
                     <Text style={styles.empty}>
@@ -150,7 +154,9 @@ export default function ApiKeysScreen({ navigation }: Props) {
                     </TouchableOpacity>
                 )}
                 ListFooterComponent={
-                    keys.length > 0 ? <Text style={styles.hint}>Long-press a key to delete it.</Text> : null
+                    keys.length > 0 ? (
+                        <Text style={styles.hint}>Long-press a key to delete it.</Text>
+                    ) : null
                 }
             />
 
@@ -173,7 +179,10 @@ export default function ApiKeysScreen({ navigation }: Props) {
                             {PROVIDERS.map((p) => (
                                 <TouchableOpacity
                                     key={p}
-                                    style={[styles.providerChip, p === provider && styles.providerChipActive]}
+                                    style={[
+                                        styles.providerChip,
+                                        p === provider && styles.providerChipActive,
+                                    ]}
                                     onPress={() => setProvider(p)}
                                 >
                                     <Text
@@ -252,7 +261,12 @@ const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     listContent: { padding: 16 },
     emptyContainer: { flexGrow: 1, alignItems: "center", justifyContent: "center", padding: 32 },
-    centered: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background },
+    centered: {
+        flex: 1,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: colors.background,
+    },
     empty: { color: colors.muted, textAlign: "center", fontSize: 15, lineHeight: 22 },
     headerAction: { color: colors.primary, fontSize: 15, fontWeight: "600", paddingHorizontal: 4 },
     hint: { color: colors.muted, fontSize: 12, textAlign: "center", marginTop: 8 },

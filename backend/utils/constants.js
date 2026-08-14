@@ -75,7 +75,9 @@ export const USAGE_PRICING_FALLBACK_USD_PER_1M = {
 };
 
 export function resolveUsagePricing(provider, model) {
-    const providerKey = String(provider || "").trim().toUpperCase();
+    const providerKey = String(provider || "")
+        .trim()
+        .toUpperCase();
     const modelKey = String(model || "").trim();
     const providerPricing = USAGE_PRICING_USD_PER_1M[providerKey];
 
@@ -101,7 +103,9 @@ export function estimateUsageCostUsd({ provider, model, inputTokens = 0, outputT
     };
 }
 
-// Optional tokens limit 
+// Optional tokens limit
 const parsedDailyTokenBudget = Number(process.env.DAILY_TOKEN_BUDGET);
 export const DAILY_TOKEN_BUDGET =
-    Number.isFinite(parsedDailyTokenBudget) && parsedDailyTokenBudget > 0 ? parsedDailyTokenBudget : null;
+    Number.isFinite(parsedDailyTokenBudget) && parsedDailyTokenBudget > 0
+        ? parsedDailyTokenBudget
+        : null;

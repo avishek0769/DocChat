@@ -1,11 +1,7 @@
 import { Router } from "express";
 import { verifyAdmin, verifyStrictJWT } from "../middlewares/auth.middleware.js";
 import validate from "../middlewares/validate.middleware.js";
-import {
-    paginationSchema,
-    rangeSchema,
-    userIdParamSchema,
-} from "../utils/validationSchemas.js";
+import { paginationSchema, rangeSchema, userIdParamSchema } from "../utils/validationSchemas.js";
 import {
     overview,
     users,

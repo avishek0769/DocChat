@@ -48,18 +48,18 @@ mobile/
 1. Start the DocChat backend (defaults to `http://localhost:3000/api/v1`).
 2. Point the app at your backend. On a physical device use your machine's LAN IP:
 
-   ```bash
-   # mobile/.env (or export in your shell)
-   EXPO_PUBLIC_API_BASE_URL=http://<your-lan-ip>:3000/api/v1
-   ```
+    ```bash
+    # mobile/.env (or export in your shell)
+    EXPO_PUBLIC_API_BASE_URL=http://<your-lan-ip>:3000/api/v1
+    ```
 
 3. Install and start:
 
-   ```bash
-   cd mobile
-   npm install
-   npm run android   # or: npm run ios   (iOS needs macOS)
-   ```
+    ```bash
+    cd mobile
+    npm install
+    npm run android   # or: npm run ios   (iOS needs macOS)
+    ```
 
 > Sending messages requires at least one API key configured on your DocChat
 > account (added via the web app); the app uses your first key's provider/model.

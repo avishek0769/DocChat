@@ -6,5 +6,4 @@
  * running on a physical device point it at your machine's LAN IP:
  *   EXPO_PUBLIC_API_BASE_URL=http://192.168.1.10:3000/api/v1
  */
-export const API_BASE_URL =
-    process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://localhost:3000/api/v1";
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://localhost:3000/api/v1";

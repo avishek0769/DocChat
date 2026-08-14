@@ -82,15 +82,15 @@ describe("usage groupBy route hardening", () => {
         expect([400, 404]).toContain(res.status);
     });
 
-    test.each([
-        "1;DROP TABLE",
-        "%27%20OR%201=1",
-    ])("GET /usage/group/%s returns 400", async (rawGroupBy) => {
-        const app = buildApp();
-        const res = await request(app).get(`/api/v1/usage/group/${rawGroupBy}`);
+    test.each(["1;DROP TABLE", "%27%20OR%201=1"])(
+        "GET /usage/group/%s returns 400",
+        async (rawGroupBy) => {
+            const app = buildApp();
+            const res = await request(app).get(`/api/v1/usage/group/${rawGroupBy}`);
 
-        expect(res.status).toBe(400);
-        expect(res.body.error || res.body.message).toMatch(/Invalid groupBy/i);
-        expect(queryRawMock).not.toHaveBeenCalled();
-    });
+            expect(res.status).toBe(400);
+            expect(res.body.error || res.body.message).toMatch(/Invalid groupBy/i);
+            expect(queryRawMock).not.toHaveBeenCalled();
+        },
+    );
 });
