@@ -10,6 +10,7 @@ import {
     getPrometheusMetrics,
     contentType,
 } from "./utils/metrics.js";
+import { qdrant } from "./utils/ragClients.js";
 
 const app = express();
 
@@ -66,6 +67,16 @@ app.get("/metrics", metricsAuthMiddleware, async (req, res) => {
         res.status(500).send(error.message);
     }
 });
+
+setInterval(async () => {
+    try {
+        await qdrant.count("React-Docs-1774783563825", {
+            exact: false,
+        });
+    } catch (error) {
+        console.error("Qdrant keep-alive failed:", error);
+    }
+}, 24 * 60 * 60 * 1000);
 
 const errorHandler = (err, req, res, next) => {
     const statusCode = err.statusCode || 500;
