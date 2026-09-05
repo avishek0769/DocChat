@@ -20,7 +20,7 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
-            cd /home/docchat
+            cd /home/ubuntu/docchat
             git stash
 
             git fetch origin
@@ -31,7 +31,7 @@ jobs:
             pnpm install --frozen-lockfile
             pnpm build
 
-            cd /home/docchat/backend
+            cd /home/ubuntu/docchat/backend
             pnpm install --frozen-lockfile
 
-            pm2 restart 11 15 12
+            pm2 restart 2 6 12
